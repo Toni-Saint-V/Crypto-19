@@ -1,8 +1,4 @@
-# ===== MOCK BYBIT DOWNLOADER =====
-# Эта заглушка нужна, чтобы проект работал без реального API
-
 def download_klines(symbol="BTCUSDT", interval="1m", limit=500):
-    # возвращаем тестовые свечи
     candles = []
     price = 50000
     for i in range(limit):
