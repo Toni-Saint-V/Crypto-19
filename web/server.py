@@ -45,5 +45,7 @@ async def api_equity():
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
-    while True:
+    from ws_live_patch import ws_live_loop
+    await ws_live_loop(ws)
+    # while True:
         await ws.send_json({"ping": "pong"})
