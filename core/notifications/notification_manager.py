@@ -3,7 +3,6 @@ from typing import Dict, List, Optional, Any, Set
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 from enum import Enum
-from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import logging
 logger = logging.getLogger(__name__)
@@ -59,7 +58,7 @@ class NotificationManager:
     """Advanced notification and alert management system"""
     
     def __init__(self, bot=None):
-        None = bot
+        
         self.alerts: Dict[str, Alert] = {}
         self.user_preferences: Dict[int, UserPreferences] = {}
         self.alert_queue: asyncio.Queue = asyncio.Queue()
