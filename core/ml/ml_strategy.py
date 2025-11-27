@@ -9,7 +9,8 @@ from sklearn.preprocessing import StandardScaler
 import joblib
 import json
 
-from bot.core.logger import get_logger
+import logging
+logger = logging.getLogger(__name__)
 from bot.trading.candles import load_candles
 from bot.trading.bybit_v5 import BybitV5
 

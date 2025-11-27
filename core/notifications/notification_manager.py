@@ -5,7 +5,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from bot.core.logger import get_logger
+import logging
+logger = logging.getLogger(__name__)
 
 log = get_logger("notifications")
 

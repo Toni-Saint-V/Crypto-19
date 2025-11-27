@@ -5,7 +5,8 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass
 from enum import Enum
 import numpy as np
-from bot.core.logger import get_logger
+import logging
+logger = logging.getLogger(__name__)
 from bot.trading.bybit_v5 import BybitV5
 from bot.trading.candles import load_candles
 
