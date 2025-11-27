@@ -57,7 +57,7 @@ class UserPreferences:
 class NotificationManager:
     """Advanced notification and alert management system"""
     
-    def __init__(self, bot=None):
+    def __init__(self):
         
         self.alerts: Dict[str, Alert] = {}
         self.user_preferences: Dict[int, UserPreferences] = {}
