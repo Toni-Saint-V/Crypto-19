@@ -20,27 +20,27 @@ app.add_middleware(
 
 @app.get("/api/status")
 async def api_status():
-    return {"status": "ok"}
+    return status_monitor.get_status()
 
 @app.post("/api/fetch")
 async def api_fetch():
-    return {"status": "pending"}
+    return backtest_engine.fetch_placeholder()
 
 @app.get("/api/candles")
 async def api_candles():
-    return {"candles": [], "meta": {}}
+    return {"candles": fetch_klines(), "meta": {"source": "bybit"}}
 
 @app.post("/api/backtest/run")
 async def api_backtest_run():
-    return {"status": "running"}
+    return backtest_engine.run()
 
 @app.get("/api/backtest/summary")
 async def api_backtest_summary():
-    return {"trades": 0, "return_pct": 0}
+    return backtest_engine.summary()
 
 @app.get("/api/equity")
 async def api_equity():
-    return {"series": [], "meta": {}}
+    return analytics.get_equity_curve()
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
