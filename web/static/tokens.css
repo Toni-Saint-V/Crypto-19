@@ -1,0 +1,30 @@
+:root {
+  --bg: #0b1321;
+  --panel: #111a2b;
+  --grid: #1b2740;
+  --text: #c3cee5;
+  --accent: #4dabf7;
+  --ok: #2bb988;
+  --bad: #ff6b6b;
+
+  --font-family-base: system-ui, -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+
+  --font-12: 12px;
+  --font-14: 14px;
+  --font-16: 16px;
+  --font-20: 20px;
+  --font-24: 24px;
+
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --space-32: 32px;
+
+  --radius-8: 8px;
+  --radius-10: 10px;
+  --radius-12: 12px;
+
+  --shadow-card: 0 8px 16px rgba(0,0,0,0.16);
+}

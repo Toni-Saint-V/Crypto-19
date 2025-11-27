@@ -13,3 +13,7 @@ templates = Jinja2Templates(directory='web/templates')
 async def ui_root(req: Request):
     return templates.TemplateResponse('index.html', {"request": req})
 
+
+@app.get("/chart.html", response_class=HTMLResponse)
+async def ui_chart_alias(req: Request):
+    return templates.TemplateResponse("index.html", {"request": req})
