@@ -49,3 +49,13 @@ async def websocket_endpoint(ws: WebSocket):
     await ws_live_loop(ws)
     # while True:
         await ws.send_json({"ping": "pong"})
+
+# ===============================
+# FIXED WEBSOCKET ENDPOINT
+# ===============================
+from ws_live_patch import ws_live_loop
+
+@app.websocket("/ws")
+async def websocket_endpoint(ws: WebSocket):
+    await ws.accept()
+    await ws_live_loop(ws)
