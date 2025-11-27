@@ -1,29 +1,24 @@
-(function () {
+;(function () {
   const $ = (id) => document.getElementById(id);
 
-  let chart, candleSeries;
-  let equityChart, equitySeries;
-  let ws;
+  let chart = null;
+  let candleSeries = null;
 
-  async function fetchJSON(url, options) {
-    const res = await fetch(url, options || {});
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error("HTTP " + res.status + " — " + text);
-    }
-    return res.json();
-  }
-
+  // ---------------- CHART ----------------
   function initChart() {
-    const el = $("chart");
-    if (!el || !window.LightweightCharts) {
-      console.warn("нет контейнера графика или LightweightCharts");
+    const container = $("chart-root");
+    if (!container) {
+      console.error("chart-root not found");
       return;
     }
 
-    chart = LightweightCharts.createChart(el, {
-      width: el.clientWidth,
-      height: 420,
+    if (!window.LightweightCharts || !LightweightCharts.createChart) {
+      console.error("LightweightCharts not loaded", window.LightweightCharts);
+      return;
+    }
+
+    chart = LightweightCharts.createChart(container, {
+      height: container.clientHeight || 480,
       layout: {
         background: { color: "#0b1321" },
         textColor: "#c3cee5",
@@ -32,44 +27,71 @@
         vertLines: { color: "#1b2740" },
         horzLines: { color: "#1b2740" },
       },
+      timeScale: {
+        timeVisible: true,
+        secondsVisible: true,
+      },
       rightPriceScale: {
         borderColor: "#1b2740",
       },
-      timeScale: {
-        borderColor: "#1b2740",
-      },
-      crosshair: {
-        mode: LightweightCharts.CrosshairMode.Normal,
-      },
     });
 
-    candleSeries = chart.addCandlestickSeries();
-
-    window.addEventListener("resize", () => {
-      if (!chart) return;
-      chart.applyOptions({ width: el.clientWidth });
+    candleSeries = chart.addCandlestickSeries({
+      upColor: "#2bb988",
+      downColor: "#ff6b6b",
+      wickUpColor: "#2bb988",
+      wickDownColor: "#ff6b6b",
+      borderVisible: false,
     });
   }
 
+  // ---------------- STATUS ----------------
+  async function loadStatus() {
+    try {
+      const res = await fetch("/api/status");
+      if (!res.ok) throw new Error("status " + res.status);
+      const data = await res.json();
+
+      const mode = $("badge-mode");
+      const net = $("badge-net");
+      const eqVal = $("equity-value");
+      const pnlVal = $("pnl-value");
+      const openTrades = $("open-trades");
+      const stratName = $("strategy-name");
+
+      if (mode && data.mode) mode.textContent = data.mode;
+      if (net && data.network) net.textContent = data.network;
+      if (eqVal && data.equity != null && data.currency) {
+        eqVal.textContent = `${data.equity.toLocaleString("ru-RU")} ${data.currency}`;
+      }
+      if (pnlVal && data.pnl_pct != null) {
+        const sign = data.pnl_pct >= 0 ? "+" : "";
+        pnlVal.textContent = `${sign}${data.pnl_pct}%`;
+        pnlVal.classList.toggle("good", data.pnl_pct >= 0);
+        pnlVal.classList.toggle("bad", data.pnl_pct < 0);
+      }
+      if (openTrades && data.open_trades != null) {
+        openTrades.textContent = data.open_trades;
+      }
+      if (stratName && data.strategy) {
+        stratName.textContent = data.strategy;
+      }
+    } catch (e) {
+      console.error("status error", e);
+    }
+  }
+
+  // ---------------- CANDLES (REST) ----------------
   async function loadCandles() {
     if (!candleSeries) return;
-    const symbolSel = $("symbol-select");
-    const tfSel = $("tf-select");
-    const statusTag = $("status-tag");
-
-    const symbol = symbolSel ? symbolSel.value : "BTCUSDT";
-    const tf = tfSel ? tfSel.value : "1m";
 
     try {
-      if (statusTag) {
-        statusTag.textContent = "loading…";
-        statusTag.className = "chip chip-gray";
-      }
-      const data = await fetchJSON(
-        `/api/candles?symbol=${encodeURIComponent(symbol)}&tf=${encodeURIComponent(tf)}`
-      );
+      const res = await fetch("/api/candles");
+      if (!res.ok) throw new Error("status " + res.status);
+      const payload = await res.json();
+      const raw = payload.candles || payload.data || [];
 
-      const candles = (data.candles || []).map((c) => ({
+      const candles = raw.map((c) => ({
         time: c.time,
         open: Number(c.open),
         high: Number(c.high),
@@ -78,200 +100,102 @@
       }));
 
       candleSeries.setData(candles);
-
-      if (statusTag) {
-        statusTag.textContent = "online";
-        statusTag.className = "chip chip-green";
-      }
     } catch (e) {
       console.error("candles error", e);
-      if (statusTag) {
-        statusTag.textContent = "error";
-        statusTag.className = "chip chip-red";
-      }
     }
   }
 
-  async function loadStatus() {
-    try {
-      const s = await fetchJSON("/api/status");
-      if ($("mode-label")) $("mode-label").textContent = s.mode || "—";
-      if ($("network-label"))
-        $("network-label").textContent = s.network || "—";
-      if ($("equity-value"))
-        $("equity-value").textContent =
-          s.equity != null && s.currency
-            ? `${s.equity} ${s.currency}`
-            : "—";
-      if ($("pnl-value"))
-        $("pnl-value").textContent =
-          s.pnl_pct != null ? `${s.pnl_pct} %` : "—";
-      if ($("open-trades"))
-        $("open-trades").textContent =
-          s.open_trades != null ? String(s.open_trades) : "—";
-      if ($("strategy-name"))
-        $("strategy-name").textContent = s.strategy || "—";
-    } catch (e) {
-      console.error("status error", e);
-    }
-  }
-
-  async function loadEquity() {
-    try {
-      const data = await fetchJSON("/api/equity");
-      const series = Array.isArray(data.series) ? data.series : [];
-
-      const el = $("equity-chart");
-      if (!el || !window.LightweightCharts) return;
-
-      if (!equityChart) {
-        equityChart = LightweightCharts.createChart(el, {
-          width: el.clientWidth,
-          height: 160,
-          layout: {
-            background: { color: "#0b1321" },
-            textColor: "#c3cee5",
-          },
-          rightPriceScale: { borderColor: "#1b2740" },
-          timeScale: { borderColor: "#1b2740" },
-        });
-        equitySeries = equityChart.addLineSeries();
-        window.addEventListener("resize", () => {
-          if (!equityChart) return;
-          equityChart.applyOptions({ width: el.clientWidth });
-        });
-      }
-
-      const lineData = series.map((v, idx) => ({
-        time: idx + 1,
-        value: Number(v),
-      }));
-      equitySeries.setData(lineData);
-    } catch (e) {
-      console.error("equity error", e);
-    }
-  }
-
+  // ---------------- BACKTEST ----------------
   async function runBacktest() {
     const btn = $("btn-backtest");
-    const tag = $("bt-status-tag");
-    const meta = $("bt-meta");
-    const tradesEl = $("bt-trades");
-    const retEl = $("bt-ret");
-    const tfSel = $("tf-select");
-    const symbolSel = $("symbol-select");
+    const tag = $("backtest-status");
+    const meta = $("backtest-meta");
 
-    const payload = {
-      symbol: symbolSel ? symbolSel.value : "BTCUSDT",
-      tf: tfSel ? tfSel.value : "1m",
-    };
+    if (btn) btn.disabled = true;
+    if (tag) tag.textContent = "running...";
+    if (meta) meta.textContent = "";
 
     try {
-      if (btn) btn.disabled = true;
-      if (tag) {
-        tag.textContent = "running";
-        tag.className = "chip chip-blue";
-      }
-      if (meta) meta.textContent = "бэктест запускается…";
+      const res = await fetch("/api/backtest/run", { method: "POST" });
+      if (!res.ok) throw new Error("status " + res.status);
+      await res.json();
 
-      await fetchJSON("/api/backtest/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const sumRes = await fetch("/api/backtest/summary");
+      const summary = await sumRes.json();
 
-      const s = await fetchJSON("/api/backtest/summary");
-      const trades = s.trades != null ? s.trades : "—";
-      const ret = s.return_pct != null ? s.return_pct : "—";
-
-      if (tradesEl) tradesEl.textContent = trades;
-      if (retEl)
-        retEl.textContent =
-          typeof ret === "number" ? ret.toFixed(2) + " %" : ret;
-
-      if (tag) {
-        tag.textContent = "completed";
-        tag.className = "chip chip-green";
-      }
-      if (meta) {
-        meta.textContent =
-          typeof ret === "number"
-            ? `ret: ${ret.toFixed(2)}% · trades: ${trades}`
-            : "бэктест завершён";
+      if (tag) tag.textContent = "done";
+      if (meta && summary) {
+        const ret = summary.return_pct ?? summary.ret ?? 0;
+        const trades = summary.trades ?? 0;
+        meta.textContent = `Доходность: ${ret}% • Сделок: ${trades}`;
       }
     } catch (e) {
       console.error("backtest error", e);
-      if (tag) {
-        tag.textContent = "error";
-        tag.className = "chip chip-red";
-      }
-      if (meta) meta.textContent = "ошибка бэктеста, см. логи сервера";
+      if (tag) tag.textContent = "error";
+      if (meta) meta.textContent = "см. логи сервера";
     } finally {
       if (btn) btn.disabled = false;
     }
   }
 
+  // ---------------- WS LIVE FEED ----------------
   function connectWs() {
-    if (!window.WebSocket) {
-      console.warn("WebSocket не поддерживается");
-      return;
+    const statusDot = $("ws-status");
+    function setWsBadge(text, cls) {
+      if (!statusDot) return;
+      statusDot.textContent = text;
+      statusDot.classList.remove("online", "offline");
+      if (cls) statusDot.classList.add(cls);
     }
-    try {
-      const proto = location.protocol === "https:" ? "wss" : "ws";
-      const url = `${proto}://${location.host}/ws`;
-      ws = new WebSocket(url);
 
-      ws.onopen = () => {
-        console.log("ws connected");
-      };
+    const proto = window.location.protocol === "https:" ? "wss://" : "ws://";
+    const url = proto + window.location.host + "/ws";
 
-      ws.onmessage = (ev) => {
-        try {
-          const msg = JSON.parse(ev.data);
-          if (msg.type === "candle" && candleSeries) {
-            const c = msg.data;
-            const bar = {
-              time: c.time,
-              open: Number(c.open),
-              high: Number(c.high),
-              low: Number(c.low),
-              close: Number(c.close),
-            };
-            candleSeries.update(bar);
-          }
-        } catch (e) {
-          console.error("ws msg error", e);
+    let ws = new WebSocket(url);
+
+    ws.onopen = () => setWsBadge("online", "online");
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === "candle" && candleSeries) {
+          const c = msg.data;
+          candleSeries.update({
+            time: c.time,
+            open: Number(c.open),
+            high: Number(c.high),
+            low: Number(c.low),
+            close: Number(c.close),
+          });
         }
-      };
+      } catch (e) {
+        console.error("ws message error", e);
+      }
+    };
 
-      ws.onclose = () => {
-        console.log("ws closed");
-      };
+    ws.onclose = () => {
+      setWsBadge("offline", "offline");
+      setTimeout(connectWs, 3000);
+    };
 
-      ws.onerror = (e) => {
-        console.error("ws error", e);
-      };
-    } catch (e) {
-      console.error("ws connect error", e);
-    }
+    ws.onerror = (e) => {
+      console.error("ws error", e);
+      ws.close();
+    };
   }
 
+  // ---------------- CONTROLS ----------------
   function wireControls() {
-    const symbolSel = $("symbol-select");
-    const tfSel = $("tf-select");
     const btBtn = $("btn-backtest");
-
-    if (symbolSel) symbolSel.addEventListener("change", loadCandles);
-    if (tfSel) tfSel.addEventListener("change", loadCandles);
     if (btBtn) btBtn.addEventListener("click", runBacktest);
   }
 
+  // ---------------- INIT ----------------
   async function init() {
     initChart();
     wireControls();
     await loadStatus();
     await loadCandles();
-    await loadEquity();
     connectWs();
   }
 
