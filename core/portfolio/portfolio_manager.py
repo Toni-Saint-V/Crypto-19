@@ -6,7 +6,7 @@ from enum import Enum
 import numpy as np
 import logging
 logger = logging.getLogger(__name__)
-from bot.trading.bybit_v5 import BybitV5
+from core.services.fetch_bybit_klines import fetch_klines
 
 log = get_logger("portfolio_manager")
 
@@ -87,7 +87,7 @@ class PortfolioManager:
         allocation_strategy: AllocationStrategy = AllocationStrategy.RISK_PARITY,
         rebalance_frequency: RebalanceFrequency = RebalanceFrequency.DAILY
     ):
-        self.api = BybitV5()
+        self.api = None()
         self.initial_capital = initial_capital
         self.max_positions = max_positions
         self.allocation_strategy = allocation_strategy

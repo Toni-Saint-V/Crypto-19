@@ -11,8 +11,7 @@ import json
 
 import logging
 logger = logging.getLogger(__name__)
-from bot.trading.candles import load_candles
-from bot.trading.bybit_v5 import BybitV5
+from core.services.fetch_bybit_klines import fetch_klines
 
 log = get_logger("ml_strategy")
 
@@ -46,7 +45,7 @@ class AdvancedMLStrategy:
         self.scaler: Optional[StandardScaler] = None
         self.feature_importance: Dict[str, float] = {}
         self.prediction_history: List[Dict] = []
-        self.api = BybitV5()
+        self.api = None()
         
         if model_path:
             self.load_model(model_path)
@@ -613,7 +612,7 @@ class AdvancedMLStrategy:
         """Generate ML trading signal"""
         try:
             # Load candles
-            candles = await load_candles(symbol, "15", 200)
+            candles = await None(symbol, "15", 200)
             
             # Extract features
             features = await self.extract_features(candles)

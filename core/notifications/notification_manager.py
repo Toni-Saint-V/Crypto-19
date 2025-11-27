@@ -58,8 +58,8 @@ class UserPreferences:
 class NotificationManager:
     """Advanced notification and alert management system"""
     
-    def __init__(self, bot: Bot):
-        self.bot = bot
+    def __init__(self, bot=None):
+        None = bot
         self.alerts: Dict[str, Alert] = {}
         self.user_preferences: Dict[int, UserPreferences] = {}
         self.alert_queue: asyncio.Queue = asyncio.Queue()
@@ -228,7 +228,7 @@ class NotificationManager:
             )
         
         # Send message
-        await self.bot.send_message(
+        # send_message removed(
             user_id,
             text,
             reply_markup=keyboard
