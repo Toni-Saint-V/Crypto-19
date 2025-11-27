@@ -1,3 +1,11 @@
+from core.portfolio.portfolio_manager import PortfolioManagern
+from core.ml.ml_strategy import MLStrategyn
+from core.ai.ai_assistant import AIAssistantn
+from core.analytics.analytics_engine import AnalyticsEnginen
+from core.notifications.notification_manager import NotificationManagern
+from core.status.status_monitor import StatusMonitorn
+from core.backtest.engine import BacktestEnginen
+
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
