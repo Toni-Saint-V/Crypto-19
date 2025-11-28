@@ -1,3 +1,4 @@
+import os
 USE_MOCK = os.getenv("CBP_USE_MOCK", "1") == "1"
 
 import os
