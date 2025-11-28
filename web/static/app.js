@@ -1,91 +1,64 @@
 "use strict";
 
-const state = {
-  symbol: "BTCUSDT",
-  tf: "1m",
-  candles: [],
-  ws: null,
-};
-
-// --------- LOG HELPERS (опционально) ---------
 function log(msg) {
-  const el = document.getElementById("log-terminal");
-  const ts = new Date().toLocaleTimeString();
-  if (el) {
-    const line = document.createElement("div");
-    line.textContent = `[${ts}] ${msg}`;
-    el.prepend(line);
-    const max = 200;
-    while (el.childNodes.length > max) {
-      el.removeChild(el.lastChild);
-    }
-  }
   console.log("[CBP]", msg);
 }
 
-// --------- CHART ---------
-let chart = null;
-let candleSeries = null;
+const state = {
+  symbol: "BTCUSDT",
+  tf: "1m",
+  chart: null,
+  candleSeries: null,
+  socket: null,
+};
 
-function mapCandle(raw) {
-  if (!raw) return null;
-  let t = raw.time;
-  if (!t) return null;
-  // поддержка и секунд, и миллисекунд
-  if (t > 1e12) t = Math.floor(t / 1000);
-
-  return {
-    time: t,
-    open: Number(raw.open),
-    high: Number(raw.high),
-    low: Number(raw.low),
-    close: Number(raw.close),
-  };
-}
+// ---------- CHART ----------
 
 function initChart() {
   const root = document.getElementById("chart-root");
-  if (!root || !window.LightweightCharts) {
-    console.error("chart-root or LightweightCharts missing");
+  if (!root) {
+    console.warn("chart-root not found");
     return;
   }
+  const { width } = root.getBoundingClientRect();
+  const height = 360;
 
-  // очищаем контейнер (на случай hot-reload)
-  root.innerHTML = "";
-
-  chart = LightweightCharts.createChart(root, {
+  const chart = LightweightCharts.createChart(root, {
+    width: width || 900,
+    height,
     layout: {
-      background: { color: "#050914" },
-      textColor: "#cbd5f5",
+      background: { color: "#0b1321" },
+      textColor: "#c3cee5",
     },
     grid: {
-      vertLines: { color: "#111827" },
-      horzLines: { color: "#111827" },
+      vertLines: { color: "#1b2740" },
+      horzLines: { color: "#1b2740" },
+    },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    rightPriceScale: {
+      borderColor: "rgba(197, 203, 206, 0.4)",
     },
     timeScale: {
-      rightOffset: 5,
-      borderColor: "#1f2937",
-    },
-    rightPriceScale: {
-      borderColor: "#1f2937",
-    },
-    crosshair: {
-      mode: LightweightCharts.CrosshairMode.Normal,
+      borderColor: "rgba(197, 203, 206, 0.4)",
     },
   });
 
-  candleSeries = chart.addCandlestickSeries({
-    upColor: "#22c55e",
-    downColor: "#ef4444",
-    borderUpColor: "#22c55e",
-    borderDownColor: "#ef4444",
-    wickUpColor: "#22c55e",
-    wickDownColor: "#ef4444",
+  const series = chart.addCandlestickSeries({
+    upColor: "#2bb988",
+    downColor: "#ff6b6b",
+    borderUpColor: "#2bb988",
+    borderDownColor: "#ff6b6b",
+    wickUpColor: "#2bb988",
+    wickDownColor: "#ff6b6b",
   });
 
-  if (state.candles.length) {
-    candleSeries.setData(state.candles);
-  }
+  state.chart = chart;
+  state.candleSeries = series;
+
+  window.addEventListener("resize", () => {
+    const { width: w } = root.getBoundingClientRect();
+    chart.applyOptions({ width: w || 900 });
+  });
 
   log("Chart initialized");
 }
@@ -97,93 +70,77 @@ async function loadCandles() {
 
   try {
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    const candles = Array.isArray(data) ? data : data.candles || [];
 
-    const raw = json.candles || json.data || [];
-    const mapped = raw
-      .map(mapCandle)
-      .filter(Boolean)
-      .sort((a, b) => a.time - b.time);
-
-    state.candles = mapped;
-
-    if (candleSeries) {
-      candleSeries.setData(mapped);
-      chart.timeScale().fitContent();
+    if (!state.candleSeries) {
+      console.warn("candleSeries not ready");
+      return;
     }
 
-    const labelPair = document.getElementById("pair-label");
-    if (labelPair) {
-      labelPair.textContent = state.symbol;
-    }
+    const items = candles.map((c) => ({
+      time: Math.floor((c.time || c.t) / 1000) || c.time || c.t,
+      open: Number(c.open),
+      high: Number(c.high),
+      low: Number(c.low),
+      close: Number(c.close),
+    }));
 
-    log(
-      `Loaded ${mapped.length} candles for ${state.symbol} @ ${state.tf} (Bybit testnet)`
-    );
+    state.candleSeries.setData(items);
+    log(`Loaded ${items.length} candles for ${state.symbol} ${state.tf}`);
   } catch (e) {
-    console.error(e);
-    log(`Failed to load candles: ${e.message}`);
+    console.error("loadCandles error", e);
   }
 }
 
-// --------- WEBSOCKET ---------
+// ---------- WS LIVE FEED ----------
+
 function connectWs() {
-  // закрываем старый
-  if (state.ws) {
-    try {
-      state.ws.close();
-    } catch (_) {}
-    state.ws = null;
-  }
-
-  const proto = window.location.protocol === "https:" ? "wss" : "ws";
-  const wsUrl = `${proto}://${window.location.host}/ws`;
-
   try {
+    const proto = window.location.protocol === "https:" ? "wss" : "ws";
+    const wsUrl = `${proto}://${window.location.host}/ws`;
     const ws = new WebSocket(wsUrl);
-    state.ws = ws;
 
     ws.onopen = () => {
-      log("WebSocket connected");
-      const statusEl = document.getElementById("ws-status");
-      if (statusEl) statusEl.textContent = "online";
-    };
-
-    ws.onclose = () => {
-      log("WebSocket closed");
-      const statusEl = document.getElementById("ws-status");
-      if (statusEl) statusEl.textContent = "offline";
-    };
-
-    ws.onerror = (err) => {
-      console.error("WS error", err);
-      log("WebSocket error");
+      log("WS connected");
     };
 
     ws.onmessage = (event) => {
-      let msg;
       try {
-        msg = JSON.parse(event.data);
-      } catch (_) {
-        return;
+        const msg = JSON.parse(event.data);
+        if (msg.type === "candle" && msg.data && state.candleSeries) {
+          const c = msg.data;
+          const bar = {
+            time: Math.floor((c.time || c.t) / 1000) || c.time || c.t,
+            open: Number(c.open),
+            high: Number(c.high),
+            low: Number(c.low),
+            close: Number(c.close),
+          };
+          state.candleSeries.update(bar);
+        }
+      } catch (err) {
+        console.error("WS message error", err);
       }
-
-      // поддержка разных форматов: {type:"candle", data:{...}} или сразу {...}
-      const payload = msg.data || msg.candle || msg;
-      const mapped = mapCandle(payload);
-      if (!mapped || !candleSeries) return;
-
-      candleSeries.update(mapped);
-      state.candles.push(mapped);
     };
+
+    ws.onclose = () => {
+      log("WS closed");
+      // простой реконнект
+      setTimeout(connectWs, 3000);
+    };
+
+    state.socket = ws;
   } catch (e) {
-    console.error(e);
-    log("Failed to init WebSocket");
+    console.error("WS connect error", e);
   }
 }
 
-// --------- CONTROLS ---------
+// ---------- CONTROLS (symbol / tf) ----------
+
 function initControls() {
   const symbolSelect = document.getElementById("symbol-select");
   const tfSelect = document.getElementById("tf-select");
@@ -206,7 +163,6 @@ function initControls() {
     });
   }
 
-  // Кнопки с data-tf / data-symbol (если появятся в дизайне)
   document.querySelectorAll("[data-tf]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const v = btn.getAttribute("data-tf");
@@ -228,13 +184,135 @@ function initControls() {
       await loadCandles();
     });
   });
+
+  log("Controls initialized");
 }
 
-// --------- INIT ---------
+// ---------- BACKTEST PANEL + API ----------
+
+function ensureBacktestPanel() {
+  let panel = document.getElementById("cbp-backtest-panel");
+  if (panel) return panel;
+
+  const grid = document.querySelector(".grid") || document.body;
+
+  panel = document.createElement("div");
+  panel.id = "cbp-backtest-panel";
+  panel.className = "card";
+
+  panel.innerHTML = `
+    <div class="card-header">
+      <div>
+        <h3>Backtest</h3>
+        <p class="muted">Simple test strategy on latest candles</p>
+      </div>
+      <button id="cbp-backtest-run" class="btn primary">Run backtest</button>
+    </div>
+    <div class="card-body">
+      <div class="stats small">
+        <div class="stat">
+          <div class="stat-label">Status</div>
+          <div class="stat-value" id="cbp-backtest-status">idle</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Trades</div>
+          <div class="stat-value" id="cbp-backtest-trades">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Return</div>
+          <div class="stat-value" id="cbp-backtest-return">0.00%</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  grid.appendChild(panel);
+  return panel;
+}
+
+function updateBacktestUI(payload) {
+  ensureBacktestPanel();
+  const data = payload || {};
+  const stats = data.stats || data;
+
+  const statusEl = document.getElementById("cbp-backtest-status");
+  const tradesEl = document.getElementById("cbp-backtest-trades");
+  const retEl = document.getElementById("cbp-backtest-return");
+
+  if (statusEl) statusEl.textContent = stats.status || "ok";
+  if (tradesEl) tradesEl.textContent = stats.trades != null ? stats.trades : "0";
+
+  if (retEl) {
+    const rp = stats.return_pct != null ? Number(stats.return_pct) : 0;
+    retEl.textContent = `${rp.toFixed(2)}%`;
+  }
+}
+
+async function runBacktest() {
+  ensureBacktestPanel();
+  const btn = document.getElementById("cbp-backtest-run");
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Running...";
+  }
+
+  try {
+    log("Backtest run started");
+    await fetch("/api/backtest/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        symbol: state.symbol,
+        tf: state.tf,
+        initial_balance: 1000,
+      }),
+    });
+
+    const res = await fetch("/api/backtest/summary");
+    if (!res.ok) {
+      throw new Error(`summary HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    updateBacktestUI(data);
+    log("Backtest finished");
+  } catch (e) {
+    console.error("runBacktest error", e);
+    updateBacktestUI({ stats: { status: "error", trades: 0, return_pct: 0 } });
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Run backtest";
+    }
+  }
+}
+
+function initBacktestControls() {
+  const panel = ensureBacktestPanel();
+  const btn = panel.querySelector("#cbp-backtest-run");
+  if (btn) {
+    btn.addEventListener("click", runBacktest);
+  }
+
+  fetch("/api/backtest/summary")
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data) => {
+      if (data) updateBacktestUI(data);
+    })
+    .catch(() => {});
+
+  window.cbpRunBacktest = runBacktest;
+
+  log("Backtest controls initialized");
+}
+
+// ---------- INIT ----------
+
 document.addEventListener("DOMContentLoaded", async () => {
   log("Dashboard init...");
   initChart();
   await loadCandles();
   connectWs();
   initControls();
+  initBacktestControls();
 });
