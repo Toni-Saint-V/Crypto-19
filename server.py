@@ -1,3 +1,7 @@
+USE_MOCK = os.getenv("CBP_USE_MOCK", "1") == "1"
+
+import os
+from web.bybit_client import fetch_ohlcv
 from fastapi import FastAPI, WebSocket, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -82,3 +86,27 @@ async def api_equity():
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
     await ws_live_loop(ws)
+
+@app.get("/api/candles")
+async def api_candles(
+    symbol: str = "BTCUSDT",
+    tf: str = "1m",
+    limit: int = 200,
+    net: str = "testnet",
+):
+    # MOCK-режим: как было раньше — рисуем тестовые свечи
+    if USE_MOCK:
+        candles = []
+        for i in range(limit):
+            candles.append({
+                "time": 1730000000 + i * 60,
+                "open": 50000,
+                "high": 50500,
+                "low": 49500,
+                "close": 50200,
+            })
+        return {"symbol": symbol, "tf": tf, "data": candles}
+
+    # REAL TESTNET: тянем свечи с Bybit
+    candles = await fetch_ohlcv(symbol=symbol, tf=tf, limit=limit)
+    return {"symbol": symbol, "tf": tf, "data": candles}
