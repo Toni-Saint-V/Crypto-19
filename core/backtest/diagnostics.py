@@ -1,5 +1,16 @@
-def diagnose(data=None):
+from typing import Dict, List
+
+def diagnose(result: Dict, equity_curve: List[Dict]) -> Dict:
     """
-    Простая заглушка диагностики, чтобы проект запускался.
+    Простейшая диагностика результата бэктеста.
+    Можно расширить (max drawdown, Sharpe и т.п.).
     """
-    return {"diagnostics": "ok"}
+    if not equity_curve:
+        return {"note": "empty equity curve"}
+
+    equities = [p["equity"] for p in equity_curve]
+    return {
+        "max_equity": max(equities),
+        "min_equity": min(equities),
+        "trades": result.get("trades", 0),
+    }
