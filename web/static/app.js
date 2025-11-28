@@ -1,161 +1,187 @@
-;(function () {
-  const $ = (id) => document.getElementById(id);
+(function () {
+  let chart;
+  let candleSeries;
+  let ws;
 
-  let chart = null;
-  let candleSeries = null;
+  function $(id) {
+    return document.getElementById(id);
+  }
 
-  // ---------------- CHART ----------------
   function initChart() {
-    const container = $("chart-root");
-    if (!container) {
+    const root = $("chart-root");
+    if (!root) {
       console.error("chart-root not found");
       return;
     }
-
-    if (!window.LightweightCharts || !LightweightCharts.createChart) {
-      console.error("LightweightCharts not loaded", window.LightweightCharts);
+    if (!window.LightweightCharts) {
+      console.error("LightweightCharts is not available");
       return;
     }
 
-    chart = LightweightCharts.createChart(container, {
-      height: container.clientHeight || 480,
+    chart = LightweightCharts.createChart(root, {
       layout: {
-        background: { color: "#0b1321" },
+        background: { type: "solid", color: "rgba(0,0,0,0)" },
         textColor: "#c3cee5",
+        fontSize: 12
       },
       grid: {
         vertLines: { color: "#1b2740" },
-        horzLines: { color: "#1b2740" },
-      },
-      timeScale: {
-        timeVisible: true,
-        secondsVisible: true,
+        horzLines: { color: "#1b2740" }
       },
       rightPriceScale: {
-        borderColor: "#1b2740",
+        borderColor: "#1b2740"
       },
+      timeScale: {
+        borderColor: "#1b2740",
+        timeVisible: true,
+        secondsVisible: false
+      }
     });
 
     candleSeries = chart.addCandlestickSeries({
       upColor: "#2bb988",
       downColor: "#ff6b6b",
-      wickUpColor: "#2bb988",
-      wickDownColor: "#ff6b6b",
       borderVisible: false,
+      wickUpColor: "#2bb988",
+      wickDownColor: "#ff6b6b"
+    });
+
+    const resizeObserver = new ResizeObserver(function () {
+      chart.applyOptions({
+        width: root.clientWidth,
+        height: root.clientHeight
+      });
+    });
+    resizeObserver.observe(root);
+    chart.applyOptions({
+      width: root.clientWidth,
+      height: root.clientHeight
     });
   }
 
-  // ---------------- STATUS ----------------
   async function loadStatus() {
     try {
       const res = await fetch("/api/status");
-      if (!res.ok) throw new Error("status " + res.status);
+      if (!res.ok) return;
       const data = await res.json();
-
-      const mode = $("badge-mode");
-      const net = $("badge-net");
-      const eqVal = $("equity-value");
-      const pnlVal = $("pnl-value");
-      const openTrades = $("open-trades");
-      const stratName = $("strategy-name");
-
-      if (mode && data.mode) mode.textContent = data.mode;
-      if (net && data.network) net.textContent = data.network;
-      if (eqVal && data.equity != null && data.currency) {
-        eqVal.textContent = `${data.equity.toLocaleString("ru-RU")} ${data.currency}`;
-      }
-      if (pnlVal && data.pnl_pct != null) {
-        const sign = data.pnl_pct >= 0 ? "+" : "";
-        pnlVal.textContent = `${sign}${data.pnl_pct}%`;
-        pnlVal.classList.toggle("good", data.pnl_pct >= 0);
-        pnlVal.classList.toggle("bad", data.pnl_pct < 0);
-      }
-      if (openTrades && data.open_trades != null) {
-        openTrades.textContent = data.open_trades;
-      }
-      if (stratName && data.strategy) {
-        stratName.textContent = data.strategy;
-      }
+      const backend = $("st-backend");
+      const uptime = $("st-uptime");
+      if (backend && data.status) backend.textContent = data.status;
+      if (uptime && data.uptime) uptime.textContent = data.uptime;
     } catch (e) {
       console.error("status error", e);
     }
   }
 
-  // ---------------- CANDLES (REST) ----------------
   async function loadCandles() {
     if (!candleSeries) return;
-
     try {
       const res = await fetch("/api/candles");
-      if (!res.ok) throw new Error("status " + res.status);
+      if (!res.ok) return;
       const payload = await res.json();
-      const raw = payload.candles || payload.data || [];
-
-      const candles = raw.map((c) => ({
-        time: c.time,
-        open: Number(c.open),
-        high: Number(c.high),
-        low: Number(c.low),
-        close: Number(c.close),
-      }));
-
-      candleSeries.setData(candles);
+      const candles = payload.candles || [];
+      if (!Array.isArray(candles) || candles.length === 0) return;
+      const prepared = candles.map(function (c) {
+        return {
+          time: c.time,
+          open: Number(c.open),
+          high: Number(c.high),
+          low: Number(c.low),
+          close: Number(c.close)
+        };
+      });
+      candleSeries.setData(prepared);
+      const feedDot = $("feed-dot");
+      if (feedDot) feedDot.classList.add("online");
     } catch (e) {
       console.error("candles error", e);
     }
   }
 
-  // ---------------- BACKTEST ----------------
   async function runBacktest() {
     const btn = $("btn-backtest");
-    const tag = $("backtest-status");
+    const statusEl = $("backtest-status");
+    const dot = $("bt-dot");
     const meta = $("backtest-meta");
+    const retEl = $("bt-return");
+    const tradesEl = $("bt-trades");
+    const logEl = $("bt-log");
 
-    if (btn) btn.disabled = true;
-    if (tag) tag.textContent = "running...";
-    if (meta) meta.textContent = "";
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Считаем...";
+    }
+    if (statusEl) statusEl.textContent = "running";
+    if (dot) {
+      dot.classList.remove("idle");
+      dot.classList.add("online");
+    }
+    if (meta) meta.textContent = "Бэктест в процессе...";
 
     try {
-      const res = await fetch("/api/backtest/run", { method: "POST" });
-      if (!res.ok) throw new Error("status " + res.status);
-      await res.json();
+      await fetch("/api/backtest/run", { method: "POST" });
+      const res = await fetch("/api/backtest/summary");
+      if (res.ok) {
+        const data = await res.json();
+        const ret = data.return_pct;
+        const trades = data.trades;
 
-      const sumRes = await fetch("/api/backtest/summary");
-      const summary = await sumRes.json();
-
-      if (tag) tag.textContent = "done";
-      if (meta && summary) {
-        const ret = summary.return_pct ?? summary.ret ?? 0;
-        const trades = summary.trades ?? 0;
-        meta.textContent = `Доходность: ${ret}% • Сделок: ${trades}`;
+        if (retEl) {
+          if (typeof ret === "number") {
+            retEl.textContent = ret.toFixed(1) + " %";
+          } else {
+            retEl.textContent = "—";
+          }
+        }
+        if (tradesEl) {
+          tradesEl.textContent = trades != null ? String(trades) : "—";
+        }
+        if (meta) meta.textContent = "Последний прогон завершён.";
+        if (logEl) {
+          var retText = typeof ret === "number" ? ret.toFixed(1) + "%" : "—";
+          var trText = trades != null ? String(trades) : "—";
+          logEl.textContent =
+            "Бэктест завершён. Сделок: " + trText + ", доходность: " + retText + ".";
+        }
+        if (statusEl) statusEl.textContent = "done";
       }
     } catch (e) {
       console.error("backtest error", e);
-      if (tag) tag.textContent = "error";
-      if (meta) meta.textContent = "см. логи сервера";
+      if (meta) meta.textContent = "Не удалось выполнить бэктест.";
+      if (statusEl) statusEl.textContent = "error";
     } finally {
-      if (btn) btn.disabled = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "Запустить бэктест";
+      }
+      if (dot) {
+        dot.classList.remove("online");
+        dot.classList.add("idle");
+      }
     }
   }
 
-  // ---------------- WS LIVE FEED ----------------
   function connectWs() {
-    const statusDot = $("ws-status");
-    function setWsBadge(text, cls) {
-      if (!statusDot) return;
-      statusDot.textContent = text;
-      statusDot.classList.remove("online", "offline");
-      if (cls) statusDot.classList.add(cls);
+    try {
+      const url =
+        (location.protocol === "https:" ? "wss://" : "ws://") +
+        location.host +
+        "/ws";
+      ws = new WebSocket(url);
+    } catch (e) {
+      console.error("ws open error", e);
+      return;
     }
 
-    const proto = window.location.protocol === "https:" ? "wss://" : "ws://";
-    const url = proto + window.location.host + "/ws";
+    const wsStatus = $("st-ws");
 
-    let ws = new WebSocket(url);
+    ws.onopen = function () {
+      if (wsStatus) wsStatus.textContent = "online";
+      const feedDot = $("feed-dot");
+      if (feedDot) feedDot.classList.add("online");
+    };
 
-    ws.onopen = () => setWsBadge("online", "online");
-
-    ws.onmessage = (event) => {
+    ws.onmessage = function (event) {
       try {
         const msg = JSON.parse(event.data);
         if (msg.type === "candle" && candleSeries) {
@@ -165,7 +191,7 @@
             open: Number(c.open),
             high: Number(c.high),
             low: Number(c.low),
-            close: Number(c.close),
+            close: Number(c.close)
           });
         }
       } catch (e) {
@@ -173,27 +199,73 @@
       }
     };
 
-    ws.onclose = () => {
-      setWsBadge("offline", "offline");
+    ws.onclose = function () {
+      if (wsStatus) wsStatus.textContent = "offline";
       setTimeout(connectWs, 3000);
     };
 
-    ws.onerror = (e) => {
-      console.error("ws error", e);
-      ws.close();
+    ws.onerror = function () {
+      if (wsStatus) wsStatus.textContent = "error";
+      try {
+        ws.close();
+      } catch (e) {}
     };
   }
 
-  // ---------------- CONTROLS ----------------
-  function wireControls() {
+  function setupTabs() {
+    const tabs = document.querySelectorAll(".tab");
+    const panels = document.querySelectorAll(".tab-panel");
+
+    tabs.forEach(function (tab) {
+      tab.addEventListener("click", function () {
+        const target = tab.getAttribute("data-tab");
+        tabs.forEach(function (t) {
+          t.classList.remove("active");
+        });
+        panels.forEach(function (p) {
+          p.classList.remove("active");
+        });
+        tab.classList.add("active");
+        const panel = document.getElementById("tab-" + target);
+        if (panel) panel.classList.add("active");
+      });
+    });
+  }
+
+  function setupToolbar() {
+    const chips = document.querySelectorAll(".chip");
+    const symbolSelect = $("symbol-select");
+    const subtitle = $("chart-subtitle");
+
+    chips.forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        chips.forEach(function (c) {
+          c.classList.remove("chip-active");
+        });
+        chip.classList.add("chip-active");
+        const tf = chip.getAttribute("data-tf") || "1m";
+        const symbol = symbolSelect ? symbolSelect.value : "BTCUSDT";
+        if (subtitle) subtitle.textContent = symbol + " · " + tf;
+      });
+    });
+
+    if (symbolSelect) {
+      symbolSelect.addEventListener("change", function () {
+        const activeChip = document.querySelector(".chip.chip-active");
+        const tf = activeChip ? activeChip.getAttribute("data-tf") || "1m" : "1m";
+        const symbol = symbolSelect.value;
+        if (subtitle) subtitle.textContent = symbol + " · " + tf;
+      });
+    }
+
     const btBtn = $("btn-backtest");
     if (btBtn) btBtn.addEventListener("click", runBacktest);
   }
 
-  // ---------------- INIT ----------------
   async function init() {
     initChart();
-    wireControls();
+    setupToolbar();
+    setupTabs();
     await loadStatus();
     await loadCandles();
     connectWs();

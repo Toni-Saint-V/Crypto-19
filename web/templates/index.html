@@ -5,144 +5,226 @@
   <title>CryptoBot Pro — Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="/static/tokens.css" />
-  <style>
-    body{margin:0;background:#050814;color:#c3cee5;font:14px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial}
-    .wrap{display:flex;flex-direction:column;gap:12px;padding:12px;min-height:100vh}
-    header{display:flex;align-items:center;justify-content:space-between;background:#111a2b;border-radius:12px;padding:12px 16px;box-shadow:0 8px 16px rgba(0,0,0,.25)}
-    .brand{display:flex;flex-direction:column}
-    .brand-title{font-weight:600;font-size:16px}
-    .brand-sub{font-size:12px;color:#72809a}
-    .header-right{display:flex;align-items:center;gap:10px}
-    .badge{border-radius:999px;border:1px solid rgba(255,255,255,.08);padding:4px 10px;font-size:11px;color:#9da9c6;background:#050a16}
-    .badge strong{color:#e7edf5}
-    .pill{border-radius:999px;background:#182235;padding:4px 10px;font-size:11px;color:#72809a}
-    .pill.online{color:#2bb988}
-    .pill.offline{color:#ff6b6b}
-    .grid{display:grid;grid-template-columns:2.2fr 1.1fr;gap:12px;margin-top:4px}
-    .card{background:#111a2b;border-radius:12px;padding:12px 14px;box-shadow:0 6px 14px rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.06)}
-    .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-    .card-title{font-size:13px;font-weight:500}
-    .card-sub{font-size:11px;color:#72809a}
-    .card-body{position:relative}
-    .chart-main{width:100%;min-height:420px}
-    .controls-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-    select,.btn{background:#0c1628;border-radius:999px;border:1px solid rgba(255,255,255,.08);padding:6px 10px;font-size:12px;color:#e7edf5;outline:none}
-    select{padding-right:26px}
-    .btn{cursor:pointer;display:inline-flex;align-items:center;gap:6px}
-    .btn-primary{background:#2780ff;border-color:#2780ff}
-    .btn-primary:disabled{opacity:.6;cursor:default}
-    .btn-sm{font-size:11px;padding:4px 9px}
-    .stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px}
-    .stats.small{grid-template-columns:repeat(2,minmax(0,1fr))}
-    .stat{display:flex;flex-direction:column;gap:2px}
-    .stat-label{font-size:11px;color:#72809a}
-    .stat-value{font-size:13px}
-    .stat-value.good{color:#2bb988}
-    .stat-value.bad{color:#ff6b6b}
-    .muted{margin:0;font-size:12px;color:#72809a}
-    .tag{border-radius:999px;background:#182235;color:#9da9c6;font-size:11px;padding:3px 8px;display:inline-flex;align-items:center;gap:4px}
-    .tag-dot{width:6px;height:6px;border-radius:50%;background:#2bb988}
-    .tag-dot.error{background:#ff6b6b}
-    .section-title{font-size:12px;color:#9da9c6;margin-bottom:6px}
-    @media (max-width:900px){
-      .grid{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto}
-    }
-  </style>
-  <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
-  <script defer src="/static/app.js"></script>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <div class="brand">
-      <div class="brand-title">CryptoBot Pro</div>
-      <div class="brand-sub">Личный дашборд · Mock candles</div>
-    </div>
-    <div class="header-right">
-      <span class="badge">Режим: <strong id="badge-mode">Локальный</strong></span>
-      <span class="badge">Сеть: <strong id="badge-net">Testnet mock</strong></span>
-      <span class="pill offline" id="ws-status">offline</span>
-    </div>
-  </header>
-
-  <div class="grid">
-    <!-- ЛЕВАЯ КОЛОНКА: график -->
-    <section class="card card-chart">
-      <div class="card-header">
-        <div>
-          <div class="card-title">График цены</div>
-          <div class="card-sub">BTCUSDT · 1m</div>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand">
+        <div class="brand-title">CryptoBot Pro</div>
+        <div class="brand-sub">Личный дашборд · Mock candles</div>
+      </div>
+      <div class="top-filters">
+        <div class="field">
+          <label class="field-label">Пара</label>
+          <select id="symbol-select">
+            <option value="BTCUSDT" selected>BTCUSDT</option>
+            <option value="ETHUSDT">ETHUSDT</option>
+            <option value="SOLUSDT">SOLUSDT</option>
+          </select>
         </div>
-        <div class="controls-row">
-          <select id="pair-select">
-            <option>BTCUSDT</option>
-            <option>ETHUSDT</option>
-          </select>
+        <div class="field">
+          <label class="field-label">Таймфрейм</label>
           <select id="tf-select">
-            <option>1m</option>
-            <option>5m</option>
-            <option>1h</option>
+            <option value="1m" selected>1m</option>
+            <option value="5m">5m</option>
+            <option value="1h">1h</option>
           </select>
-          <button class="btn btn-primary" id="btn-backtest">
-            Запустить бэктест
-          </button>
         </div>
       </div>
-      <div class="card-body">
-        <!-- ВАЖНО: сюда рисуем график -->
-        <div id="chart-root" class="chart-main"></div>
+      <div class="top-right">
+        <div class="top-pills">
+          <span class="pill" id="mode-pill">
+            <span class="pill-label">Локальный режим</span>
+          </span>
+          <span class="pill" id="net-pill">
+            <span class="pill-dot online" id="net-dot"></span>
+            <span class="pill-label" id="net-label">Testnet mock</span>
+          </span>
+        </div>
+        <button class="btn btn-ghost" id="btn-ai">
+          <span class="btn-dot"></span>
+          Спросить AI о рынке
+        </button>
+      </div>
+    </header>
+
+    <section class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-label">Equity</div>
+        <div class="kpi-value" id="kpi-equity">10 000 USDT</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">P&amp;L (mock)</div>
+        <div class="kpi-value kpi-good" id="kpi-pnl">+2.3%</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Открытых сделок</div>
+        <div class="kpi-value" id="kpi-open-trades">0</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Стратегия</div>
+        <div class="kpi-value" id="kpi-strategy">Three-Candle (demo)</div>
       </div>
     </section>
 
-    <!-- ПРАВАЯ КОЛОНКА -->
-    <div class="col-right">
-      <!-- Портфель -->
-      <section class="card card-equity">
+    <section class="grid">
+      <section class="card card-chart">
         <div class="card-header">
           <div>
-            <div class="card-title">Сводка портфеля</div>
+            <div class="card-title">График цены</div>
+            <div class="card-sub" id="chart-subtitle">BTCUSDT · 1m</div>
           </div>
+          <span class="tag tag-inline">
+            <span class="tag-dot online" id="feed-dot"></span>
+            <span id="feed-label">online</span>
+          </span>
         </div>
-        <div class="card-body">
-          <div class="stats">
-            <div class="stat">
-              <span class="stat-label">Equity</span>
-              <span class="stat-value" id="equity-value">10 000 USDT</span>
-            </div>
-            <div class="stat">
-              <span class="stat-label">P&amp;L (mock)</span>
-              <span class="stat-value good" id="pnl-value">+0.0%</span>
-            </div>
-            <div class="stat">
-              <span class="stat-label">Открытых сделок</span>
-              <span class="stat-value" id="open-trades">0</span>
-            </div>
-            <div class="stat">
-              <span class="stat-label">Стратегия</span>
-              <span class="stat-value" id="strategy-name">Three-Candle (demo)</span>
-            </div>
+
+        <div class="chart-toolbar">
+          <div class="chart-toolbar-left">
+            <button class="chip chip-active" data-tf="1m">1m</button>
+            <button class="chip" data-tf="5m">5m</button>
+            <button class="chip" data-tf="1h">1h</button>
           </div>
+          <button class="btn btn-primary" id="btn-backtest">Запустить бэктест</button>
+        </div>
+
+        <div class="chart-shell">
+          <div id="chart-root"></div>
         </div>
       </section>
 
-      <!-- Бэктест -->
-      <section class="card card-bt">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Бэктест</div>
-            <div class="card-sub">Результаты последнего прогона</div>
+      <aside class="side-column">
+        <section class="card card-portfolio">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Сводка портфеля</div>
+              <div class="card-sub">Состояние счёта и стратегии</div>
+            </div>
           </div>
-          <span class="tag">
-            <span class="tag-dot" id="bt-dot"></span>
-            <span id="backtest-status">idle</span>
-          </span>
+          <div class="card-body">
+            <dl class="stats">
+              <div class="stat">
+                <dt>Equity</dt>
+                <dd id="pf-equity">10 000 USDT</dd>
+              </div>
+              <div class="stat">
+                <dt>P&amp;L (mock)</dt>
+                <dd id="pf-pnl" class="good">+2.3%</dd>
+              </div>
+              <div class="stat">
+                <dt>Открытых сделок</dt>
+                <dd id="pf-open-trades">0</dd>
+              </div>
+              <div class="stat">
+                <dt>Стратегия</dt>
+                <dd id="pf-strategy">Three-Candle (demo)</dd>
+              </div>
+            </dl>
+          </div>
+        </section>
+
+        <section class="card card-bt">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Бэктест</div>
+              <div class="card-sub">Результаты последнего прогона</div>
+            </div>
+            <span class="tag">
+              <span class="tag-dot idle" id="bt-dot"></span>
+              <span id="backtest-status">idle</span>
+            </span>
+          </div>
+          <div class="card-body">
+            <p class="muted" id="backtest-meta">
+              Нажми «Запустить бэктест», чтобы увидеть доходность и число сделок.
+            </p>
+            <div class="stats stats-small">
+              <div class="stat">
+                <dt>Доходность</dt>
+                <dd id="bt-return">—</dd>
+              </div>
+              <div class="stat">
+                <dt>Сделок</dt>
+                <dd id="bt-trades">—</dd>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card card-status">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Статус системы</div>
+              <div class="card-sub">Сервер, данные и уведомления</div>
+            </div>
+          </div>
+          <div class="card-body">
+            <dl class="stats stats-small">
+              <div class="stat">
+                <dt>Backend</dt>
+                <dd id="st-backend">ok</dd>
+              </div>
+              <div class="stat">
+                <dt>WebSocket</dt>
+                <dd id="st-ws">online</dd>
+              </div>
+              <div class="stat">
+                <dt>Net</dt>
+                <dd id="st-net">Testnet mock</dd>
+              </div>
+              <div class="stat">
+                <dt>Uptime</dt>
+                <dd id="st-uptime">stable</dd>
+              </div>
+            </dl>
+          </div>
+        </section>
+      </aside>
+    </section>
+
+    <section class="bottom">
+      <div class="tabs">
+        <button class="tab active" data-tab="signals">Сигналы</button>
+        <button class="tab" data-tab="positions">Позиции</button>
+        <button class="tab" data-tab="orders">Ордеры</button>
+        <button class="tab" data-tab="bt-log">Бэктест</button>
+        <button class="tab" data-tab="logs">Логи</button>
+      </div>
+
+      <div class="tab-panels">
+        <div class="tab-panel active" id="tab-signals">
+          <p class="muted">
+            Здесь будет список торговых сигналов и паттернов, обнаруженных ML-движком.
+          </p>
         </div>
-        <div class="card-body">
-          <p class="muted" id="backtest-meta">Нажми «Запустить бэктест», чтобы увидеть доходность и число сделок.</p>
+        <div class="tab-panel" id="tab-positions">
+          <p class="muted">
+            Здесь появятся открытые позиции с PnL, плечом и уровнями стоп-лосс/тейк-профит.
+          </p>
         </div>
-      </section>
-    </div>
+        <div class="tab-panel" id="tab-orders">
+          <p class="muted">
+            Здесь будет история ордеров: заявки, исполнение, отмена.
+          </p>
+        </div>
+        <div class="tab-panel" id="tab-bt-log">
+          <p class="muted" id="bt-log">
+            После запуска бэктеста сюда можно выводить краткий лог сделок и шагов стратегии.
+          </p>
+        </div>
+        <div class="tab-panel" id="tab-logs">
+          <p class="muted">
+            Технические логи системы: ошибки API, reconnect WebSocket, сообщения уведомлений.
+          </p>
+        </div>
+      </div>
+    </section>
   </div>
-</div>
+
+  <div id="toast-root" class="toast-root"></div>
+
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="/static/app.js"></script>
 </body>
 </html>
