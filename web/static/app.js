@@ -1,31 +1,77 @@
 "use strict";
 
-function log(msg) {
-  console.log("[CBP]", msg);
+// ============================
+// HELPERS: лог и нормализация свечей
+// ============================
+
+function cbpLog(msg, extra) {
+  if (extra !== undefined) {
+    console.log("[CBP]", msg, extra);
+  } else {
+    console.log("[CBP]", msg);
+  }
 }
 
-const state = {
+function cbpSanitizeCandles(raw) {
+  if (!Array.isArray(raw)) return [];
+
+  const safe = raw
+    .filter((c) => {
+      if (!c) return false;
+      const { time, open, high, low, close } = c;
+      return (
+        time !== null &&
+        time !== undefined &&
+        open !== null &&
+        open !== undefined &&
+        high !== null &&
+        high !== undefined &&
+        low !== null &&
+        low !== undefined &&
+        close !== null &&
+        close !== undefined
+      );
+    })
+    .map((c) => {
+      return {
+        time: typeof c.time === "number" ? c.time : Math.floor(Number(c.time)),
+        open: Number(c.open),
+        high: Number(c.high),
+        low: Number(c.low),
+        close: Number(c.close),
+      };
+    });
+
+  cbpLog("Sanitized candles", { before: raw.length, after: safe.length });
+  return safe;
+}
+
+// ============================
+// ГЛОБАЛЬНОЕ СОСТОЯНИЕ
+// ============================
+
+const CBP_STATE = {
   symbol: "BTCUSDT",
   tf: "1m",
+  candles: [],
+  backtest: null,
   chart: null,
   candleSeries: null,
-  socket: null,
+  ws: null,
 };
 
-// ---------- CHART ----------
+// ============================
+// ИНИЦИАЛИЗАЦИЯ ЧАРТА
+// ============================
 
-function initChart() {
+function cbpInitChart() {
   const root = document.getElementById("chart-root");
   if (!root) {
-    console.warn("chart-root not found");
+    cbpLog("chart-root not found in DOM");
     return;
   }
-  const { width } = root.getBoundingClientRect();
-  const height = 360;
 
   const chart = LightweightCharts.createChart(root, {
-    width: width || 900,
-    height,
     layout: {
       background: { color: "#0b1321" },
       textColor: "#c3cee5",
@@ -34,291 +80,145 @@ function initChart() {
       vertLines: { color: "#1b2740" },
       horzLines: { color: "#1b2740" },
     },
-    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-    rightPriceScale: {
-      borderColor: "rgba(197, 203, 206, 0.4)",
-    },
     timeScale: {
-      borderColor: "rgba(197, 203, 206, 0.4)",
+      borderColor: "#1b2740",
+    },
+    rightPriceScale: {
+      borderColor: "#1b2740",
     },
   });
 
-  const series = chart.addCandlestickSeries({
-    upColor: "#2bb988",
-    downColor: "#ff6b6b",
-    borderUpColor: "#2bb988",
-    borderDownColor: "#ff6b6b",
-    wickUpColor: "#2bb988",
-    wickDownColor: "#ff6b6b",
-  });
+  const candleSeries = chart.addCandlestickSeries();
 
-  state.chart = chart;
-  state.candleSeries = series;
+  // оборачиваем setData, чтобы всегда чистить вход
+  const origSetData = candleSeries.setData.bind(candleSeries);
+  candleSeries.setData = (raw) => {
+    const safe = cbpSanitizeCandles(raw || []);
+    try {
+      origSetData(safe);
+    } catch (e) {
+      console.error("setData error after sanitize", e);
+    }
+  };
 
-  window.addEventListener("resize", () => {
-    const { width: w } = root.getBoundingClientRect();
-    chart.applyOptions({ width: w || 900 });
-  });
+  CBP_STATE.chart = chart;
+  CBP_STATE.candleSeries = candleSeries;
+  window.chart = chart;
+  window.candleSeries = candleSeries;
 
-  log("Chart initialized");
+  cbpLog("Chart initialized");
 }
 
-async function loadCandles() {
-  const url = `/api/candles?symbol=${encodeURIComponent(
-    state.symbol
-  )}&tf=${encodeURIComponent(state.tf)}`;
+// ============================
+// ЗАГРУЗКА СВЕЧЕЙ С БЭКА
+// ============================
+
+async function cbpLoadCandles(symbol, tf) {
+  CBP_STATE.symbol = symbol;
+  CBP_STATE.tf = tf;
 
   try {
-    const res = await fetch(url);
+    const res = await fetch(
+      `/api/candles?symbol=${encodeURIComponent(symbol)}&tf=${encodeURIComponent(tf)}`
+    );
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-    const data = await res.json();
-    const candles = Array.isArray(data) ? data : data.candles || [];
-
-    if (!state.candleSeries) {
-      console.warn("candleSeries not ready");
+      cbpLog("Failed to load candles", res.status);
       return;
     }
+    const data = await res.json();
+    const candles = Array.isArray(data.candles) ? data.candles : [];
+    const safe = cbpSanitizeCandles(candles);
 
-    const items = candles.map((c) => ({
-      time: Math.floor((c.time || c.t) / 1000) || c.time || c.t,
-      open: Number(c.open),
-      high: Number(c.high),
-      low: Number(c.low),
-      close: Number(c.close),
-    }));
+    CBP_STATE.candles = safe;
 
-    state.candleSeries.setData(items);
-    log(`Loaded ${items.length} candles for ${state.symbol} ${state.tf}`);
+    if (CBP_STATE.candleSeries) {
+      CBP_STATE.candleSeries.setData(safe);
+    }
+
+    cbpLog(`Loaded ${safe.length} candles for ${symbol} ${tf}`);
   } catch (e) {
-    console.error("loadCandles error", e);
+    console.error("Error loading candles", e);
   }
 }
 
-// ---------- WS LIVE FEED ----------
+// ============================
+// WEBSOCKET (mock или real-time)
+// ============================
 
-function connectWs() {
+function cbpInitWS() {
   try {
     const proto = window.location.protocol === "https:" ? "wss" : "ws";
     const wsUrl = `${proto}://${window.location.host}/ws`;
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      log("WS connected");
+      cbpLog("WS connected");
     };
 
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
-        if (msg.type === "candle" && msg.data && state.candleSeries) {
-          const c = msg.data;
-          const bar = {
-            time: Math.floor((c.time || c.t) / 1000) || c.time || c.t,
-            open: Number(c.open),
-            high: Number(c.high),
-            low: Number(c.low),
-            close: Number(c.close),
-          };
-          state.candleSeries.update(bar);
+        if (msg.type === "candle" && msg.data && CBP_STATE.candleSeries) {
+          const raw = msg.data;
+          const safeArr = cbpSanitizeCandles([raw]);
+          if (!safeArr.length) return;
+          const safe = safeArr[0];
+
+          CBP_STATE.candles.push(safe);
+          CBP_STATE.candles = CBP_STATE.candles.slice(-500);
+
+          CBP_STATE.candleSeries.setData(CBP_STATE.candles);
         }
-      } catch (err) {
-        console.error("WS message error", err);
+      } catch (e) {
+        console.warn("WS message parse error", e);
       }
     };
 
     ws.onclose = () => {
-      log("WS closed");
-      // простой реконнект
-      setTimeout(connectWs, 3000);
+      cbpLog("WS closed");
     };
 
-    state.socket = ws;
+    CBP_STATE.ws = ws;
   } catch (e) {
-    console.error("WS connect error", e);
+    console.error("WS init error", e);
   }
 }
-
-// ---------- CONTROLS (symbol / tf) ----------
-
-function initControls() {
-  const symbolSelect = document.getElementById("symbol-select");
-  const tfSelect = document.getElementById("tf-select");
-
-  if (symbolSelect) {
-    symbolSelect.value = state.symbol;
-    symbolSelect.addEventListener("change", async () => {
-      state.symbol = symbolSelect.value;
-      log(`Symbol changed to ${state.symbol}`);
-      await loadCandles();
-    });
-  }
-
-  if (tfSelect) {
-    tfSelect.value = state.tf;
-    tfSelect.addEventListener("change", async () => {
-      state.tf = tfSelect.value;
-      log(`Timeframe changed to ${state.tf}`);
-      await loadCandles();
-    });
-  }
-
-  document.querySelectorAll("[data-tf]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const v = btn.getAttribute("data-tf");
-      if (!v) return;
-      state.tf = v;
-      if (tfSelect) tfSelect.value = v;
-      log(`Timeframe changed to ${state.tf} (button)`);
-      await loadCandles();
-    });
-  });
-
-  document.querySelectorAll("[data-symbol]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const v = btn.getAttribute("data-symbol");
-      if (!v) return;
-      state.symbol = v;
-      if (symbolSelect) symbolSelect.value = v;
-      log(`Symbol changed to ${state.symbol} (button)`);
-      await loadCandles();
-    });
-  });
-
-  log("Controls initialized");
-}
-
-// ---------- BACKTEST PANEL + API ----------
-
-function ensureBacktestPanel() {
-  let panel = document.getElementById("cbp-backtest-panel");
-  if (panel) return panel;
-
-  const grid = document.querySelector(".grid") || document.body;
-
-  panel = document.createElement("div");
-  panel.id = "cbp-backtest-panel";
-  panel.className = "card";
-
-  panel.innerHTML = `
-    <div class="card-header">
-      <div>
-        <h3>Backtest</h3>
-        <p class="muted">Simple test strategy on latest candles</p>
-      </div>
-      <button id="cbp-backtest-run" class="btn primary">Run backtest</button>
-    </div>
-    <div class="card-body">
-      <div class="stats small">
-        <div class="stat">
-          <div class="stat-label">Status</div>
-          <div class="stat-value" id="cbp-backtest-status">idle</div>
-        </div>
-        <div class="stat">
-          <div class="stat-label">Trades</div>
-          <div class="stat-value" id="cbp-backtest-trades">0</div>
-        </div>
-        <div class="stat">
-          <div class="stat-label">Return</div>
-          <div class="stat-value" id="cbp-backtest-return">0.00%</div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  grid.appendChild(panel);
-  return panel;
-}
-
-function updateBacktestUI(payload) {
-  ensureBacktestPanel();
-  const data = payload || {};
-  const stats = data.stats || data;
-
-  const statusEl = document.getElementById("cbp-backtest-status");
-  const tradesEl = document.getElementById("cbp-backtest-trades");
-  const retEl = document.getElementById("cbp-backtest-return");
-
-  if (statusEl) statusEl.textContent = stats.status || "ok";
-  if (tradesEl) tradesEl.textContent = stats.trades != null ? stats.trades : "0";
-
-  if (retEl) {
-    const rp = stats.return_pct != null ? Number(stats.return_pct) : 0;
-    retEl.textContent = `${rp.toFixed(2)}%`;
-  }
-}
-
-async function runBacktest() {
-  ensureBacktestPanel();
-  const btn = document.getElementById("cbp-backtest-run");
-
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = "Running...";
-  }
-
-  try {
-    log("Backtest run started");
-    await fetch("/api/backtest/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        symbol: state.symbol,
-        tf: state.tf,
-        initial_balance: 1000,
-      }),
-    });
-
-    const res = await fetch("/api/backtest/summary");
-    if (!res.ok) {
-      throw new Error(`summary HTTP ${res.status}`);
-    }
-    const data = await res.json();
-    updateBacktestUI(data);
-    log("Backtest finished");
-  } catch (e) {
-    console.error("runBacktest error", e);
-    updateBacktestUI({ stats: { status: "error", trades: 0, return_pct: 0 } });
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = "Run backtest";
-    }
-  }
-}
-
-function initBacktestControls() {
-  const panel = ensureBacktestPanel();
-  const btn = panel.querySelector("#cbp-backtest-run");
-  if (btn) {
-    btn.addEventListener("click", runBacktest);
-  }
-
-  fetch("/api/backtest/summary")
-    .then((res) => (res.ok ? res.json() : null))
-    .then((data) => {
-      if (data) updateBacktestUI(data);
-    })
-    .catch(() => {});
-
-  window.cbpRunBacktest = runBacktest;
-
-  log("Backtest controls initialized");
-}
-
-// ---------- INIT ----------
-
-document.addEventListener("DOMContentLoaded", async () => {
-  log("Dashboard init...");
-  initChart();
-  await loadCandles();
-  connectWs();
-  initControls();
-  initBacktestControls();
-});
 
 // ============================
-// ENHANCED BACKTEST UI + MARKERS
+// КОНТРОЛЫ: символы, таймфреймы
+// ============================
+
+function cbpInitControls() {
+  // селект символа
+  const sel =
+    document.getElementById("symbol-select") ||
+    document.querySelector("[data-cbp-symbol-select]");
+  if (sel) {
+    sel.addEventListener("change", () => {
+      const symbol = sel.value || "BTCUSDT";
+      cbpLog("Symbol changed", symbol);
+      cbpLoadCandles(symbol, CBP_STATE.tf);
+    });
+  }
+
+  // кнопки таймфрейма (по data-атрибуту, чтобы не зависеть от конкретных id)
+  const tfButtons = document.querySelectorAll("[data-tf]");
+  tfButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tf = btn.getAttribute("data-tf");
+      if (!tf) return;
+      cbpLog(`Timeframe changed to ${tf} (button)`);
+      cbpLoadCandles(CBP_STATE.symbol, tf);
+      tfButtons.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+    });
+  });
+
+  cbpLog("Controls initialized");
+}
+
+// ============================
+// BACKTEST: отрисовка UI и маркеров
 // ============================
 
 function cbpRenderTradesTable(trades) {
@@ -367,7 +267,7 @@ function cbpRenderVirtualPosition(data) {
   };
 
   if (!last) {
-    setText("pos-symbol", data && data.symbol ? data.symbol : "—");
+    setText("pos-symbol", (data && data.symbol) || "—");
     setText("pos-side", "—");
     setText("pos-entry", "—");
     setText("pos-pnl", "—");
@@ -380,31 +280,33 @@ function cbpRenderVirtualPosition(data) {
   setText(
     "pos-pnl",
     last.pnl_pct != null
-      ? ((last.pnl_pct > 0 ? "+" : "") + last.pnl_pct + "%")
+      ? (last.pnl_pct > 0 ? "+" : "") + last.pnl_pct + "%"
       : "—"
   );
 }
 
 function cbpApplyMarkersFromBacktest(data) {
-  if (!window.candleSeries) {
-    // график ещё не инициализирован
-    return;
-  }
+  const series = CBP_STATE.candleSeries;
+  if (!series) return;
+
   const candles = (data && data.candles) || [];
   const trades = (data && data.trades) || [];
-  if (!candles.length || !trades.length) {
-    // просто сбрасываем маркеры, если нечего ставить
-    try {
-      window.candleSeries.setMarkers([]);
-    } catch (e) {}
+
+  if (!candles.length) {
+    // нет свечей — ничего не делаем
     return;
   }
 
-  // Обновим свечи на графике теми же, по которым считали бэктест
-  try {
-    window.candleSeries.setData(candles);
-  } catch (e) {
-    console.warn("setData error", e);
+  // обновим свечи на графике теми же, по которым считали бэктест
+  series.setData(candles);
+
+  if (!trades.length) {
+    try {
+      series.setMarkers([]);
+    } catch (e) {
+      console.warn("setMarkers([]) error", e);
+    }
+    return;
   }
 
   const markers = [];
@@ -416,7 +318,6 @@ function cbpApplyMarkersFromBacktest(data) {
 
     const isLong = t.side === "LONG";
 
-    // маркер входа
     markers.push({
       time: entry.time,
       position: isLong ? "belowBar" : "aboveBar",
@@ -425,7 +326,6 @@ function cbpApplyMarkersFromBacktest(data) {
       text: t.side + " " + t.entry_price,
     });
 
-    // маркер выхода
     markers.push({
       time: exit.time,
       position: isLong ? "aboveBar" : "belowBar",
@@ -436,20 +336,19 @@ function cbpApplyMarkersFromBacktest(data) {
   });
 
   try {
-    window.candleSeries.setMarkers(markers);
+    series.setMarkers(markers);
   } catch (e) {
     console.warn("setMarkers error", e);
   }
 }
 
-// Переопределяем updateBacktestUI (если была раньше) на более умную версию
+// Переопределяем/задаём updateBacktestUI глобально
 window.updateBacktestUI = function updateBacktestUI(data) {
   try {
     cbpRenderTradesTable((data && data.trades) || []);
     cbpRenderVirtualPosition(data);
     cbpApplyMarkersFromBacktest(data);
 
-    // если есть summary-блоки, тоже обновим (опционально)
     const setText = (id, value) => {
       const el = document.getElementById(id);
       if (el) el.textContent = value;
@@ -462,7 +361,7 @@ window.updateBacktestUI = function updateBacktestUI(data) {
       setText(
         "bt-pnl",
         data.total_pnl_pct != null
-          ? ((data.total_pnl_pct > 0 ? "+" : "") + data.total_pnl_pct + "%")
+          ? (data.total_pnl_pct > 0 ? "+" : "") + data.total_pnl_pct + "%"
           : "—"
       );
       setText("bt-trades-count", data.trades_count || 0);
@@ -471,3 +370,73 @@ window.updateBacktestUI = function updateBacktestUI(data) {
     console.error("updateBacktestUI error", e);
   }
 };
+
+// ============================
+// BACKTEST: запросы к API
+// ============================
+
+async function cbpLoadBacktestSummary() {
+  try {
+    const res = await fetch("/api/backtest/summary");
+    if (!res.ok) {
+      cbpLog("Backtest summary failed", res.status);
+      return;
+    }
+    const data = await res.json();
+    CBP_STATE.backtest = data;
+    window.updateBacktestUI(data);
+  } catch (e) {
+    console.error("Error loading backtest summary", e);
+  }
+}
+
+async function cbpRunBacktest() {
+  const payload = {
+    symbol: CBP_STATE.symbol,
+    tf: CBP_STATE.tf,
+  };
+
+  try {
+    cbpLog("Run backtest", payload);
+    await fetch("/api/backtest/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    await cbpLoadBacktestSummary();
+  } catch (e) {
+    console.error("Error running backtest", e);
+  }
+}
+
+function cbpInitBacktestControls() {
+  const btn =
+    document.getElementById("bt-run") ||
+    document.getElementById("backtest-run-btn");
+  if (btn) {
+    btn.addEventListener("click", () => {
+      cbpRunBacktest();
+    });
+  }
+
+  cbpLog("Backtest controls initialized");
+}
+
+// ============================
+// MAIN INIT
+// ============================
+
+function cbpInitDashboard() {
+  cbpLog("Dashboard init...");
+
+  cbpInitChart();
+  cbpInitControls();
+  cbpInitBacktestControls();
+  cbpInitWS();
+
+  // первая загрузка
+  cbpLoadCandles(CBP_STATE.symbol, CBP_STATE.tf);
+  cbpLoadBacktestSummary();
+}
+
+document.addEventListener("DOMContentLoaded", cbpInitDashboard);
