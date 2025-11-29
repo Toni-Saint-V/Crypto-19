@@ -131,12 +131,17 @@ async def api_candles(symbol: str = "BTCUSDT", tf: str = "1m", limit: int = 300)
 
 
 @app.post("/api/backtest/run")
-async def api_backtest_run():
-    # фронт просто показывает статус, можно вернуть заглушку
-    return {"status": "ok", "message": "backtest started (mock)"}
+async def api_backtest_run(payload: dict = None):
+    payload = payload or {}
+    symbol = payload.get("symbol", "BTCUSDT")
+    tf = payload.get("tf", "1m")
+    return backtest_engine.run(symbol=symbol, tf=tf)
 
 
 @app.get("/api/backtest/summary")
+async def api_backtest_summary():
+    return backtest_engine.summary()
+
 async def api_backtest_summary():
     # данные для блока "Бэктест"
     return {
