@@ -1,442 +1,476 @@
-"use strict";
+(function () {
+  const $ = (id) => document.getElementById(id);
 
-// ============================
-// HELPERS: лог и нормализация свечей
-// ============================
+  let chart;
+  let mainSeries;
+  let equityChart;
+  let equitySeries;
+  let ws;
 
-function cbpLog(msg, extra) {
-  if (extra !== undefined) {
-    console.log("[CBP]", msg, extra);
-  } else {
-    console.log("[CBP]", msg);
+  // trades-by-time для тултипов
+  const tradeByTime = new Map();
+  let tradeTooltipEl = null;
+
+  // ==============================
+  //  HELPERS
+  // ==============================
+
+  function createTradeTooltip(container) {
+    if (tradeTooltipEl) return tradeTooltipEl;
+    const el = document.createElement("div");
+    el.className = "trade-tooltip";
+    el.style.position = "absolute";
+    el.style.zIndex = "20";
+    el.style.pointerEvents = "none";
+    el.style.padding = "8px 10px";
+    el.style.borderRadius = "8px";
+    el.style.fontSize = "11px";
+    el.style.lineHeight = "1.4";
+    el.style.background = "rgba(5, 10, 20, 0.96)";
+    el.style.color = "#e7edf7";
+    el.style.border = "1px solid rgba(255,255,255,0.08)";
+    el.style.boxShadow = "0 8px 18px rgba(0,0,0,0.45)";
+    el.style.whiteSpace = "pre";
+    el.style.display = "none";
+    container.style.position = container.style.position || "relative";
+    container.appendChild(el);
+    tradeTooltipEl = el;
+    return el;
   }
-}
 
-function cbpSanitizeCandles(raw) {
-  if (!Array.isArray(raw)) return [];
+  function hideTradeTooltip() {
+    if (tradeTooltipEl) {
+      tradeTooltipEl.style.display = "none";
+    }
+  }
 
-  const safe = raw
-    .filter((c) => {
-      if (!c) return false;
-      const { time, open, high, low, close } = c;
-      return (
-        time !== null &&
-        time !== undefined &&
-        open !== null &&
-        open !== undefined &&
-        high !== null &&
-        high !== undefined &&
-        low !== null &&
-        low !== undefined &&
-        close !== null &&
-        close !== undefined
-      );
-    })
-    .map((c) => {
+  function showTradeTooltip(trade, point, container) {
+    const el = createTradeTooltip(container);
+    const sideLabel = trade.side || "LONG";
+    const pnlStr = trade.pnl != null ? trade.pnl.toFixed(1) + "%" : "+0.0%";
+    const tpMark = trade.tp_hit ? "✅" : "❌";
+    const slMark = trade.sl_hit ? "✅" : "❌";
+
+    el.textContent =
+      "#" + (trade.id || 145) + " - " + sideLabel + "\n" +
+      "Entry: " + (trade.entry || 49200) + "\n" +
+      "TP: " + (trade.tp || 49900) + " " + tpMark + "\n" +
+      "SL: " + (trade.sl || 48900) + " " + slMark + "\n" +
+      "Exit: " + (trade.exit || 49860) + "\n" +
+      "PnL: " + pnlStr;
+
+    const rect = container.getBoundingClientRect();
+    const x = point && typeof point.x === "number" ? point.x : rect.width / 2;
+    const y = point && typeof point.y === "number" ? point.y : rect.height / 2;
+
+    el.style.left = Math.round(x + 12) + "px";
+    el.style.top = Math.round(y + 12) + "px";
+    el.style.display = "block";
+  }
+
+  function buildMockCandles() {
+    const now = Math.floor(Date.now() / 1000);
+    const res = [];
+    let price = 50000;
+    for (let i = 60; i >= 0; i--) {
+      const t = now - i * 60;
+      const open = price;
+      const high = open + Math.random() * 80;
+      const low = open - Math.random() * 80;
+      const close = low + Math.random() * (high - low);
+      price = close;
+      res.push({
+        time: t,
+        open: Math.round(open),
+        high: Math.round(high),
+        low: Math.round(low),
+        close: Math.round(close),
+      });
+    }
+    return res;
+  }
+
+  function buildMockEquity() {
+    const res = [];
+    let v = 100;
+    for (let i = 0; i < 60; i++) {
+      v += (Math.random() - 0.4) * 1.5;
+      res.push({ time: Math.floor(Date.now() / 1000) - (60 - i) * 60, value: v });
+    }
+    return res;
+  }
+
+  function buildMockTrades(candles) {
+    if (!candles || candles.length < 10) return [];
+    const n = candles.length;
+    const baseIdx = Math.max(3, n - 15);
+    const picks = [
+      { idx: baseIdx, side: "LONG" },
+      { idx: baseIdx + 4, side: "SHORT" },
+      { idx: baseIdx + 8, side: "LONG" },
+    ];
+    return picks.map((p, i) => {
+      const c = candles[p.idx];
+      const entry = c.open;
+      const exit = c.close;
+      const dir = p.side === "LONG" ? 1 : -1;
+      const pnl = ((exit - entry) / entry) * 100 * dir;
+      const tp = p.side === "LONG" ? entry + (entry * 0.015) : entry - (entry * 0.015);
+      const sl = p.side === "LONG" ? entry - (entry * 0.007) : entry + (entry * 0.007);
+
       return {
-        time: typeof c.time === "number" ? c.time : Math.floor(Number(c.time)),
-        open: Number(c.open),
-        high: Number(c.high),
-        low: Number(c.low),
-        close: Number(c.close),
+        id: 145 + i,
+        side: p.side,
+        time: c.time,
+        entry: Math.round(entry),
+        exit: Math.round(exit),
+        tp: Math.round(tp),
+        sl: Math.round(sl),
+        tp_hit: pnl > 1.0,
+        sl_hit: pnl < -0.5,
+        pnl,
       };
     });
-
-  cbpLog("Sanitized candles", { before: raw.length, after: safe.length });
-  return safe;
-}
-
-// ============================
-// ГЛОБАЛЬНОЕ СОСТОЯНИЕ
-// ============================
-
-const CBP_STATE = {
-  symbol: "BTCUSDT",
-  tf: "1m",
-  candles: [],
-  backtest: null,
-  chart: null,
-  candleSeries: null,
-  ws: null,
-};
-
-// ============================
-// ИНИЦИАЛИЗАЦИЯ ЧАРТА
-// ============================
-
-function cbpInitChart() {
-  const root = document.getElementById("chart-root");
-  if (!root) {
-    cbpLog("chart-root not found in DOM");
-    return;
   }
 
-  const chart = LightweightCharts.createChart(root, {
-    layout: {
-      background: { color: "#0b1321" },
-      textColor: "#c3cee5",
-    },
-    grid: {
-      vertLines: { color: "#1b2740" },
-      horzLines: { color: "#1b2740" },
-    },
-    timeScale: {
-      borderColor: "#1b2740",
-    },
-    rightPriceScale: {
-      borderColor: "#1b2740",
-    },
-  });
+  // ==============================
+  //  CHARTS
+  // ==============================
 
-  const candleSeries = chart.addCandlestickSeries();
+  function initCharts() {
+    const chartRoot = $("chart-root");
+    const equityRoot = $("equity-root");
 
-  // оборачиваем setData, чтобы всегда чистить вход
-  const origSetData = candleSeries.setData.bind(candleSeries);
-  candleSeries.setData = (raw) => {
-    const safe = cbpSanitizeCandles(raw || []);
-    try {
-      origSetData(safe);
-    } catch (e) {
-      console.error("setData error after sanitize", e);
-    }
-  };
-
-  CBP_STATE.chart = chart;
-  CBP_STATE.candleSeries = candleSeries;
-  window.chart = chart;
-  window.candleSeries = candleSeries;
-
-  cbpLog("Chart initialized");
-}
-
-// ============================
-// ЗАГРУЗКА СВЕЧЕЙ С БЭКА
-// ============================
-
-async function cbpLoadCandles(symbol, tf) {
-  CBP_STATE.symbol = symbol;
-  CBP_STATE.tf = tf;
-
-  try {
-    const res = await fetch(
-      `/api/candles?symbol=${encodeURIComponent(symbol)}&tf=${encodeURIComponent(tf)}`
-    );
-    if (!res.ok) {
-      cbpLog("Failed to load candles", res.status);
+    if (!chartRoot || !window.LightweightCharts) {
+      console.warn("chart-root or LightweightCharts not found");
       return;
     }
-    const data = await res.json();
-    const candles = Array.isArray(data.candles) ? data.candles : [];
-    const safe = cbpSanitizeCandles(candles);
 
-    CBP_STATE.candles = safe;
+    // MAIN CHART
+    chart = LightweightCharts.createChart(chartRoot, {
+      layout: {
+        background: { color: "transparent" },
+        textColor: "#c2cee4",
+      },
+      grid: {
+        vertLines: { color: "rgba(68, 82, 110, 0.25)" },
+        horzLines: { color: "rgba(68, 82, 110, 0.25)" },
+      },
+      crosshair: {
+        mode: LightweightCharts.CrosshairMode.Normal,
+      },
+      rightPriceScale: {
+        borderColor: "rgba(134, 150, 180, 0.4)",
+      },
+      timeScale: {
+        borderColor: "rgba(134, 150, 180, 0.4)",
+      },
+    });
 
-    if (CBP_STATE.candleSeries) {
-      CBP_STATE.candleSeries.setData(safe);
+    mainSeries = chart.addCandlestickSeries({
+      upColor: "rgba(46, 189, 133, 1)",
+      downColor: "rgba(255, 107, 107, 1)",
+      wickUpColor: "rgba(46, 189, 133, 1)",
+      wickDownColor: "rgba(255, 107, 107, 1)",
+      borderVisible: false,
+    });
+
+    const ema20 = chart.addLineSeries({
+      color: "rgba(79, 171, 247, 1)",
+      lineWidth: 2,
+    });
+
+    const ema50 = chart.addLineSeries({
+      color: "rgba(220, 192, 108, 1)",
+      lineWidth: 1,
+    });
+
+    // EQUITY CHART (справа)
+    if (equityRoot && window.LightweightCharts) {
+      equityChart = LightweightCharts.createChart(equityRoot, {
+        layout: {
+          background: { color: "transparent" },
+          textColor: "#c2cee4",
+        },
+        grid: {
+          vertLines: { color: "rgba(68, 82, 110, 0.18)" },
+          horzLines: { color: "rgba(68, 82, 110, 0.18)" },
+        },
+        rightPriceScale: {
+          borderColor: "rgba(134, 150, 180, 0.32)",
+        },
+        timeScale: {
+          borderColor: "rgba(134, 150, 180, 0.32)",
+        },
+      });
+
+      equitySeries = equityChart.addLineSeries({
+        color: "rgba(79, 171, 247, 1)",
+        lineWidth: 2,
+      });
+
+      // mock equity сразу
+      const eqMock = buildMockEquity();
+      equitySeries.setData(eqMock);
     }
 
-    cbpLog(`Loaded ${safe.length} candles for ${symbol} ${tf}`);
-  } catch (e) {
-    console.error("Error loading candles", e);
-  }
-}
+    // crosshair для трейд-тултипов
+    chart.subscribeCrosshairMove((param) => {
+      if (!param || !param.time) {
+        hideTradeTooltip();
+        return;
+      }
+      const trade = tradeByTime.get(param.time);
+      const container = $("chart-root");
+      if (!trade || !container) {
+        hideTradeTooltip();
+        return;
+      }
+      showTradeTooltip(trade, param.point || null, container);
+    });
 
-// ============================
-// WEBSOCKET (mock или real-time)
-// ============================
+    // mock EMA, если нужно — потом заменим бэкендом
+    function calcEma(data, period) {
+      if (!data || data.length === 0) return [];
+      const k = 2 / (period + 1);
+      const res = [];
+      let emaPrev = data[0].close;
+      res.push({ time: data[0].time, value: emaPrev });
+      for (let i = 1; i < data.length; i++) {
+        const price = data[i].close;
+        emaPrev = price * k + emaPrev * (1 - k);
+        res.push({ time: data[i].time, value: emaPrev });
+      }
+      return res;
+    }
 
-function cbpInitWS() {
-  try {
-    const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    const wsUrl = `${proto}://${window.location.host}/ws`;
-    const ws = new WebSocket(wsUrl);
-
-    ws.onopen = () => {
-      cbpLog("WS connected");
-    };
-
-    ws.onmessage = (event) => {
+    // загрузка свечей
+    async function loadCandles() {
+      let candles = [];
       try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === "candle" && msg.data && CBP_STATE.candleSeries) {
-          const raw = msg.data;
-          const safeArr = cbpSanitizeCandles([raw]);
-          if (!safeArr.length) return;
-          const safe = safeArr[0];
-
-          CBP_STATE.candles.push(safe);
-          CBP_STATE.candles = CBP_STATE.candles.slice(-500);
-
-          CBP_STATE.candleSeries.setData(CBP_STATE.candles);
+        const resp = await fetch("/api/candles");
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data && Array.isArray(data.candles) && data.candles.length) {
+            candles = data.candles;
+          }
         }
       } catch (e) {
-        console.warn("WS message parse error", e);
+        console.warn("candles fetch failed, using mock", e);
+      }
+      if (!candles.length) {
+        candles = buildMockCandles();
+      }
+
+      mainSeries.setData(candles);
+
+      const ema20Data = calcEma(candles, 20);
+      const ema50Data = calcEma(candles, 50);
+      ema20.setData(ema20Data);
+      ema50.setData(ema50Data);
+
+      // TRADES → MARKERS (TRIANGLES)
+      const trades = buildMockTrades(candles);
+      tradeByTime.clear();
+      const markers = trades.map((t) => {
+        tradeByTime.set(t.time, t);
+        const isLong = t.side === "LONG";
+        return {
+          time: t.time,
+          position: isLong ? "belowBar" : "aboveBar",
+          color: isLong ? "rgba(46, 189, 133, 1)" : "rgba(255, 107, 107, 1)",
+          shape: isLong ? "triangleUp" : "triangleDown",
+        };
+      });
+      if (markers.length) {
+        mainSeries.setMarkers(markers);
+      }
+
+      chart.timeScale().fitContent();
+    }
+
+    // стартовая загрузка
+    loadCandles().catch(console.error);
+
+    // WS live feed
+    connectWs(candlesUpdater(mainSeries, chart));
+  }
+
+  function candlesUpdater(series, chartInstance) {
+    return function (candle) {
+      if (!series || !candle) return;
+      series.update({
+        time: candle.time,
+        open: candle.open,
+        high: candle.high,
+        low: candle.low,
+        close: candle.close,
+      });
+      if (chartInstance) {
+        chartInstance.timeScale().scrollToRealTime();
       }
     };
-
-    ws.onclose = () => {
-      cbpLog("WS closed");
-    };
-
-    CBP_STATE.ws = ws;
-  } catch (e) {
-    console.error("WS init error", e);
-  }
-}
-
-// ============================
-// КОНТРОЛЫ: символы, таймфреймы
-// ============================
-
-function cbpInitControls() {
-  // селект символа
-  const sel =
-    document.getElementById("symbol-select") ||
-    document.querySelector("[data-cbp-symbol-select]");
-  if (sel) {
-    sel.addEventListener("change", () => {
-      const symbol = sel.value || "BTCUSDT";
-      cbpLog("Symbol changed", symbol);
-      cbpLoadCandles(symbol, CBP_STATE.tf);
-    });
   }
 
-  // кнопки таймфрейма (по data-атрибуту, чтобы не зависеть от конкретных id)
-  const tfButtons = document.querySelectorAll("[data-tf]");
-  tfButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const tf = btn.getAttribute("data-tf");
-      if (!tf) return;
-      cbpLog(`Timeframe changed to ${tf} (button)`);
-      cbpLoadCandles(CBP_STATE.symbol, tf);
-      tfButtons.forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-    });
-  });
-
-  cbpLog("Controls initialized");
-}
-
-// ============================
-// BACKTEST: отрисовка UI и маркеров
-// ============================
-
-function cbpRenderTradesTable(trades) {
-  const tbody = document.getElementById("trades-tbody");
-  if (!tbody) return;
-  tbody.innerHTML = "";
-
-  if (!trades || !trades.length) {
-    const tr = document.createElement("tr");
-    const td = document.createElement("td");
-    td.colSpan = 5;
-    td.textContent = "No trades yet";
-    tr.appendChild(td);
-    tbody.appendChild(tr);
-    return;
-  }
-
-  trades.forEach((t, idx) => {
-    const tr = document.createElement("tr");
-
-    const cols = [
-      idx + 1,
-      t.side,
-      t.entry_price,
-      t.exit_price,
-      (t.pnl_pct > 0 ? "+" : "") + t.pnl_pct + "%",
-    ];
-
-    cols.forEach((val) => {
-      const td = document.createElement("td");
-      td.textContent = val;
-      tr.appendChild(td);
-    });
-
-    tbody.appendChild(tr);
-  });
-}
-
-function cbpRenderVirtualPosition(data) {
-  const trades = (data && data.trades) || [];
-  const last = trades[trades.length - 1];
-
-  const setText = (id, value) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = value;
-  };
-
-  if (!last) {
-    setText("pos-symbol", (data && data.symbol) || "—");
-    setText("pos-side", "—");
-    setText("pos-entry", "—");
-    setText("pos-pnl", "—");
-    return;
-  }
-
-  setText("pos-symbol", data.symbol || "—");
-  setText("pos-side", last.side || "—");
-  setText("pos-entry", last.entry_price != null ? last.entry_price : "—");
-  setText(
-    "pos-pnl",
-    last.pnl_pct != null
-      ? (last.pnl_pct > 0 ? "+" : "") + last.pnl_pct + "%"
-      : "—"
-  );
-}
-
-function cbpApplyMarkersFromBacktest(data) {
-  const series = CBP_STATE.candleSeries;
-  if (!series) return;
-
-  const candles = (data && data.candles) || [];
-  const trades = (data && data.trades) || [];
-
-  if (!candles.length) {
-    // нет свечей — ничего не делаем
-    return;
-  }
-
-  // обновим свечи на графике теми же, по которым считали бэктест
-  series.setData(candles);
-
-  if (!trades.length) {
+  function connectWs(onCandle) {
     try {
-      series.setMarkers([]);
+      if (ws) {
+        ws.close();
+      }
+      ws = new WebSocket("ws://" + window.location.host + "/ws");
+      ws.onopen = function () {
+        console.log("WS connected");
+      };
+      ws.onmessage = function (event) {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg && msg.type === "candle" && msg.data && onCandle) {
+            onCandle(msg.data);
+          }
+        } catch (e) {
+          console.warn("WS message parse error", e);
+        }
+      };
+      ws.onclose = function () {
+        console.log("WS closed");
+      };
+      ws.onerror = function (e) {
+        console.warn("WS error", e);
+      };
     } catch (e) {
-      console.warn("setMarkers([]) error", e);
+      console.warn("WS connect failed", e);
     }
-    return;
   }
 
-  const markers = [];
+  // ==============================
+  //  PANELS / UI
+  // ==============================
 
-  trades.forEach((t) => {
-    const entry = candles[t.entry_index];
-    const exit = candles[t.exit_index];
-    if (!entry || !exit) return;
-
-    const isLong = t.side === "LONG";
-
-    markers.push({
-      time: entry.time,
-      position: isLong ? "belowBar" : "aboveBar",
-      color: isLong ? "#1ebe6b" : "#ff4d4f",
-      shape: isLong ? "arrowUp" : "arrowDown",
-      text: t.side + " " + t.entry_price,
-    });
-
-    markers.push({
-      time: exit.time,
-      position: isLong ? "aboveBar" : "belowBar",
-      color: isLong ? "#1ebe6b" : "#ff4d4f",
-      shape: isLong ? "arrowDown" : "arrowUp",
-      text: "x " + t.exit_price,
-    });
-  });
-
-  try {
-    series.setMarkers(markers);
-  } catch (e) {
-    console.warn("setMarkers error", e);
-  }
-}
-
-// Переопределяем/задаём updateBacktestUI глобально
-window.updateBacktestUI = function updateBacktestUI(data) {
-  try {
-    cbpRenderTradesTable((data && data.trades) || []);
-    cbpRenderVirtualPosition(data);
-    cbpApplyMarkersFromBacktest(data);
-
-    const setText = (id, value) => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = value;
-    };
-
-    if (data) {
-      setText("bt-status", data.status || "—");
-      setText("bt-symbol", data.symbol || "—");
-      setText("bt-tf", data.tf || "—");
-      setText(
-        "bt-pnl",
-        data.total_pnl_pct != null
-          ? (data.total_pnl_pct > 0 ? "+" : "") + data.total_pnl_pct + "%"
-          : "—"
-      );
-      setText("bt-trades-count", data.trades_count || 0);
+  async function loadStatus() {
+    const el = $("status-label");
+    try {
+      const resp = await fetch("/api/status");
+      if (!resp.ok) throw new Error("bad status");
+      const data = await resp.json();
+      if (el && data && data.status) {
+        el.textContent = data.status.toUpperCase();
+      }
+    } catch (e) {
+      if (el) el.textContent = "MOCK";
     }
-  } catch (e) {
-    console.error("updateBacktestUI error", e);
   }
-};
 
-// ============================
-// BACKTEST: запросы к API
-// ============================
-
-async function cbpLoadBacktestSummary() {
-  try {
-    const res = await fetch("/api/backtest/summary");
-    if (!res.ok) {
-      cbpLog("Backtest summary failed", res.status);
-      return;
+  async function loadEquity() {
+    if (!equitySeries) return;
+    try {
+      const resp = await fetch("/api/equity");
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data && Array.isArray(data.series) && data.series.length) {
+          const eq = data.series.map((v, idx) => ({
+            time: Math.floor(Date.now() / 1000) - (data.series.length - idx) * 60,
+            value: v,
+          }));
+          equitySeries.setData(eq);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn("equity fetch failed, keep mock", e);
     }
-    const data = await res.json();
-    CBP_STATE.backtest = data;
-    window.updateBacktestUI(data);
-  } catch (e) {
-    console.error("Error loading backtest summary", e);
   }
-}
 
-async function cbpRunBacktest() {
-  const payload = {
-    symbol: CBP_STATE.symbol,
-    tf: CBP_STATE.tf,
-  };
+  async function runBacktest() {
+    const btn = $("btn-backtest");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Running…";
+    }
+    try {
+      await fetch("/api/backtest/run", { method: "POST" });
+      const resp = await fetch("/api/backtest/summary");
+      if (resp.ok) {
+        const data = await resp.json();
+        const elTrades = $("bt-trades");
+        const elRet = $("bt-return");
+        if (elTrades && typeof data.trades !== "undefined") {
+          elTrades.textContent = String(data.trades);
+        }
+        if (elRet && typeof data.return_pct !== "undefined") {
+          elRet.textContent = data.return_pct.toFixed
+            ? data.return_pct.toFixed(2) + "%"
+            : data.return_pct + "%";
+        }
+      }
+      await loadEquity();
+    } catch (e) {
+      console.warn("backtest failed", e);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "Run backtest";
+      }
+    }
+  }
 
-  try {
-    cbpLog("Run backtest", payload);
-    await fetch("/api/backtest/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+  function setupToolbar() {
+    const chips = document.querySelectorAll(".chip");
+    const symbolSelect = $("symbol-select");
+    const subtitle = $("chart-subtitle");
+
+    chips.forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        chips.forEach(function (c) {
+          c.classList.remove("chip-active");
+        });
+        chip.classList.add("chip-active");
+        const tf = chip.getAttribute("data-tf") || "1m";
+        const symbol = symbolSelect ? symbolSelect.value : "BTCUSDT";
+        if (subtitle) subtitle.textContent = symbol + " · " + tf;
+      });
     });
-    await cbpLoadBacktestSummary();
-  } catch (e) {
-    console.error("Error running backtest", e);
-  }
-}
 
-function cbpInitBacktestControls() {
-  const btn =
-    document.getElementById("bt-run") ||
-    document.getElementById("backtest-run-btn");
-  if (btn) {
-    btn.addEventListener("click", () => {
-      cbpRunBacktest();
+    if (symbolSelect) {
+      symbolSelect.addEventListener("change", function () {
+        const activeChip = document.querySelector(".chip.chip-active");
+        const tf = activeChip ? activeChip.getAttribute("data-tf") || "1m" : "1m";
+        const symbol = symbolSelect.value;
+        if (subtitle) subtitle.textContent = symbol + " · " + tf;
+      });
+    }
+
+    const btBtn = $("btn-backtest");
+    if (btBtn) btBtn.addEventListener("click", runBacktest);
+  }
+
+  function setupTabs() {
+    const tabs = document.querySelectorAll("[data-tab]");
+    const panels = document.querySelectorAll("[data-panel]");
+    if (!tabs.length || !panels.length) return;
+
+    tabs.forEach(function (tab) {
+      tab.addEventListener("click", function () {
+        const target = tab.getAttribute("data-tab");
+        tabs.forEach(function (t) {
+          t.classList.remove("active");
+        });
+        panels.forEach(function (p) {
+          p.classList.remove("active");
+        });
+        tab.classList.add("active");
+        const panel = document.querySelector('[data-panel="' + target + '"]');
+        if (panel) panel.classList.add("active");
+      });
     });
   }
 
-  cbpLog("Backtest controls initialized");
-}
+  async function init() {
+    initCharts();
+    setupToolbar();
+    setupTabs();
+    await loadStatus();
+    await loadEquity();
+  }
 
-// ============================
-// MAIN INIT
-// ============================
-
-function cbpInitDashboard() {
-  cbpLog("Dashboard init...");
-
-  cbpInitChart();
-  cbpInitControls();
-  cbpInitBacktestControls();
-  cbpInitWS();
-
-  // первая загрузка
-  cbpLoadCandles(CBP_STATE.symbol, CBP_STATE.tf);
-  cbpLoadBacktestSummary();
-}
-
-document.addEventListener("DOMContentLoaded", cbpInitDashboard);
+  document.addEventListener("DOMContentLoaded", init);
+})();
