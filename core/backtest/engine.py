@@ -1,92 +1,114 @@
-from __future__ import annotations
-from typing import List, Dict
-
+from typing import List, Dict, Any
 from core.services.fetch_bybit_klines import fetch_klines
 
-_last_summary: Dict = {"status": "idle", "return_pct": 0.0, "trades": 0}
-_last_equity_curve: List[Dict] = []
 
 class BacktestEngine:
     """
-    Простой backtest:
-    - берём mock-свечи
-    - стратегия: 3 растущих свечи подряд -> вход в лонг
-      3 падающих свечи -> выход из позиции
-    - считаем доходность и число сделок, строим equity-curve
+    Простейший серверный бэктест:
+    - берём свечи через fetch_klines
+    - каждые N свечей открываем сделку и закрываем через M свечей
+    - считаем PnL, equity-кривую
+    - возвращаем:
+        - trades: список сделок
+        - candles: свечи, по которым считали
+        - equity_curve: баланс после каждой сделки
     """
 
-    def run(
-        self,
-        symbol: str = "BTCUSDT",
-        interval: str = "1m",
-        limit: int = 300,
-    ) -> Dict:
-        global _last_summary, _last_equity_curve
+    def __init__(self) -> None:
+        self._last_result: Dict[str, Any] = {}
 
-        candles = fetch_klines(symbol=symbol, interval=interval, limit=limit)
+    def _generate_trades(self, candles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        trades: List[Dict[str, Any]] = []
         if not candles:
-            _last_summary = {
-                "status": "error",
-                "message": "no candles",
-                "return_pct": 0.0,
-                "trades": 0,
-            }
-            _last_equity_curve = []
-            return _last_summary
+            return trades
 
-        equity = 10_000.0
-        start_equity = equity
-        position = 0          # 0 — нет позиции, 1 — лонг
-        entry_price = None
-        trades = 0
-        equity_curve: List[Dict] = []
+        step = 20   # каждые 20 свечей
+        hold = 5    # держим позицию 5 свечей
 
-        for i, c in enumerate(candles):
-            price = c["close"]
+        for i in range(0, len(candles) - hold, step):
+            entry = candles[i]
+            exit_ = candles[i + hold]
 
-            # Паттерн из 3-х свечей
-            if i >= 3:
-                c1, c2, c3 = candles[i-3:i]
-                up = c1["close"] < c2["close"] < c3["close"] < price
-                down = c1["close"] > c2["close"] > c3["close"] > price
+            entry_price = float(entry["close"])
+            exit_price = float(exit_["close"])
+
+            # простая логика: если выросло — считаем, что это LONG, если упало — SHORT
+            side = "LONG" if exit_price >= entry_price else "SHORT"
+
+            if side == "LONG":
+                pnl_pct = (exit_price / entry_price - 1.0) * 100.0
             else:
-                up = down = False
+                pnl_pct = (entry_price / exit_price - 1.0) * 100.0
 
-            # Выход из лонга
-            if position == 1 and down:
-                pnl = (price - entry_price) / entry_price
-                equity *= (1 + pnl)
-                position = 0
-                entry_price = None
-                trades += 1
+            trades.append(
+                {
+                    "id": len(trades) + 1,
+                    "side": side,
+                    "entry_index": i,
+                    "exit_index": i + hold,
+                    "entry_price": round(entry_price, 2),
+                    "exit_price": round(exit_price, 2),
+                    "pnl_pct": round(pnl_pct, 2),
+                }
+            )
 
-            # Вход в лонг
-            if position == 0 and up:
-                position = 1
-                entry_price = price
+        return trades
 
-            equity_curve.append({"time": c["time"], "equity": round(equity, 2)})
+    def run(self, symbol: str = "BTCUSDT", tf: str = "1m") -> Dict[str, Any]:
+        # берём те же свечи, что и для графика
+        candles = fetch_klines(symbol=symbol, interval=tf, limit=500)
 
-        # Если остались в позиции — закрываемся по последней цене
-        if position == 1 and entry_price is not None:
-            price = candles[-1]["close"]
-            pnl = (price - entry_price) / entry_price
-            equity *= (1 + pnl)
-            trades += 1
-            equity_curve[-1]["equity"] = round(equity, 2)
+        if not candles:
+            self._last_result = {
+                "status": "error",
+                "error": "no candles",
+                "symbol": symbol,
+                "tf": tf,
+                "trades": [],
+                "equity_curve": [],
+                "total_pnl_pct": 0.0,
+                "trades_count": 0,
+                "candles": [],
+            }
+            return self._last_result
 
-        return_pct = (equity / start_equity - 1) * 100.0
+        trades = self._generate_trades(candles)
 
-        _last_summary = {
+        # считаем equity по трейдам, стартуем с условных 1000
+        balance = 1000.0
+        equity_curve = [{"step": 0, "balance": round(balance, 2)}]
+
+        for idx, t in enumerate(trades, start=1):
+            balance *= 1.0 + (t["pnl_pct"] / 100.0)
+            equity_curve.append({"step": idx, "balance": round(balance, 2)})
+
+        total_pnl_pct = (balance / 1000.0 - 1.0) * 100.0 if trades else 0.0
+
+        result: Dict[str, Any] = {
             "status": "completed",
-            "return_pct": round(return_pct, 2),
+            "symbol": symbol,
+            "tf": tf,
             "trades": trades,
+            "equity_curve": equity_curve,
+            "total_pnl_pct": round(total_pnl_pct, 2),
+            "trades_count": len(trades),
+            "candles": candles,
         }
-        _last_equity_curve = equity_curve
-        return _last_summary
 
-    def summary(self) -> Dict:
-        return _last_summary
+        self._last_result = result
+        return result
 
-def get_last_equity_curve() -> List[Dict]:
-    return _last_equity_curve
+    def summary(self) -> Dict[str, Any]:
+        # для первого захода, когда ещё не жали Run backtest
+        if not self._last_result:
+            return {
+                "status": "idle",
+                "symbol": None,
+                "tf": None,
+                "trades": [],
+                "equity_curve": [],
+                "total_pnl_pct": 0.0,
+                "trades_count": 0,
+                "candles": [],
+            }
+        return self._last_result

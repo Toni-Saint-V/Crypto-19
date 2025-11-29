@@ -316,3 +316,158 @@ document.addEventListener("DOMContentLoaded", async () => {
   initControls();
   initBacktestControls();
 });
+
+// ============================
+// ENHANCED BACKTEST UI + MARKERS
+// ============================
+
+function cbpRenderTradesTable(trades) {
+  const tbody = document.getElementById("trades-tbody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  if (!trades || !trades.length) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 5;
+    td.textContent = "No trades yet";
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+
+  trades.forEach((t, idx) => {
+    const tr = document.createElement("tr");
+
+    const cols = [
+      idx + 1,
+      t.side,
+      t.entry_price,
+      t.exit_price,
+      (t.pnl_pct > 0 ? "+" : "") + t.pnl_pct + "%",
+    ];
+
+    cols.forEach((val) => {
+      const td = document.createElement("td");
+      td.textContent = val;
+      tr.appendChild(td);
+    });
+
+    tbody.appendChild(tr);
+  });
+}
+
+function cbpRenderVirtualPosition(data) {
+  const trades = (data && data.trades) || [];
+  const last = trades[trades.length - 1];
+
+  const setText = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  };
+
+  if (!last) {
+    setText("pos-symbol", data && data.symbol ? data.symbol : "—");
+    setText("pos-side", "—");
+    setText("pos-entry", "—");
+    setText("pos-pnl", "—");
+    return;
+  }
+
+  setText("pos-symbol", data.symbol || "—");
+  setText("pos-side", last.side || "—");
+  setText("pos-entry", last.entry_price != null ? last.entry_price : "—");
+  setText(
+    "pos-pnl",
+    last.pnl_pct != null
+      ? ((last.pnl_pct > 0 ? "+" : "") + last.pnl_pct + "%")
+      : "—"
+  );
+}
+
+function cbpApplyMarkersFromBacktest(data) {
+  if (!window.candleSeries) {
+    // график ещё не инициализирован
+    return;
+  }
+  const candles = (data && data.candles) || [];
+  const trades = (data && data.trades) || [];
+  if (!candles.length || !trades.length) {
+    // просто сбрасываем маркеры, если нечего ставить
+    try {
+      window.candleSeries.setMarkers([]);
+    } catch (e) {}
+    return;
+  }
+
+  // Обновим свечи на графике теми же, по которым считали бэктест
+  try {
+    window.candleSeries.setData(candles);
+  } catch (e) {
+    console.warn("setData error", e);
+  }
+
+  const markers = [];
+
+  trades.forEach((t) => {
+    const entry = candles[t.entry_index];
+    const exit = candles[t.exit_index];
+    if (!entry || !exit) return;
+
+    const isLong = t.side === "LONG";
+
+    // маркер входа
+    markers.push({
+      time: entry.time,
+      position: isLong ? "belowBar" : "aboveBar",
+      color: isLong ? "#1ebe6b" : "#ff4d4f",
+      shape: isLong ? "arrowUp" : "arrowDown",
+      text: t.side + " " + t.entry_price,
+    });
+
+    // маркер выхода
+    markers.push({
+      time: exit.time,
+      position: isLong ? "aboveBar" : "belowBar",
+      color: isLong ? "#1ebe6b" : "#ff4d4f",
+      shape: isLong ? "arrowDown" : "arrowUp",
+      text: "x " + t.exit_price,
+    });
+  });
+
+  try {
+    window.candleSeries.setMarkers(markers);
+  } catch (e) {
+    console.warn("setMarkers error", e);
+  }
+}
+
+// Переопределяем updateBacktestUI (если была раньше) на более умную версию
+window.updateBacktestUI = function updateBacktestUI(data) {
+  try {
+    cbpRenderTradesTable((data && data.trades) || []);
+    cbpRenderVirtualPosition(data);
+    cbpApplyMarkersFromBacktest(data);
+
+    // если есть summary-блоки, тоже обновим (опционально)
+    const setText = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    };
+
+    if (data) {
+      setText("bt-status", data.status || "—");
+      setText("bt-symbol", data.symbol || "—");
+      setText("bt-tf", data.tf || "—");
+      setText(
+        "bt-pnl",
+        data.total_pnl_pct != null
+          ? ((data.total_pnl_pct > 0 ? "+" : "") + data.total_pnl_pct + "%")
+          : "—"
+      );
+      setText("bt-trades-count", data.trades_count || 0);
+    }
+  } catch (e) {
+    console.error("updateBacktestUI error", e);
+  }
+};
