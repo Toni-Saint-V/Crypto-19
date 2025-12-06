@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>CryptoBot Pro — Dashboard</title>
+<link rel="stylesheet" href="/static/css/dashboard_new.css">
+<script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+<script defer src="/static/js/dashboard_new.js?v=9999"></script>
+</head>
+
+<body>
+
+<div class="cbp-page">
+  <div class="cbp-frame">
+
+    <!-- TOP BAR -->
+    <div class="cbp-topbar">
+      <div class="cbp-topbar-left">
+        <div class="cbp-title">CryptoBot Pro</div>
+        <div class="cbp-subtitle">Личный дашборд · Mock candles</div>
+      </div>
+      <div class="cbp-topbar-right">
+        <div class="cbp-status-column">
+          <div class="cbp-status-pill">WS <span id="st-inline-ws" class="cbp-dot cbp-dot-warn"></span></div>
+          <div class="cbp-status-pill">Net <span id="st-inline-net" class="cbp-dot cbp-dot-warn"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN GRID -->
+    <div class="cbp-main-row">
+
+      <!-- LEFT -->
+      <div class="cbp-left">
+
+        <div class="cbp-card cbp-backtest-card">
+          <div class="cbp-card-title">Backtest</div>
+          <div class="cbp-bt-row">Return <span id="bt-return">+0%</span></div>
+          <div class="cbp-bt-row">Trades <span id="bt-trades">0</span></div>
+          <div class="cbp-bt-row">Status <span id="bt-status">idle</span></div>
+          <div class="cbp-bt-actions">
+            <button id="btn-backtest" class="cbp-btn-primary cbp-btn-full">Run backtest</button>
+          </div>
+        </div>
+
+        <div class="cbp-card">
+          <div class="cbp-card-title">Signals</div>
+          <div id="signals-list" class="cbp-signal-empty">No signals yet</div>
+        </div>
+
+      </div>
+
+      <!-- CENTER -->
+      <div class="cbp-center">
+
+        <!-- FILTER BAR -->
+        <div class="cbp-chart-card">
+
+          <div class="cbp-chart-header">
+            <div class="cbp-chart-row">
+
+              <div class="cbp-chart-filters">
+                <div class="cbp-field-inline">
+                  <span>Пара</span>
+                  <select id="symbol">
+                    <option>BTCUSDT</option>
+                    <option>ETHUSDT</option>
+                    <option>SOLUSDT</option>
+                  </select>
+                </div>
+                <div class="cbp-field-inline">
+                  <span>Таймфрейм</span>
+                  <select id="tf">
+                    <option>1m</option>
+                    <option>5m</option>
+                    <option>15m</option>
+                    <option>1h</option>
+                  </select>
+                </div>
+                <div class="cbp-field-inline">
+                  <span>Стратегия</span>
+                  <select id="strategy">
+                    <option>Three-Candle (demo)</option>
+                  </select>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- CHART ROOT -->
+          <div class="cbp-chart-body">
+            <div id="chart-root" class="chart-root"></div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- RIGHT -->
+      <div class="cbp-right">
+
+        <div class="cbp-card">
+          <div class="cbp-card-title">Equity</div>
+          <div class="cbp-card-value" id="eq-value">10 000 USDT</div>
+        </div>
+
+        <div class="cbp-card">
+          <div class="cbp-card-title">P&L</div>
+          <div class="cbp-card-value" id="pl-value">+2.3%</div>
+        </div>
+
+        <div class="cbp-card">
+          <div class="cbp-card-title">Deals</div>
+          <div class="cbp-card-value" id="deals-value">0</div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- AI PANEL -->
+    <div class="cbp-card cbp-ai-card">
+      <div class="cbp-ai-header">
+        <span>AI Assistant beta</span>
+        <span class="cbp-pill">beta</span>
+      </div>
+      <div id="ai-messages" class="cbp-ai-messages"></div>
+      <div class="cbp-ai-input-block">
+        <textarea id="ai-input" rows="2"></textarea>
+        <button id="ai-send" class="cbp-btn-primary">Send</button>
+        <button id="ai-generate" class="cbp-btn-primary">Generate report</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

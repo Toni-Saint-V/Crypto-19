@@ -43,7 +43,26 @@
       },
     });
 
+    if (!chart || typeof chart.addCandlestickSeries !== "function") {
+      console.error("Invalid chart object", chart, LightweightCharts);
+      return;
+    }
+
+    const container = document.getElementById("tvchart") || document.getElementById("chart") || document.querySelector("[data-role=\"price-chart\"]");
+    if (!container || !window.LightweightCharts || typeof LightweightCharts.createChart !== "function") {
+      console.error("Cannot init price chart", container, window.LightweightCharts);
+      return;
+    }
+    const localChart = LightweightCharts.createChart(container, {
+      width: container.clientWidth || 800,
+      height: 400,
+      layout: { background: { color: "#020817" }, textColor: "#C9D1D9" },
+      timeScale: { borderColor: "#30363D" },
+      rightPriceScale: { borderColor: "#30363D" }
+    });
+    chart = localChart;
     candleSeries = chart.addCandlestickSeries();
+
 
     window.addEventListener("resize", () => {
       if (!chart) return;
@@ -135,7 +154,21 @@
           rightPriceScale: { borderColor: "#1b2740" },
           timeScale: { borderColor: "#1b2740" },
         });
-        equitySeries = equityChart.addLineSeries();
+        equitySeries = if (!equityChart || typeof equityChart.addLineSeries !== "function") {
+      const eqEl = document.getElementById("equity-chart") || document.getElementById("equityChart") || document.querySelector("[data-role=\"equity-chart\"]");
+      if (!eqEl || !window.LightweightCharts || typeof LightweightCharts.createChart !== "function") {
+        console.error("Cannot init equity chart", eqEl, window.LightweightCharts);
+        return;
+      }
+      equityChart = LightweightCharts.createChart(eqEl, {
+        width: eqEl.clientWidth || 800,
+        height: 200,
+        layout: { background: { color: "#020817" }, textColor: "#C9D1D9" },
+        timeScale: { borderColor: "#30363D" },
+        rightPriceScale: { borderColor: "#30363D" }
+      });
+    }
+    equityChart.addLineSeries();
         window.addEventListener("resize", () => {
           if (!equityChart) return;
           equityChart.applyOptions({ width: el.clientWidth });
@@ -277,3 +310,111 @@
 
   document.addEventListener("DOMContentLoaded", init);
 })();
+
+
+// === CRYPTOBOT PRO PATCH: stable charts ===
+window.initChart = async function initChart() {
+  try {
+    const container =
+      document.getElementById("tvchart") ||
+      document.getElementById("chart") ||
+      document.querySelector("[data-role='price-chart']");
+
+    if (!container) {
+      console.error("Price chart container not found");
+      return;
+    }
+    if (!window.LightweightCharts || typeof LightweightCharts.createChart !== "function") {
+      console.error("LightweightCharts not available", window.LightweightCharts);
+      return;
+    }
+
+    const chart = LightweightCharts.createChart(container, {
+      width: container.clientWidth || 800,
+      height: 400,
+      layout: { background: { color: "#020817" }, textColor: "#C9D1D9" },
+      timeScale: { borderColor: "#30363D" },
+      rightPriceScale: { borderColor: "#30363D" }
+    });
+
+    const candleSeries = chart.addCandlestickSeries();
+
+    const resp = await fetch("/api/candles?symbol=BTCUSDT&tf=1m&limit=200");
+    const payload = await resp.json();
+    const data = payload.data || payload.candles || [];
+
+    const mapped = data.map(c => ({
+      time: c.time,
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close
+    }));
+
+    candleSeries.setData(mapped);
+    window.chart = chart;
+    window.candleSeries = candleSeries;
+  } catch (e) {
+    console.error("initChart patch error", e);
+  }
+};
+
+window.loadEquity = async function loadEquity() {
+  try {
+    const container =
+      document.getElementById("equity-chart") ||
+      document.getElementById("equityChart") ||
+      document.querySelector("[data-role='equity-chart']");
+
+    if (!container) {
+      console.warn("Equity chart container not found");
+      return;
+    }
+    if (!window.LightweightCharts || typeof LightweightCharts.createChart !== "function") {
+      console.error("LightweightCharts not available for equity", window.LightweightCharts);
+      return;
+    }
+
+    const chart = LightweightCharts.createChart(container, {
+      width: container.clientWidth || 800,
+      height: 200,
+      layout: { background: { color: "#020817" }, textColor: "#C9D1D9" },
+      timeScale: { borderColor: "#30363D" },
+      rightPriceScale: { borderColor: "#30363D" }
+    });
+
+    const resp = await fetch("/api/equity");
+    const payload = await resp.json();
+    let points = [];
+
+    if (Array.isArray(payload)) {
+      points = payload;
+    } else if (Array.isArray(payload.points)) {
+      points = payload.points;
+    } else if (Array.isArray(payload.equity)) {
+      points = payload.equity;
+    } else {
+      console.warn("Unknown equity payload shape", payload);
+      return;
+    }
+
+    const mapped = points.map((p, idx) => {
+      if (Array.isArray(p)) {
+        return { time: p[0] or idx, value: p[1] };
+      } else if (typeof p === "number") {
+        return { time: idx, value: p };
+      } else {
+        return { time: (p.time ?? idx), value: (p.value ?? p.equity ?? p.balance ?? 0) };
+      }
+    });
+
+    const series = chart.addLineSeries();
+    series.setData(mapped);
+
+    window.equityChart = chart;
+    window.equitySeries = series;
+  } catch (e) {
+    console.error("loadEquity patch error", e);
+  }
+};
+// === END PATCH ===

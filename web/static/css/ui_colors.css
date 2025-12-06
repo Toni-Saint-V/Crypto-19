@@ -1,0 +1,23 @@
+:root {
+  /* Base */
+  --bg-main: #0D1117;
+  --bg-panel: #161B22;
+  --border: #30363D;
+  --text-main: #C9D1D9;
+  --text-muted: #8B949E;
+
+  /* Accents */
+  --accent-blue: #3FB6FF;      /* primary action */
+  --accent-green: #2ECC71;     /* profit / success */
+  --accent-red: #E74C3C;       /* loss / error */
+  --accent-amber: #E6A157;     /* EMA50 / warning */
+
+  /* Chart */
+  --c-ema20: #4FC3F7;
+  --c-ema50: #E6A157;
+  --c-oi-line: #80CBC4;
+  --c-oi-fill: rgba(128, 203, 196, 0.18);
+
+  --c-candle-bull: #26A69A;
+  --c-candle-bear: #EF5350;
+}

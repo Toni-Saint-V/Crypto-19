@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang=\"ru\">
+<head>
+  <meta charset=\"UTF-8\">
+  <title>CryptoBot Pro — Личный дашборд</title>
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+  <link rel=\"stylesheet\" href=\"/static/css/ui_colors.css\">
+  <link rel=\"stylesheet\" href=\"/static/css/dashboard.css\">
+  <script defer src=\"/static/js/dashboard.js\"></script>
+  <script src=\"/static/lib/lightweight-charts.js\"></script>
+</head>
+<body>
+<div class=\"cbp-page\">
+  <div class=\"cbp-frame\">
+
+    <header class=\"cbp-topbar\">
+      <div class=\"cbp-topbar-left\">
+        <div class=\"cbp-title\">CryptoBot Pro</div>
+        <div class=\"cbp-subtitle\">Личный дашборд · Mock candles</div>
+      </div>
+      <div class=\"cbp-topbar-center\">
+        <div class=\"cbp-field\">
+          <span>Пара</span>
+          <select id=\"symbol\">
+            <option>BTCUSDT</option>
+            <option>ETHUSDT</option>
+            <option>SOLUSDT</option>
+          </select>
+        </div>
+        <div class=\"cbp-field\">
+          <span>Таймфрейм</span>
+          <select id=\"tf\">
+            <option>1m</option>
+            <option>5m</option>
+            <option>15m</option>
+            <option>1h</option>
+          </select>
+        </div>
+      </div>
+      <div class=\"cbp-topbar-right\">
+        <div class=\"cbp-chip-toggle\">
+          <span class=\"cbp-dot\"></span>
+          <span>Testnet mock</span>
+        </div>
+        <div class=\"cbp-chip-toggle\">
+          <span>Спросить AI о рынке</span>
+        </div>
+      </div>
+    </header>
+
+    <section class=\"cbp-metrics-row\">
+      <div class=\"cbp-card\">
+        <div class=\"cbp-card-title\">Equity</div>
+        <div class=\"cbp-card-value\">10 000 USDT</div>
+      </div>
+      <div class=\"cbp-card\">
+        <div class=\"cbp-card-title\">P&amp;L (mock)</div>
+        <div class=\"cbp-card-value cbp-text-green\">+2.3%</div>
+      </div>
+      <div class=\"cbp-card\">
+        <div class=\"cbp-card-title\">Открытых сделок</div>
+        <div class=\"cbp-card-value\">0</div>
+      </div>
+    </section>
+
+    <section class=\"cbp-main-row\">
+      <div class=\"cbp-chart-card\">
+        <div class=\"cbp-chart-header\">
+          <div class=\"cbp-chart-title-block\">
+            <div class=\"cbp-chart-title\">График цены</div>
+            <div class=\"cbp-chart-subtitle\">BTCUSDT · 1h</div>
+          </div>
+          <div class=\"cbp-chart-actions\">
+            <div class=\"cbp-status-inline\">
+              <span class=\"cbp-status-dot\"></span>
+              <span>online</span>
+            </div>
+            <div class=\"cbp-timeframe-switch\">
+              <button class=\"cbp-tf-btn cbp-tf-btn--active\">1m</button>
+              <button class=\"cbp-tf-btn\">5m</button>
+              <button class=\"cbp-tf-btn\">1h</button>
+            </div>
+            <button id=\"btn-backtest\" class=\"cbp-btn-primary\">Run backtest</button>
+          </div>
+        </div>
+        <div class=\"cbp-chart-body\">
+          <div id=\"chart-root\"></div>
+        </div>
+      </div>
+
+      <aside class=\"cbp-sidebar-column\">
+        <div class=\"cbp-card\">
+          <div class=\"cbp-side-card-title-row\">
+            <span>Сводка портфеля</span>
+          </div>
+          <div class=\"cbp-side-kv-row\">
+            <span>Equity</span><span>10 000 USDT</span>
+          </div>
+          <div class=\"cbp-side-kv-row\">
+            <span>P&amp;L (mock)</span><span class=\"cbp-text-green\">+2.3%</span>
+          </div>
+          <div class=\"cbp-side-kv-row\">
+            <span>Открытых сделок</span><span>0</span>
+          </div>
+          <div class=\"cbp-side-kv-row\">
+            <span>Стратегия</span><span>Three-Candle (demo)</span>
+          </div>
+        </div>
+
+        <div class=\"cbp-card\">
+          <div class=\"cbp-side-card-title-row\">
+            <span>Бэктест</span>
+            <span class=\"cbp-pill\">idle</span>
+          </div>
+          <div class=\"cbp-side-kv-row\">
+            <span>Доходность</span><span id=\"bt-ret\">12.50%</span>
+          </div>
+          <div class=\"cbp-side-kv-row\">
+            <span>Сделок</span><span id=\"bt-trades\">14</span>
+          </div>
+        </div>
+
+        <div class=\"cbp-card\">
+          <div class=\"cbp-side-card-title-row\">
+            <span>Статус системы</span>
+          </div>
+          <div class=\"cbp-status-grid\">
+            <span class=\"cbp-status-label\">Backend</span>
+            <span class=\"cbp-status-value\"><span class=\"cbp-ind-dot\"></span>ok</span>
+            <span class=\"cbp-status-label\">WebSocket</span>
+            <span class=\"cbp-status-value\"><span class=\"cbp-ind-dot\"></span>online</span>
+            <span class=\"cbp-status-label\">Net</span>
+            <span class=\"cbp-status-value\"><span class=\"cbp-ind-dot\"></span>Testnet mock</span>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+  </div>
+</div>
+</body>
+</html>
