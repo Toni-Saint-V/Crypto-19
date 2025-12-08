@@ -1,19 +1,26 @@
+"""
+CryptoBot Pro - FastAPI Server
+AI-powered crypto trading dashboard with WebSocket support
+"""
+
 import uvicorn
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-import asyncio, random, os
+from fastapi.middleware.cors import CORSMiddleware
+import asyncio
+import json
+import random
+import os
+import time
+from typing import List, Dict, Any
+from datetime import datetime
 
 # === FASTAPI INITIALIZATION ===
 app = FastAPI(title="CryptoBot Pro — Neural Dashboard")
 
-
-
-
-
-from fastapi.middleware.cors import CORSMiddleware
-
+# === CORS MIDDLEWARE ===
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,7 +28,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # === PATHS ===
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -31,17 +37,72 @@ STATIC_DIR = os.path.join(BASE_DIR, "web", "static")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
+# === WEBSOCKET CONNECTION MANAGER ===
+class ConnectionManager:
+    def __init__(self):
+        self.ai_connections: List[WebSocket] = []
+        self.trade_connections: List[WebSocket] = []
+    
+    async def connect_ai(self, websocket: WebSocket):
+        await websocket.accept()
+        self.ai_connections.append(websocket)
+        print(f"🟢 AI WebSocket connected. Total: {len(self.ai_connections)}")
+    
+    async def disconnect_ai(self, websocket: WebSocket):
+        if websocket in self.ai_connections:
+            self.ai_connections.remove(websocket)
+        print(f"🔴 AI WebSocket disconnected. Total: {len(self.ai_connections)}")
+    
+    async def connect_trade(self, websocket: WebSocket):
+        await websocket.accept()
+        self.trade_connections.append(websocket)
+        print(f"🟢 Trade WebSocket connected. Total: {len(self.trade_connections)}")
+    
+    async def disconnect_trade(self, websocket: WebSocket):
+        if websocket in self.trade_connections:
+            self.trade_connections.remove(websocket)
+        print(f"🔴 Trade WebSocket disconnected. Total: {len(self.trade_connections)}")
+    
+    async def broadcast_ai(self, message: Dict[str, Any]):
+        """Broadcast message to all AI connections"""
+        disconnected = []
+        for connection in self.ai_connections:
+            try:
+                await connection.send_json(message)
+            except:
+                disconnected.append(connection)
+        for conn in disconnected:
+            await self.disconnect_ai(conn)
+    
+    async def broadcast_trade(self, message: Dict[str, Any]):
+        """Broadcast message to all trade connections"""
+        disconnected = []
+        for connection in self.trade_connections:
+            try:
+                await connection.send_json(message)
+            except:
+                disconnected.append(connection)
+        for conn in disconnected:
+            await self.disconnect_trade(conn)
+
+manager = ConnectionManager()
+
 # === ROUTES ===
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    """Redirect root to new dashboard"""
-    return templates.TemplateResponse("dashboard_new.html", {"request": request})
+    """Redirect root to trading core"""
+    return templates.TemplateResponse("trading_core.html", {"request": request})
 
 @app.get("/dashboard_new", response_class=HTMLResponse)
 async def dashboard_new(request: Request):
     """Main neural dashboard"""
     return templates.TemplateResponse("dashboard_new.html", {"request": request})
+
+@app.get("/trading_core", response_class=HTMLResponse)
+async def trading_core(request: Request):
+    """Render the Trading Core dashboard"""
+    return templates.TemplateResponse("trading_core.html", {"request": request})
 
 # === REST API ENDPOINTS ===
 
@@ -54,19 +115,225 @@ async def api_dashboard():
         "confidence": round(random.uniform(50, 99), 1)
     })
 
-@app.get("/api/backtest/run")
+@app.get("/api/backtest")
 async def api_backtest():
-    """Generate synthetic equity curve"""
-    curve = [100]
-    for _ in range(100):
-        curve.append(curve[-1] + random.uniform(-1, 1))
-    return JSONResponse({"equity_curve": curve})
+    """
+    Generate comprehensive backtest data
+    Returns equity curve, drawdown, trades, and statistics
+    """
+    # Generate realistic equity curve
+    base_equity = 10000
+    equity_curve = [base_equity]
+    prices = [42000]  # Starting BTC price
+    
+    for i in range(200):
+        # Random walk with slight upward bias
+        change = random.uniform(-0.02, 0.03)
+        new_equity = equity_curve[-1] * (1 + change)
+        equity_curve.append(max(5000, new_equity))  # Floor at 50% of base
+        
+        # Price movement
+        price_change = random.uniform(-500, 800)
+        prices.append(max(30000, prices[-1] + price_change))
+    
+    # Calculate drawdown
+    peak = base_equity
+    max_drawdown = 0
+    for equity in equity_curve:
+        if equity > peak:
+            peak = equity
+        drawdown = (peak - equity) / peak * 100
+        if drawdown > max_drawdown:
+            max_drawdown = drawdown
+    
+    # Generate sample trades
+    trades = []
+    for i in range(0, len(equity_curve) - 1, 20):
+        side = random.choice(["buy", "sell"])
+        trades.append({
+            "timestamp": i,
+            "side": side,
+            "price": prices[i],
+            "equity": equity_curve[i],
+            "pnl": round((equity_curve[i] - base_equity) / base_equity * 100, 2)
+        })
+    
+    total_return = ((equity_curve[-1] - base_equity) / base_equity) * 100
+    
+    return JSONResponse({
+        "equity_curve": equity_curve,
+        "prices": prices,
+        "trades": trades,
+        "statistics": {
+            "total_return": round(total_return, 2),
+            "max_drawdown": round(max_drawdown, 2),
+            "total_trades": len(trades),
+            "win_rate": round(random.uniform(45, 65), 1),
+            "sharpe_ratio": round(random.uniform(0.5, 2.5), 2)
+        }
+    })
 
-# === WEBSOCKET LIVE CHANNEL ===
+# === WEBSOCKET ENDPOINTS ===
+
+@app.websocket("/ws/ai")
+async def websocket_ai(websocket: WebSocket):
+    """
+    AI WebSocket endpoint for chat and system updates
+    Handles bidirectional communication for AI assistant
+    """
+    await manager.connect_ai(websocket)
+    
+    # Send welcome message
+    await websocket.send_json({
+        "type": "system",
+        "message": "AI Assistant (Anton) connected. Ready to help!",
+        "timestamp": time.time()
+    })
+    
+    try:
+        # Start background data stream
+        async def stream_data():
+            while True:
+                await asyncio.sleep(3)
+                await manager.broadcast_ai({
+                    "type": "data",
+                    "payload": {
+                        "confidence": round(random.uniform(60, 95), 2),
+                        "risk": round(random.uniform(0.3, 0.8), 3),
+                        "pnl": round(random.uniform(-3, 5), 2),
+                        "price": round(random.uniform(40000, 45000), 2)
+                    },
+                    "timestamp": time.time()
+                })
+        
+        # Start streaming task
+        stream_task = asyncio.create_task(stream_data())
+        
+        # Handle incoming messages
+        while True:
+            try:
+                data = await websocket.receive_text()
+                message_data = json.loads(data)
+                
+                # Handle chat messages
+                if message_data.get("type") == "message" or "text" in message_data:
+                    user_message = message_data.get("text") or message_data.get("message", "")
+                    
+                    # Simulate AI response
+                    await asyncio.sleep(random.uniform(0.5, 1.5))
+                    
+                    # Generate contextual response
+                    response = generate_ai_response(user_message)
+                    
+                    await websocket.send_json({
+                        "type": "response",
+                        "message": response,
+                        "timestamp": time.time()
+                    })
+                
+                # Handle commands
+                elif message_data.get("type") == "command":
+                    command = message_data.get("command", "")
+                    response = handle_command(command)
+                    await websocket.send_json({
+                        "type": "response",
+                        "message": response,
+                        "timestamp": time.time()
+                    })
+                    
+            except json.JSONDecodeError:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Invalid JSON format",
+                    "timestamp": time.time()
+                })
+            except Exception as e:
+                print(f"Error handling AI message: {e}")
+                break
+        
+        stream_task.cancel()
+        
+    except WebSocketDisconnect:
+        await manager.disconnect_ai(websocket)
+    except Exception as e:
+        print(f"AI WebSocket error: {e}")
+        await manager.disconnect_ai(websocket)
+
+@app.websocket("/ws/trades")
+async def websocket_trades(websocket: WebSocket):
+    """
+    Trade WebSocket endpoint for live trade signals
+    Streams simulated trading signals and updates
+    """
+    await manager.connect_trade(websocket)
+    
+    # Send initial connection message
+    await websocket.send_json({
+        "type": "system",
+        "message": "Trade signal stream connected",
+        "timestamp": time.time()
+    })
+    
+    try:
+        base_price = 42000.0
+        equity = 100.0
+        
+        while True:
+            await asyncio.sleep(random.uniform(2, 5))
+            
+            # Generate random trade signal
+            side = random.choice(["buy", "sell"])
+            price_change = random.uniform(-200, 300)
+            base_price += price_change
+            base_price = max(35000, min(50000, base_price))  # Keep in range
+            
+            # Update equity based on trade
+            if side == "buy":
+                equity += random.uniform(0.1, 0.8)
+            else:
+                equity += random.uniform(-0.5, 0.3)
+            
+            # Generate trade signal
+            trade_signal = {
+                "type": "trade",
+                "side": side,
+                "symbol": "BTCUSDT",
+                "price": round(base_price, 2),
+                "equity": round(equity, 2),
+                "confidence": round(random.uniform(65, 95), 1),
+                "timestamp": time.time(),
+                "datetime": datetime.now().isoformat()
+            }
+            
+            await websocket.send_json(trade_signal)
+            
+            # Occasionally send general signals
+            if random.random() < 0.3:
+                signal_types = ["new", "ai", "bt"]
+                signal_messages = [
+                    "High confidence buy signal detected",
+                    "Risk level adjusted to 0.6%",
+                    "Backtest completed: +23% return",
+                    "Market volatility increased",
+                    "Strategy rebalanced"
+                ]
+                
+                await websocket.send_json({
+                    "type": "signal",
+                    "signal_type": random.choice(signal_types),
+                    "message": random.choice(signal_messages),
+                    "timestamp": time.time()
+                })
+    
+    except WebSocketDisconnect:
+        await manager.disconnect_trade(websocket)
+    except Exception as e:
+        print(f"Trade WebSocket error: {e}")
+        await manager.disconnect_trade(websocket)
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """Live stream of trading metrics"""
+    """Legacy WebSocket endpoint for backward compatibility"""
     await websocket.accept()
     try:
         while True:
@@ -80,69 +347,86 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         print("🔴 WebSocket disconnected")
 
+# === HELPER FUNCTIONS ===
+
+def generate_ai_response(user_message: str) -> str:
+    """Generate contextual AI response based on user message"""
+    message_lower = user_message.lower()
+    
+    # Strategy-related queries
+    if any(word in message_lower for word in ["strategy", "strategies", "backtest", "performance"]):
+        responses = [
+            "Current strategy 'Momentum ML v2' is performing well with 23% return over the last month.",
+            "Backtest results show a Sharpe ratio of 1.8 and max drawdown of 12%.",
+            "I recommend monitoring the risk-adjusted returns closely. Current win rate is 58%."
+        ]
+        return random.choice(responses)
+    
+    # Market-related queries
+    elif any(word in message_lower for word in ["market", "price", "btc", "eth", "trend"]):
+        responses = [
+            "BTC is showing bullish momentum with increasing volume. Current price action suggests continuation.",
+            "Market volatility is moderate. Risk management parameters are optimal for current conditions.",
+            "Technical indicators show mixed signals. Waiting for clearer trend confirmation."
+        ]
+        return random.choice(responses)
+    
+    # Risk-related queries
+    elif any(word in message_lower for word in ["risk", "risk management", "drawdown", "stop loss"]):
+        responses = [
+            "Current risk level is set to 0.6% per trade. Maximum drawdown is within acceptable limits.",
+            "Risk parameters are dynamically adjusted based on market volatility. Current settings are optimal.",
+            "Stop loss levels are active and protecting capital. No immediate risk concerns."
+        ]
+        return random.choice(responses)
+    
+    # General queries
+    elif any(word in message_lower for word in ["hello", "hi", "hey", "help"]):
+        responses = [
+            "Hello! I'm Anton, your AI trading assistant. I can help with strategies, backtests, and market analysis.",
+            "Hi there! Ask me about trading strategies, market conditions, or system performance.",
+            "Hey! I'm here to help. Try asking about current performance, risk levels, or market trends."
+        ]
+        return random.choice(responses)
+    
+    # Default response
+    else:
+        responses = [
+            "I understand. Let me analyze that for you.",
+            "Processing your request. One moment...",
+            "That's an interesting question. Based on current data...",
+            "I'll help you with that. Here's what I found:",
+            "Good question! Let me check the latest data..."
+        ]
+        return random.choice(responses) + " " + generate_contextual_info()
+
+def generate_contextual_info() -> str:
+    """Generate contextual trading information"""
+    info_types = [
+        f"Current PNL is {random.uniform(-2, 3):.2f}%.",
+        f"Confidence level is at {random.uniform(70, 95):.1f}%.",
+        f"Risk-adjusted returns are positive this week.",
+        f"Market conditions are favorable for the current strategy."
+    ]
+    return random.choice(info_types)
+
+def handle_command(command: str) -> str:
+    """Handle system commands"""
+    command_lower = command.lower().strip()
+    
+    if command_lower == "status":
+        return "System status: Running | Connected | All systems operational"
+    elif command_lower == "performance":
+        return f"Performance: +{random.uniform(15, 30):.1f}% return | Sharpe: {random.uniform(1.2, 2.0):.2f}"
+    elif command_lower == "risk":
+        return f"Risk level: {random.uniform(0.4, 0.8):.2f}% | Max drawdown: {random.uniform(8, 15):.1f}%"
+    else:
+        return f"Command '{command}' not recognized. Try: status, performance, or risk"
+
 # === RUN SERVER ===
 
 if __name__ == "__main__":
-    print("🚀 Launching CryptoBot Pro Dashboard at http://127.0.0.1:8000/dashboard_new")
+    print("🚀 Launching CryptoBot Pro Dashboard")
+    print("📊 Trading Core: http://127.0.0.1:8000/trading_core")
+    print("🌐 Dashboard: http://127.0.0.1:8000/dashboard_new")
     uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# === Anton Protocol v3.9 WS Unified Payload ===
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi import WebSocket, WebSocketDisconnect
-import asyncio, json, time, random
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.websocket("/ws/ai")
-async def websocket_ai(ws: WebSocket):
-    await ws.accept()
-    print("🟢 WS Connected:", ws.client)
-    try:
-        while True:
-            data = {
-                "type": "data",
-                "payload": {
-                    "confidence": round(random.uniform(0, 100), 2),
-                    "risk": round(random.uniform(0, 1), 3),
-                    "pnl": round(random.uniform(-5, 5), 2)
-                },
-                "timestamp": time.time()
-            }
-            await ws.send_text(json.dumps(data))
-            await asyncio.sleep(2)
-    except WebSocketDisconnect:
-        print("🔴 WS Disconnected (client closed)")
-# === End Anton Protocol v3.9 WS Unified Payload ===
-
-# === Trading Core Route Patch ===
-from fastapi.responses import HTMLResponse
-from fastapi import Request
-from fastapi.templating import Jinja2Templates
-
-templates = Jinja2Templates(directory="web/templates")
-
-@app.get("/trading_core", response_class=HTMLResponse)
-async def trading_core(request: Request):
-    """Render the new Trading Core dashboard."""
-    return templates.TemplateResponse("trading_core.html", {"request": request})
-# === END PATCH ===
