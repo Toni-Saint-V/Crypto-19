@@ -10,10 +10,8 @@ import joblib
 import json
 
 import logging
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 from core.services.fetch_bybit_klines import fetch_klines
-
-log = get_logger("ml_strategy")
 
 class SignalType(Enum):
     STRONG_BUY = 2
