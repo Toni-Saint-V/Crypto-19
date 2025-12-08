@@ -37,17 +37,17 @@ class BacktestEngine:
         self.strategies['momentum_ml_v2'] = {
             'function': None,  # To be implemented
             'name': 'Momentum ML v2',
-            'description': 'Momentum-based model using volatility features and AI confidence'
+            'description': 'Momentum-based model using volatility features and AI confidence. Analyzes price momentum with machine learning predictions.'
         }
         self.strategies['reversion_alpha'] = {
             'function': None,  # To be implemented
             'name': 'Reversion α',
-            'description': 'Mean reversion with Bollinger deviation logic'
+            'description': 'Mean reversion with Bollinger deviation logic. Trades price reversions from extreme levels.'
         }
         self.strategies['ensemble_beta'] = {
             'function': None,  # To be implemented
             'name': 'Ensemble β',
-            'description': 'Combined signals from Momentum + Reversion'
+            'description': 'Combined signals from Momentum + Reversion strategies. Uses weighted ensemble approach.'
         }
     
     def run(

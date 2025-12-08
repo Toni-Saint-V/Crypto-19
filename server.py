@@ -4,7 +4,7 @@ AI-powered crypto trading dashboard with WebSocket support
 """
 
 import uvicorn
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -14,8 +14,11 @@ import json
 import random
 import os
 import time
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from datetime import datetime
+from core.backtest.engine import BacktestEngine
+from web.bybit_client import fetch_ohlcv, get_klines
+from core.ml.ml_service import MLService
 
 # === FASTAPI INITIALIZATION ===
 app = FastAPI(title="CryptoBot Pro — Neural Dashboard")
@@ -87,6 +90,10 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+# === SERVICES ===
+backtest_engine = BacktestEngine()
+ml_service = MLService()
+
 # === ROUTES ===
 
 @app.get("/", response_class=HTMLResponse)
@@ -115,28 +122,106 @@ async def api_dashboard():
         "confidence": round(random.uniform(50, 99), 1)
     })
 
+@app.get("/api/candles")
+async def api_candles(
+    symbol: str = Query("BTCUSDT", description="Trading pair symbol"),
+    interval: str = Query("60", description="Timeframe in minutes (1-1500) or standard (1m, 5m, 15m, etc.)"),
+    limit: int = Query(200, description="Number of candles to fetch")
+):
+    """
+    Fetch OHLCV candles from Bybit Testnet.
+    Supports timeframes from 1m to 1500m.
+    """
+    try:
+        candles = await fetch_ohlcv(symbol=symbol, interval=interval, limit=limit)
+        
+        if not candles:
+            # Fallback to mock data if fetch fails
+            candles = []
+            base_price = 42000.0
+            base_time = int(time.time()) - (limit * 60)
+            for i in range(limit):
+                price_change = random.uniform(-200, 200)
+                base_price += price_change
+                base_price = max(35000, min(50000, base_price))
+                candles.append({
+                    "time": base_time + (i * 60),
+                    "open": base_price + random.uniform(-50, 50),
+                    "high": base_price + random.uniform(50, 150),
+                    "low": base_price - random.uniform(50, 150),
+                    "close": base_price + random.uniform(-50, 50),
+                    "volume": random.uniform(100, 1000)
+                })
+        
+        return JSONResponse({
+            "symbol": symbol,
+            "interval": interval,
+            "candles": candles,
+            "count": len(candles)
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.post("/api/backtest/run")
+async def api_backtest_run(
+    symbol: str = Query("BTCUSDT"),
+    interval: str = Query("60"),
+    strategy: str = Query("pattern3_extreme"),
+    risk_per_trade: float = Query(100.0),
+    rr_ratio: float = Query(4.0),
+    limit: int = Query(500)
+):
+    """
+    Run backtest with specified parameters.
+    Returns trades, equity curve, and performance metrics.
+    """
+    try:
+        result = backtest_engine.run(
+            symbol=symbol,
+            interval=interval,
+            strategy=strategy,
+            risk_per_trade=risk_per_trade,
+            rr_ratio=rr_ratio,
+            limit=limit
+        )
+        
+        if "error" in result:
+            return JSONResponse(result, status_code=400)
+        
+        # Calculate equity curve from trades
+        initial_capital = 10000.0
+        equity_curve = [initial_capital]
+        current_equity = initial_capital
+        
+        for trade in result.get("trades", []):
+            pnl = trade.get("result_R", 0) * risk_per_trade
+            current_equity += pnl
+            equity_curve.append(max(1000, current_equity))  # Floor at 10%
+        
+        result["equity_curve"] = equity_curve
+        result["initial_capital"] = initial_capital
+        
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
 @app.get("/api/backtest")
-async def api_backtest():
+async def api_backtest_legacy():
     """
-    Generate comprehensive backtest data
-    Returns equity curve, drawdown, trades, and statistics
+    Legacy endpoint for backward compatibility.
+    Returns mock backtest data.
     """
-    # Generate realistic equity curve
     base_equity = 10000
     equity_curve = [base_equity]
-    prices = [42000]  # Starting BTC price
+    prices = [42000]
     
     for i in range(200):
-        # Random walk with slight upward bias
         change = random.uniform(-0.02, 0.03)
         new_equity = equity_curve[-1] * (1 + change)
-        equity_curve.append(max(5000, new_equity))  # Floor at 50% of base
-        
-        # Price movement
+        equity_curve.append(max(5000, new_equity))
         price_change = random.uniform(-500, 800)
         prices.append(max(30000, prices[-1] + price_change))
     
-    # Calculate drawdown
     peak = base_equity
     max_drawdown = 0
     for equity in equity_curve:
@@ -146,7 +231,6 @@ async def api_backtest():
         if drawdown > max_drawdown:
             max_drawdown = drawdown
     
-    # Generate sample trades
     trades = []
     for i in range(0, len(equity_curve) - 1, 20):
         side = random.choice(["buy", "sell"])
@@ -172,6 +256,25 @@ async def api_backtest():
             "sharpe_ratio": round(random.uniform(0.5, 2.5), 2)
         }
     })
+
+@app.get("/api/strategies")
+async def api_strategies():
+    """Get list of available strategies with descriptions"""
+    strategies = backtest_engine.get_available_strategies()
+    return JSONResponse({"strategies": strategies})
+
+@app.get("/api/ml/predict")
+async def api_ml_predict(
+    symbol: str = Query("BTCUSDT"),
+    interval: str = Query("60"),
+    limit: int = Query(100)
+):
+    """Get ML prediction for current market conditions"""
+    try:
+        prediction = await ml_service.predict(symbol=symbol, interval=interval, limit=limit)
+        return JSONResponse(prediction)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 # === WEBSOCKET ENDPOINTS ===
 

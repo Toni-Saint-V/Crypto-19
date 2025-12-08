@@ -320,9 +320,40 @@ body {
   border-radius: 6px;
   cursor: pointer;
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all var(--transition-smooth);
+}
+
+.strategy-info {
+  display: flex;
   align-items: center;
   justify-content: space-between;
-  transition: all var(--transition-smooth);
+  width: 100%;
+}
+
+.strategy-actions {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+}
+
+.strategy-btn {
+  flex: 1;
+  padding: 4px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.strategy-btn:hover {
+  background: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  color: #000;
 }
 
 .strategy-item:hover {
@@ -372,6 +403,52 @@ body {
   color: var(--accent-green);
 }
 
+/* Risk Settings */
+.risk-settings {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+.risk-settings h4 {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-blue);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+.risk-input-group {
+  margin-bottom: 12px;
+}
+
+.risk-input-group label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.risk-input-group input {
+  width: 100%;
+  padding: 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  transition: all var(--transition-fast);
+}
+
+.risk-input-group input:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 8px rgba(0, 255, 224, 0.2);
+}
+
 /* ============================================
    Chart Section
    ============================================ */
@@ -407,6 +484,20 @@ body {
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.control-group label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .chart-select {
@@ -429,6 +520,84 @@ body {
   outline: none;
   border-color: var(--accent-cyan);
   box-shadow: 0 0 12px rgba(0, 255, 224, 0.3);
+}
+
+/* Chart Statistics */
+.chart-stats {
+  padding: 12px 20px;
+  background: rgba(0, 0, 0, 0.2);
+  border-top: 1px solid var(--border-color);
+}
+
+.stat-card {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-blue);
+}
+
+.stat-value.positive {
+  color: var(--accent-green);
+}
+
+.stat-value.negative {
+  color: var(--accent-red);
+}
+
+/* Trades List */
+.trades-list {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+.trades-list h4 {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-blue);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+#trades-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trade-item {
+  padding: 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.trade-item.win {
+  border-left: 3px solid var(--accent-green);
+}
+
+.trade-item.loss {
+  border-left: 3px solid var(--accent-red);
 }
 
 /* ============================================

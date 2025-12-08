@@ -3,16 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CryptoBot Pro — Trading Core</title>
+  <title>CryptoBot Pro v8.0 — Trading Core</title>
   <link rel="stylesheet" href="/static/css/trading_core.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+  <script src="/static/lib/lightweight-charts.js"></script>
 </head>
 <body>
   <!-- Top Header Bar -->
   <header class="top-header">
     <div class="header-left">
-      <div class="logo">⚡ CryptoBot Pro</div>
+      <div class="logo">⚡ CryptoBot Pro v8.0</div>
       <div class="status-indicator" id="connection-status">
         <span class="status-dot"></span>
         <span class="status-text">Connecting...</span>
@@ -29,7 +28,11 @@
       </div>
       <div class="header-info">
         <span class="info-label">Strategy:</span>
-        <span class="info-value" id="current-strategy">Momentum ML v2</span>
+        <span class="info-value" id="current-strategy">Pattern3 Extreme</span>
+      </div>
+      <div class="header-info">
+        <span class="info-label">Mode:</span>
+        <span class="info-value" id="current-mode">Backtest</span>
       </div>
     </div>
     <div class="header-right">
@@ -47,64 +50,95 @@
 
   <!-- Main Grid Layout -->
   <main class="grid-container">
-    <!-- Left Panel: Strategies -->
+    <!-- Left Panel: Strategy Library -->
     <aside id="strategies-panel" class="panel left-panel">
       <div class="panel-header">
-        <h3>📋 Strategies</h3>
-        <button id="new-strategy-btn" class="icon-btn">＋</button>
+        <h3>📋 Strategy Library</h3>
+        <button id="new-strategy-btn" class="icon-btn" title="Create new strategy">＋</button>
       </div>
       <div class="panel-content">
         <ul id="strategies-list">
-          <li class="strategy-item active" data-strategy="momentum-ml-v2">
-            <span class="strategy-name">Momentum ML v2</span>
-            <span class="strategy-status">●</span>
-          </li>
-          <li class="strategy-item" data-strategy="reversion-alpha">
-            <span class="strategy-name">Reversion α</span>
-            <span class="strategy-status">○</span>
-          </li>
-          <li class="strategy-item" data-strategy="ensemble-beta">
-            <span class="strategy-name">Ensemble β</span>
-            <span class="strategy-status">○</span>
-          </li>
+          <!-- Strategies will be loaded dynamically -->
         </ul>
+        <div class="risk-settings">
+          <h4>⚙️ Risk Settings</h4>
+          <div class="risk-input-group">
+            <label>Risk per Trade ($)</label>
+            <input type="number" id="risk-usd" value="100" min="1" max="10000" step="10">
+          </div>
+          <div class="risk-input-group">
+            <label>R:R Ratio</label>
+            <input type="number" id="rr-ratio" value="4.0" min="0.5" max="10" step="0.5">
+          </div>
+          <div class="risk-input-group">
+            <label>Leverage</label>
+            <input type="number" id="leverage" value="1" min="1" max="10" step="1">
+          </div>
+        </div>
       </div>
     </aside>
 
     <!-- Center: Chart Area -->
     <section id="chart-area" class="chart-section">
       <div class="chart-container">
-        <canvas id="mainChart"></canvas>
+        <div id="mainChart"></div>
       </div>
       <div class="chart-controls">
-        <select id="symbol-select" class="chart-select">
-          <option value="BTCUSDT">BTCUSDT</option>
-          <option value="ETHUSDT">ETHUSDT</option>
-          <option value="BNBUSDT">BNBUSDT</option>
-        </select>
-        <select id="timeframe-select" class="chart-select">
-          <option value="15">15m</option>
-          <option value="60" selected>60m</option>
-          <option value="240">4h</option>
-          <option value="1440">1d</option>
-        </select>
-        <select id="strategy-select" class="chart-select">
-          <option value="momentum-ml-v2" selected>Momentum ML v2</option>
-          <option value="reversion-alpha">Reversion α</option>
-          <option value="ensemble-beta">Ensemble β</option>
-        </select>
+        <div class="control-group">
+          <label>Symbol</label>
+          <select id="symbol-select" class="chart-select">
+            <option value="BTCUSDT">BTCUSDT</option>
+            <option value="ETHUSDT">ETHUSDT</option>
+            <option value="BNBUSDT">BNBUSDT</option>
+            <option value="SOLUSDT">SOLUSDT</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>Timeframe</label>
+          <select id="timeframe-select" class="chart-select">
+            <option value="1">1m</option>
+            <option value="5">5m</option>
+            <option value="15">15m</option>
+            <option value="30">30m</option>
+            <option value="60" selected>60m</option>
+            <option value="240">4h</option>
+            <option value="1440">1d</option>
+            <option value="1500">1500m</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>Strategy</label>
+          <select id="strategy-select" class="chart-select">
+            <!-- Will be populated dynamically -->
+          </select>
+        </div>
+        <div class="control-group">
+          <label>Mode</label>
+          <select id="mode-select" class="chart-select">
+            <option value="backtest" selected>Backtest</option>
+            <option value="live">Live (Testnet)</option>
+          </select>
+        </div>
+        <button id="run-backtest-btn" class="control-btn run">Run Backtest</button>
+      </div>
+      <div class="chart-stats" id="chart-stats">
+        <!-- Backtest statistics will appear here -->
       </div>
     </section>
 
-    <!-- Right Panel: Signals Feed -->
+    <!-- Right Panel: Signals & Trades -->
     <aside id="signals-panel" class="panel right-panel">
       <div class="panel-header">
         <h3>🔔 Signals <span class="signal-count" id="signal-count">0</span></h3>
-        <button id="close-signals-btn" class="icon-btn">✕</button>
+        <button id="close-signals-btn" class="icon-btn" title="Close panel">✕</button>
       </div>
       <div class="panel-content">
         <div id="signals-list" class="signals-list">
           <!-- Signals will be dynamically added here -->
+        </div>
+        <div id="trades-list" class="trades-list">
+          <h4>Recent Trades</h4>
+          <div id="trades-content"></div>
         </div>
         <button id="clear-signals-btn" class="clear-btn">Clear All</button>
       </div>
@@ -114,21 +148,21 @@
   <!-- Bottom: AI Chat Console -->
   <footer id="ai-console" class="ai-console">
     <div class="console-header">
-      <h3>🤖 AI Assistant (Anton)</h3>
+      <h3>🤖 Toni AI Assistant</h3>
       <span class="console-status" id="ai-status">Ready</span>
     </div>
     <div id="chat-log" class="chat-log">
       <div class="chat-message system">
         <span class="chat-time"></span>
         <span class="chat-author">System:</span>
-        <span class="chat-text">AI Assistant initialized. Type a message to start.</span>
+        <span class="chat-text">Toni AI initialized. Ask about strategies, backtests, or market analysis.</span>
       </div>
     </div>
     <div id="chat-inputs" class="chat-inputs">
       <input 
         type="text" 
         id="chat-input" 
-        placeholder="Ask Anton about strategies, backtests, or market analysis..." 
+        placeholder="Ask Toni about strategies, backtests, or market analysis..." 
         autocomplete="off"
       />
       <button id="send-btn" class="send-btn">Send</button>
