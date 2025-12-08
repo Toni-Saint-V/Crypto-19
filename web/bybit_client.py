@@ -79,9 +79,28 @@ def get_klines(symbol: str = "BTCUSDT", interval: str = "1m", limit: int = 200):
     return candles
 
 
-def fetch_ohlcv(*args, **kwargs):
-    return []
-
-
-def fetch_ohlcv(*args, **kwargs):
-    return []
+async def fetch_ohlcv(symbol: str = "BTCUSDT", interval: str = "1m", limit: int = 200):
+    """
+    Async wrapper for get_klines to fetch OHLCV data from Bybit Testnet.
+    
+    Args:
+        symbol: Trading pair symbol
+        interval: Timeframe interval (supports 1m-1500m and standard intervals)
+        limit: Number of candles to fetch
+    
+    Returns:
+        List of candle dictionaries with time, open, high, low, close, volume
+    """
+    import asyncio
+    try:
+        # Run synchronous get_klines in thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        candles = await loop.run_in_executor(None, get_klines, symbol, interval, limit)
+        
+        if isinstance(candles, dict) and 'error' in candles:
+            return []
+        
+        return candles
+    except Exception as e:
+        print(f"Error fetching OHLCV: {e}")
+        return []

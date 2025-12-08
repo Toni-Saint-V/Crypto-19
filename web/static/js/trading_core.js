@@ -1,6 +1,6 @@
 /**
- * CryptoBot Pro - Trading Core Frontend
- * WebSocket connections, Chart.js integration, and AI chat
+ * CryptoBot Pro v8.0 - Trading Core Frontend
+ * Lightweight Charts integration with candlesticks, strategy overlays, and AI chat
  */
 
 // ============================================
@@ -8,194 +8,423 @@
 // ============================================
 
 let chart = null;
+let candlestickSeries = null;
+let equitySeries = null;
+let confidenceSeries = null;
 let wsAI = null;
 let wsTrades = null;
 let isRunning = false;
-let chartData = {
-  labels: [],
-  equity: [],
-  price: [],
-  confidence: [],
-  buyMarkers: [],
-  sellMarkers: []
+let isLiveMode = false;
+let currentStrategy = 'pattern3_extreme';
+
+// Strategy name mapping (frontend -> backend)
+const strategyNameMap = {
+  'momentum-ml-v2': 'momentum_ml_v2',
+  'reversion-alpha': 'reversion_alpha',
+  'ensemble-beta': 'ensemble_beta',
+  'pattern3-extreme': 'pattern3_extreme',
+  'pattern3_extreme': 'pattern3_extreme',
 };
-let messageHistory = [];
-const MAX_MESSAGES = 10;
+let currentSymbol = 'BTCUSDT';
+let currentTimeframe = '60';
+let candlesData = [];
+let backtestTrades = [];
+let strategiesList = [];
 
 // ============================================
-// Chart Initialization
+// Chart Initialization (Lightweight Charts)
 // ============================================
 
 function initializeChart() {
-  const ctx = document.getElementById('mainChart').getContext('2d');
+  const chartContainer = document.getElementById('mainChart');
   
-  chart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: chartData.labels,
-      datasets: [
-        {
-          label: 'Equity',
-          data: chartData.equity,
-          borderColor: '#00ff88',
-          backgroundColor: 'rgba(0, 255, 136, 0.1)',
-          fill: true,
-          tension: 0.4,
-          borderWidth: 2,
-          pointRadius: 0,
-          pointHoverRadius: 4
-        },
-        {
-          label: 'Price',
-          data: chartData.price,
-          borderColor: '#5af3ff',
-          backgroundColor: 'rgba(90, 243, 255, 0.1)',
-          fill: false,
-          tension: 0.4,
-          borderWidth: 2,
-          pointRadius: 0,
-          yAxisID: 'y1'
-        },
-        {
-          label: 'Confidence',
-          data: chartData.confidence,
-          borderColor: '#aa55ff',
-          backgroundColor: 'rgba(170, 85, 255, 0.1)',
-          fill: false,
-          tension: 0.4,
-          borderWidth: 1.5,
-          pointRadius: 0,
-          yAxisID: 'y2',
-          borderDash: [5, 5]
-        }
-      ]
+  // Create chart
+  chart = LightweightCharts.createChart(chartContainer, {
+    width: chartContainer.clientWidth,
+    height: chartContainer.clientHeight,
+    layout: {
+      background: { color: '#0a0a1a' },
+      textColor: '#a0a0c0',
     },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: {
-        mode: 'index',
-        intersect: false
-      },
-      plugins: {
-        legend: {
-          display: true,
-          position: 'top',
-          labels: {
-            color: '#e6e6f2',
-            font: {
-              size: 11,
-              family: 'Inter'
-            },
-            usePointStyle: true,
-            padding: 15
-          }
-        },
-        tooltip: {
-          backgroundColor: 'rgba(14, 14, 31, 0.95)',
-          titleColor: '#00ffe0',
-          bodyColor: '#e6e6f2',
-          borderColor: '#00ffe0',
-          borderWidth: 1,
-          padding: 12,
-          displayColors: true,
-          callbacks: {
-            label: function(context) {
-              let label = context.dataset.label || '';
-              if (label) {
-                label += ': ';
-              }
-              label += context.parsed.y.toFixed(2);
-              if (context.dataset.label === 'Price') {
-                label += ' USDT';
-              } else if (context.dataset.label === 'Confidence') {
-                label += '%';
-              } else {
-                label += '%';
-              }
-              return label;
-            }
-          }
-        }
-      },
-      scales: {
-        x: {
-          grid: {
-            color: 'rgba(26, 26, 53, 0.5)',
-            drawBorder: false
-          },
-          ticks: {
-            color: '#a0a0c0',
-            font: {
-              size: 10
-            },
-            maxTicksLimit: 10
-          }
-        },
-        y: {
-          type: 'linear',
-          display: true,
-          position: 'left',
-          grid: {
-            color: 'rgba(26, 26, 53, 0.5)',
-            drawBorder: false
-          },
-          ticks: {
-            color: '#a0a0c0',
-            font: {
-              size: 10
-            },
-            callback: function(value) {
-              return value.toFixed(2) + '%';
-            }
-          },
-          title: {
-            display: true,
-            text: 'Equity (%)',
-            color: '#00ff88',
-            font: {
-              size: 11
-            }
-          }
-        },
-        y1: {
-          type: 'linear',
-          display: true,
-          position: 'right',
-          grid: {
-            drawOnChartArea: false
-          },
-          ticks: {
-            color: '#5af3ff',
-            font: {
-              size: 10
-            },
-            callback: function(value) {
-              return value.toFixed(0);
-            }
-          },
-          title: {
-            display: true,
-            text: 'Price (USDT)',
-            color: '#5af3ff',
-            font: {
-              size: 11
-            }
-          }
-        },
-        y2: {
-          type: 'linear',
-          display: false
-        }
-      },
-      animation: {
-        duration: 750
-      }
+    grid: {
+      vertLines: { color: '#1a1a35' },
+      horzLines: { color: '#1a1a35' },
+    },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal,
+    },
+    rightPriceScale: {
+      borderColor: '#1a1a35',
+    },
+    timeScale: {
+      borderColor: '#1a1a35',
+      timeVisible: true,
+    },
+  });
+
+  // Create candlestick series
+  candlestickSeries = chart.addCandlestickSeries({
+    upColor: '#00ff88',
+    downColor: '#ff3366',
+    borderVisible: false,
+    wickUpColor: '#00ff88',
+    wickDownColor: '#ff3366',
+  });
+
+  // Create equity curve series (on separate pane)
+  equitySeries = chart.addLineSeries({
+    color: '#5af3ff',
+    lineWidth: 2,
+    priceFormat: {
+      type: 'price',
+      precision: 2,
+      minMove: 0.01,
+    },
+    priceScaleId: 'equity',
+    title: 'Equity',
+  });
+
+  // Create confidence overlay (area series)
+  confidenceSeries = chart.addAreaSeries({
+    color: 'rgba(170, 85, 255, 0.2)',
+    lineColor: '#aa55ff',
+    lineWidth: 1,
+    priceScaleId: 'confidence',
+    title: 'AI Confidence',
+  });
+
+  // Configure price scales
+  chart.priceScale('equity').applyOptions({
+    scaleMargins: {
+      top: 0.1,
+      bottom: 0.1,
+    },
+  });
+
+  chart.priceScale('confidence').applyOptions({
+    scaleMargins: {
+      top: 0.8,
+      bottom: 0.1,
+    },
+  });
+
+  // Handle resize
+  window.addEventListener('resize', () => {
+    chart.applyOptions({
+      width: chartContainer.clientWidth,
+      height: chartContainer.clientHeight,
+    });
+  });
+
+  // Load initial data
+  loadCandles();
+  loadStrategies();
+}
+
+// ============================================
+// Data Loading
+// ============================================
+
+async function loadCandles() {
+  try {
+    const response = await fetch(`/api/candles?symbol=${currentSymbol}&interval=${currentTimeframe}&limit=500`);
+    const data = await response.json();
+    
+    if (data.candles && data.candles.length > 0) {
+      candlesData = data.candles.map(c => ({
+        time: c.time,
+        open: c.open,
+        high: c.high,
+        low: c.low,
+        close: c.close,
+      }));
+      
+      candlestickSeries.setData(candlesData);
+      chart.timeScale().fitContent();
+    }
+  } catch (error) {
+    console.error('Error loading candles:', error);
+    addChatMessage('system', `Error loading candles: ${error.message}`);
+  }
+}
+
+async function loadStrategies() {
+  try {
+    const response = await fetch('/api/strategies');
+    const data = await response.json();
+    
+    if (data.strategies) {
+      strategiesList = data.strategies;
+      updateStrategiesUI();
+    }
+  } catch (error) {
+    console.error('Error loading strategies:', error);
+  }
+}
+
+function updateStrategiesUI() {
+  const strategiesListEl = document.getElementById('strategies-list');
+  const strategySelect = document.getElementById('strategy-select');
+  
+  // Clear existing
+  strategiesListEl.innerHTML = '';
+  strategySelect.innerHTML = '';
+  
+  // Add strategies
+  Object.entries(strategiesList).forEach(([key, strategy]) => {
+    // Add to sidebar list
+    const li = document.createElement('li');
+    li.className = `strategy-item ${key === currentStrategy ? 'active' : ''}`;
+    li.dataset.strategy = key;
+    li.innerHTML = `
+      <div class="strategy-info">
+        <span class="strategy-name">${strategy.name}</span>
+        <span class="strategy-status" title="${strategy.available ? 'Available' : 'Not implemented'}">
+          ${strategy.available ? '●' : '○'}
+        </span>
+      </div>
+      <div class="strategy-actions">
+        <button class="strategy-btn backtest" data-strategy="${key}" title="Run Backtest">📊</button>
+        <button class="strategy-btn compare" data-strategy="${key}" title="Compare">📈</button>
+      </div>
+    `;
+    
+    // Add tooltip
+    if (strategy.description) {
+      li.setAttribute('title', strategy.description);
+    }
+    
+    strategiesListEl.appendChild(li);
+    
+    // Add to select dropdown
+    const option = document.createElement('option');
+    option.value = key;
+    option.textContent = strategy.name;
+    if (key === currentStrategy) {
+      option.selected = true;
+    }
+    strategySelect.appendChild(option);
+  });
+  
+  // Add event listeners
+  document.querySelectorAll('.strategy-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const strategyKey = item.dataset.strategy;
+      selectStrategy(strategyKey);
+    });
+  });
+  
+  document.querySelectorAll('.strategy-btn.backtest').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const strategyKey = btn.dataset.strategy;
+      runBacktest(strategyKey);
+    });
+  });
+}
+
+// ============================================
+// Backtest Functions
+// ============================================
+
+async function runBacktest(strategy = null) {
+  const strategyToUse = strategy || currentStrategy;
+  // Map frontend strategy name to backend name
+  const backendStrategy = strategyNameMap[strategyToUse] || strategyToUse;
+  const riskPerTrade = parseFloat(document.getElementById('risk-usd').value) || 100;
+  const rrRatio = parseFloat(document.getElementById('rr-ratio').value) || 4.0;
+  
+  addChatMessage('system', `Running backtest for ${strategiesList[strategyToUse]?.name || strategyToUse}...`);
+  
+  try {
+    const params = new URLSearchParams({
+      symbol: currentSymbol,
+      interval: currentTimeframe,
+      strategy: backendStrategy,
+      risk_per_trade: riskPerTrade,
+      rr_ratio: rrRatio,
+      limit: 500,
+    });
+    
+    const response = await fetch(`/api/backtest/run?${params}`);
+    const result = await response.json();
+    
+    if (result.error) {
+      addChatMessage('system', `Backtest error: ${result.error}`);
+      return;
+    }
+    
+    // Store trades
+    backtestTrades = result.trades || [];
+    
+    // Update chart with trades
+    updateChartWithTrades(backtestTrades);
+    
+    // Update equity curve
+    if (result.equity_curve) {
+      updateEquityCurve(result.equity_curve);
+    }
+    
+    // Display statistics
+    displayBacktestStats(result.summary || {});
+    
+    // Add signals for trades
+    backtestTrades.forEach(trade => {
+      addSignal('bt', `Trade: ${trade.result_R > 0 ? 'WIN' : 'LOSS'} ${trade.result_R.toFixed(2)}R @ ${trade.entry_price?.toFixed(2) || 'N/A'}`);
+    });
+    
+    addChatMessage('ai', `Backtest completed! Total trades: ${backtestTrades.length}, Return: ${result.summary?.pnl_% || 0}%`);
+    
+  } catch (error) {
+    console.error('Backtest error:', error);
+    addChatMessage('system', `Backtest failed: ${error.message}`);
+  }
+}
+
+function updateChartWithTrades(trades) {
+  if (!candlestickSeries || !trades || trades.length === 0) return;
+  
+  // Add markers for entry, stop, and take profit
+  const markers = [];
+  
+  trades.forEach(trade => {
+    const entryTime = parseTime(trade.entry_time);
+    if (!entryTime) return;
+    
+    // Entry marker
+    markers.push({
+      time: entryTime,
+      position: 'belowBar',
+      color: trade.result_R > 0 ? '#00ff88' : '#ff3366',
+      shape: 'arrowUp',
+      text: `Entry ${trade.entry_price?.toFixed(2) || ''}`,
+    });
+    
+    // Stop loss line (horizontal)
+    if (trade.stop) {
+      candlestickSeries.createPriceLine({
+        price: trade.stop,
+        color: '#ff3366',
+        lineWidth: 1,
+        lineStyle: LightweightCharts.LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: 'Stop',
+      });
+    }
+    
+    // Take profit line (horizontal)
+    if (trade.tp) {
+      candlestickSeries.createPriceLine({
+        price: trade.tp,
+        color: '#00ff88',
+        lineWidth: 1,
+        lineStyle: LightweightCharts.LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: 'TP',
+      });
     }
   });
   
-  // Initialize with sample data
-  loadInitialData();
+  candlestickSeries.setMarkers(markers);
+}
+
+function updateEquityCurve(equityCurve) {
+  if (!equitySeries || !equityCurve || equityCurve.length === 0) return;
+  
+  const initialEquity = equityCurve[0];
+  const equityData = equityCurve.map((equity, index) => {
+    // Use corresponding candle time if available
+    const time = candlesData[index]?.time || (Date.now() / 1000) + index;
+    return {
+      time: time,
+      value: equity,
+    };
+  });
+  
+  equitySeries.setData(equityData);
+}
+
+function displayBacktestStats(summary) {
+  const statsEl = document.getElementById('chart-stats');
+  
+  if (!summary || Object.keys(summary).length === 0) {
+    statsEl.innerHTML = '';
+    return;
+  }
+  
+  statsEl.innerHTML = `
+    <div class="stat-card">
+      <div class="stat-item">
+        <span class="stat-label">Total Return:</span>
+        <span class="stat-value ${summary.pnl_% >= 0 ? 'positive' : 'negative'}">
+          ${summary.pnl_% >= 0 ? '+' : ''}${summary.pnl_%?.toFixed(2) || 0}%
+        </span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Total Trades:</span>
+        <span class="stat-value">${summary.total_trades || 0}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Win Rate:</span>
+        <span class="stat-value">${summary.winrate?.toFixed(1) || 0}%</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Avg R:</span>
+        <span class="stat-value">${summary.avg_R?.toFixed(2) || 0}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Max Drawdown:</span>
+        <span class="stat-value negative">${summary.max_dd?.toFixed(2) || 0}%</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Sharpe Ratio:</span>
+        <span class="stat-value">${summary.sharpe?.toFixed(2) || 0}</span>
+      </div>
+    </div>
+  `;
+}
+
+function parseTime(timeValue) {
+  if (!timeValue) return null;
+  
+  // If it's a number (timestamp)
+  if (typeof timeValue === 'number') {
+    return timeValue;
+  }
+  
+  // If it's a string ISO format
+  if (typeof timeValue === 'string') {
+    const date = new Date(timeValue);
+    return Math.floor(date.getTime() / 1000);
+  }
+  
+  return null;
+}
+
+// ============================================
+// Strategy Selection
+// ============================================
+
+function selectStrategy(strategyKey) {
+  currentStrategy = strategyKey;
+  
+  // Update UI
+  document.querySelectorAll('.strategy-item').forEach(item => {
+    item.classList.remove('active');
+    if (item.dataset.strategy === strategyKey) {
+      item.classList.add('active');
+    }
+  });
+  
+  // Update select
+  const strategySelect = document.getElementById('strategy-select');
+  strategySelect.value = strategyKey;
+  
+  // Update header
+  const strategyName = strategiesList[strategyKey]?.name || strategyKey;
+  document.getElementById('current-strategy').textContent = strategyName;
+  
+  addChatMessage('system', `Strategy changed to: ${strategyName}`);
 }
 
 // ============================================
@@ -216,7 +445,7 @@ function connectAIWebSocket() {
   wsAI.onopen = () => {
     console.log('✅ AI WebSocket connected');
     updateConnectionStatus(true);
-    addChatMessage('system', 'AI WebSocket connected. Ready to chat.');
+    addChatMessage('system', 'Toni AI connected. Ready to chat.');
   };
   
   wsAI.onmessage = (event) => {
@@ -237,7 +466,6 @@ function connectAIWebSocket() {
     console.log('🔴 AI WebSocket disconnected');
     updateConnectionStatus(false);
     addChatMessage('system', 'AI WebSocket disconnected. Reconnecting...');
-    // Reconnect after 3 seconds
     setTimeout(connectAIWebSocket, 3000);
   };
 }
@@ -268,7 +496,6 @@ function connectTradesWebSocket() {
   
   wsTrades.onclose = () => {
     console.log('🔴 Trades WebSocket disconnected');
-    // Reconnect after 3 seconds
     setTimeout(connectTradesWebSocket, 3000);
   };
 }
@@ -279,174 +506,39 @@ function connectTradesWebSocket() {
 
 function handleAIMessage(data) {
   if (data.type === 'message' || data.type === 'response') {
-    // Chat message
     addChatMessage('ai', data.message || data.text || JSON.stringify(data));
   } else if (data.type === 'data' || data.type === 'update') {
-    // Data update (confidence, risk, PNL)
     if (data.payload) {
       updateMetrics(data.payload);
-      updateChartData(data.payload);
+      updateMLConfidence(data.payload.confidence);
     }
   } else if (data.type === 'system') {
-    // System message
     addChatMessage('system', data.message || data.text);
   }
 }
 
 function handleTradeSignal(data) {
   if (data.type === 'trade' || data.side) {
-    // Trade signal
     addSignal('trade', `[TRADE] ${data.side?.toUpperCase()} ${data.symbol || 'BTCUSDT'} @ ${data.price?.toFixed(2) || 'N/A'}`);
-    
-    // Add marker to chart
-    if (data.side === 'buy') {
-      addBuyMarker(data.timestamp || Date.now(), data.price);
-    } else if (data.side === 'sell') {
-      addSellMarker(data.timestamp || Date.now(), data.price);
-    }
     
     // Update equity if provided
     if (data.equity !== undefined) {
       updateEquity(data.equity);
     }
   } else if (data.type === 'signal') {
-    // General signal
     addSignal('new', data.message || JSON.stringify(data));
   }
 }
 
-// ============================================
-// Chart Updates
-// ============================================
-
-function loadInitialData() {
-  // Load backtest data on init
-  fetch('/api/backtest')
-    .then(response => response.json())
-    .then(data => {
-      if (data.equity_curve && data.equity_curve.length > 0) {
-        const baseEquity = 100;
-        chartData.labels = data.equity_curve.map((_, i) => `T${i + 1}`);
-        chartData.equity = data.equity_curve.map((val, i) => {
-          if (i === 0) return baseEquity;
-          return ((val / data.equity_curve[0]) * baseEquity) - baseEquity;
-        });
-        
-        // Generate sample price and confidence data
-        const basePrice = 42000;
-        chartData.price = data.equity_curve.map((_, i) => 
-          basePrice + (Math.random() - 0.5) * 1000
-        );
-        chartData.confidence = data.equity_curve.map(() => 
-          Math.random() * 30 + 60
-        );
-        
-        updateChart();
-      }
-    })
-    .catch(error => {
-      console.error('Error loading backtest data:', error);
-      // Use empty data
-      initializeEmptyChart();
-    });
-}
-
-function initializeEmptyChart() {
-  const now = Date.now();
-  for (let i = 0; i < 50; i++) {
-    chartData.labels.push(new Date(now - (50 - i) * 60000).toLocaleTimeString());
-    chartData.equity.push(0);
-    chartData.price.push(42000);
-    chartData.confidence.push(70);
-  }
-  updateChart();
-}
-
-function updateChartData(payload) {
-  if (!chart) return;
+function updateMLConfidence(confidence) {
+  if (!confidenceSeries || confidence === undefined) return;
   
-  const now = new Date().toLocaleTimeString();
-  
-  // Add new data point
-  chartData.labels.push(now);
-  if (chartData.labels.length > 100) {
-    chartData.labels.shift();
-    chartData.equity.shift();
-    chartData.price.shift();
-    chartData.confidence.shift();
-  }
-  
-  // Update values
-  if (payload.equity !== undefined) {
-    chartData.equity.push(payload.equity);
-  } else if (chartData.equity.length > 0) {
-    const lastEquity = chartData.equity[chartData.equity.length - 1];
-    chartData.equity.push(lastEquity + (Math.random() - 0.5) * 0.5);
-  } else {
-    chartData.equity.push(0);
-  }
-  
-  if (payload.price !== undefined) {
-    chartData.price.push(payload.price);
-  } else if (chartData.price.length > 0) {
-    const lastPrice = chartData.price[chartData.price.length - 1];
-    chartData.price.push(lastPrice + (Math.random() - 0.5) * 100);
-  } else {
-    chartData.price.push(42000);
-  }
-  
-  if (payload.confidence !== undefined) {
-    chartData.confidence.push(payload.confidence);
-  } else if (chartData.confidence.length > 0) {
-    const lastConf = chartData.confidence[chartData.confidence.length - 1];
-    chartData.confidence.push(Math.max(0, Math.min(100, lastConf + (Math.random() - 0.5) * 5)));
-  } else {
-    chartData.confidence.push(70);
-  }
-  
-  updateChart();
-}
-
-function updateEquity(newEquity) {
-  if (!chart || chartData.equity.length === 0) return;
-  
-  const baseEquity = chartData.equity[0] || 100;
-  const equityChange = ((newEquity / baseEquity) * 100) - 100;
-  
-  chartData.equity[chartData.equity.length - 1] = equityChange;
-  updateChart();
-}
-
-function addBuyMarker(timestamp, price) {
-  if (!chart) return;
-  
-  // Add visual marker (annotation would require chartjs-plugin-annotation)
-  // For now, we'll add a data point highlight
-  const index = chartData.labels.length - 1;
-  if (index >= 0) {
-    // Create a temporary dataset for markers or use annotations plugin
-    console.log(`Buy marker at ${timestamp}, price: ${price}`);
-  }
-}
-
-function addSellMarker(timestamp, price) {
-  if (!chart) return;
-  
-  const index = chartData.labels.length - 1;
-  if (index >= 0) {
-    console.log(`Sell marker at ${timestamp}, price: ${price}`);
-  }
-}
-
-function updateChart() {
-  if (!chart) return;
-  
-  chart.data.labels = chartData.labels;
-  chart.data.datasets[0].data = chartData.equity;
-  chart.data.datasets[1].data = chartData.price;
-  chart.data.datasets[2].data = chartData.confidence;
-  
-  chart.update('none'); // 'none' for instant update, 'active' for animation
+  // Update confidence overlay (simplified - would need time series in production)
+  const currentTime = Math.floor(Date.now() / 1000);
+  confidenceSeries.update({
+    time: currentTime,
+    value: confidence,
+  });
 }
 
 // ============================================
@@ -473,9 +565,16 @@ function updateMetrics(payload) {
     pnlElement.textContent = `${pnlValue >= 0 ? '+' : ''}${pnlValue.toFixed(2)}%`;
     pnlElement.className = `info-value pnl ${pnlValue >= 0 ? 'positive' : 'negative'}`;
   }
-  
-  if (payload.confidence !== undefined) {
-    // Could update confidence display if needed
+}
+
+function updateEquity(newEquity) {
+  // Update equity curve if needed
+  if (equitySeries) {
+    const currentTime = Math.floor(Date.now() / 1000);
+    equitySeries.update({
+      time: currentTime,
+      value: newEquity,
+    });
   }
 }
 
@@ -521,20 +620,14 @@ function addChatMessage(author, text) {
   messageDiv.className = `chat-message ${author}`;
   messageDiv.innerHTML = `
     <span class="chat-time">${timeStr}</span>
-    <span class="chat-author">${author === 'user' ? 'You' : author === 'ai' ? 'Anton' : 'System'}:</span>
+    <span class="chat-author">${author === 'user' ? 'You' : author === 'ai' ? 'Toni' : 'System'}:</span>
     <span class="chat-text">${text}</span>
   `;
   
   chatLog.appendChild(messageDiv);
   
-  // Store in history
-  messageHistory.push({ author, text, time: timeStr });
-  if (messageHistory.length > MAX_MESSAGES) {
-    messageHistory.shift();
-  }
-  
-  // Remove old messages from DOM (keep last MAX_MESSAGES)
-  while (chatLog.children.length > MAX_MESSAGES) {
+  // Remove old messages (keep last 50)
+  while (chatLog.children.length > 50) {
     chatLog.removeChild(chatLog.firstChild);
   }
   
@@ -562,32 +655,34 @@ function setupEventHandlers() {
     addChatMessage('system', 'Trading paused.');
   });
   
-  // Strategy selection
-  document.querySelectorAll('.strategy-item').forEach(item => {
-    item.addEventListener('click', () => {
-      document.querySelectorAll('.strategy-item').forEach(i => i.classList.remove('active'));
-      item.classList.add('active');
-      const strategyName = item.querySelector('.strategy-name').textContent;
-      document.getElementById('current-strategy').textContent = strategyName;
-      addChatMessage('system', `Strategy changed to: ${strategyName}`);
-    });
-  });
-  
   // Chart controls
   document.getElementById('symbol-select').addEventListener('change', (e) => {
-    document.getElementById('current-symbol').textContent = e.target.value;
-    addChatMessage('system', `Symbol changed to: ${e.target.value}`);
+    currentSymbol = e.target.value;
+    document.getElementById('current-symbol').textContent = currentSymbol;
+    loadCandles();
+    addChatMessage('system', `Symbol changed to: ${currentSymbol}`);
   });
   
   document.getElementById('timeframe-select').addEventListener('change', (e) => {
-    document.getElementById('current-timeframe').textContent = e.target.value + 'm';
-    addChatMessage('system', `Timeframe changed to: ${e.target.value}m`);
+    currentTimeframe = e.target.value;
+    document.getElementById('current-timeframe').textContent = `${currentTimeframe}m`;
+    loadCandles();
+    addChatMessage('system', `Timeframe changed to: ${currentTimeframe}m`);
   });
   
   document.getElementById('strategy-select').addEventListener('change', (e) => {
-    const strategyText = e.target.options[e.target.selectedIndex].text;
-    document.getElementById('current-strategy').textContent = strategyText;
-    addChatMessage('system', `Strategy changed to: ${strategyText}`);
+    selectStrategy(e.target.value);
+  });
+  
+  document.getElementById('mode-select').addEventListener('change', (e) => {
+    isLiveMode = e.target.value === 'live';
+    document.getElementById('current-mode').textContent = isLiveMode ? 'Live' : 'Backtest';
+    addChatMessage('system', `Mode changed to: ${isLiveMode ? 'Live (Testnet)' : 'Backtest'}`);
+  });
+  
+  // Run backtest button
+  document.getElementById('run-backtest-btn').addEventListener('click', () => {
+    runBacktest();
   });
   
   // Signals panel
@@ -650,7 +745,7 @@ function setupEventHandlers() {
 // ============================================
 
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('🚀 CryptoBot Pro - Trading Core initializing...');
+  console.log('🚀 CryptoBot Pro v8.0 - Trading Core initializing...');
   
   initializeChart();
   setupEventHandlers();
