@@ -766,6 +766,54 @@ function setupEventHandlers() {
     selectStrategy(e.target.value);
   });
   
+  // Data source selector
+  document.getElementById('data-source-select').addEventListener('change', (e) => {
+    const source = e.target.value;
+    const exchangeGroup = document.getElementById('exchange-group');
+    const csvGroup = document.getElementById('csv-group');
+    
+    if (source === 'csv') {
+      exchangeGroup.style.display = 'none';
+      csvGroup.style.display = 'block';
+    } else {
+      exchangeGroup.style.display = 'block';
+      csvGroup.style.display = 'none';
+    }
+  });
+  
+  // CSV upload
+  document.getElementById('upload-csv-btn').addEventListener('click', async () => {
+    const fileInput = document.getElementById('csv-file-input');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+      addChatMessage('system', 'Please select a CSV file first');
+      return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+      addChatMessage('system', 'Uploading CSV file...');
+      const response = await fetch('/api/data/upload-csv', {
+        method: 'POST',
+        body: formData
+      });
+      
+      const data = await response.json();
+      if (data.message) {
+        addChatMessage('system', `${data.message} (${data.rows} rows)`);
+        loadCandles(); // Reload with CSV data
+      } else {
+        addChatMessage('system', `Error: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Error uploading CSV:', error);
+      addChatMessage('system', 'Failed to upload CSV file');
+    }
+  });
+  
   document.getElementById('mode-select').addEventListener('change', (e) => {
     isLiveMode = e.target.value === 'live';
     document.getElementById('current-mode').textContent = isLiveMode ? 'Live' : 'Backtest';
