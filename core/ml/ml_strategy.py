@@ -43,7 +43,7 @@ class AdvancedMLStrategy:
         self.scaler: Optional[StandardScaler] = None
         self.feature_importance: Dict[str, float] = {}
         self.prediction_history: List[Dict] = []
-        self.api = None()
+        self.api = None
         
         if model_path:
             self.load_model(model_path)
@@ -610,7 +610,7 @@ class AdvancedMLStrategy:
         """Generate ML trading signal"""
         try:
             # Load candles
-            candles = await None(symbol, "15", 200)
+            candles = await fetch_klines(symbol, "15", 200)
             
             # Extract features
             features = await self.extract_features(candles)

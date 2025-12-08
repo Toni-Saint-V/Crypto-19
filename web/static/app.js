@@ -154,21 +154,7 @@
           rightPriceScale: { borderColor: "#1b2740" },
           timeScale: { borderColor: "#1b2740" },
         });
-        equitySeries = if (!equityChart || typeof equityChart.addLineSeries !== "function") {
-      const eqEl = document.getElementById("equity-chart") || document.getElementById("equityChart") || document.querySelector("[data-role=\"equity-chart\"]");
-      if (!eqEl || !window.LightweightCharts || typeof LightweightCharts.createChart !== "function") {
-        console.error("Cannot init equity chart", eqEl, window.LightweightCharts);
-        return;
-      }
-      equityChart = LightweightCharts.createChart(eqEl, {
-        width: eqEl.clientWidth || 800,
-        height: 200,
-        layout: { background: { color: "#020817" }, textColor: "#C9D1D9" },
-        timeScale: { borderColor: "#30363D" },
-        rightPriceScale: { borderColor: "#30363D" }
-      });
-    }
-    equityChart.addLineSeries();
+        equitySeries = equityChart.addLineSeries();
         window.addEventListener("resize", () => {
           if (!equityChart) return;
           equityChart.applyOptions({ width: el.clientWidth });
