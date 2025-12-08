@@ -5,7 +5,7 @@ AI-powered crypto trading dashboard with WebSocket support
 
 import uvicorn
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Query
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,18 +13,19 @@ import asyncio
 import json
 import random
 import os
-import time
 import logging
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
+import math
+import time
 
 log = logging.getLogger(__name__)
 from core.backtest.engine import BacktestEngine
-from web.bybit_client import fetch_ohlcv, get_klines
 from core.ml.ml_service import MLService
 from core.ai.toni_service import ToniAIService, ToniContext
 from core.risk.risk_manager import RiskManager, RiskLimits
 from core.exchange.factory import create_exchange_provider
+from core.market_data.service import MarketDataService
 import yaml
 
 # === FASTAPI INITIALIZATION ===
@@ -120,6 +121,7 @@ risk_limits = RiskLimits(
 backtest_engine = BacktestEngine(risk_limits=risk_limits)
 ml_service = MLService()
 global_risk_manager = RiskManager(limits=risk_limits)
+market_data_service = MarketDataService()
 
 # Default exchange provider
 default_exchange = config.get("exchange", {}).get("default", "bybit")
@@ -139,84 +141,158 @@ last_backtest_context = None
 
 # === ROUTES ===
 
+
+def _make_test_dashboard_payload() -> dict:
+    """
+    Генерируем стабильный тестовый payload для /api/dashboard.
+    Никаких запросов к биржам, только локальные данные.
+    """
+    equity = 10_000.0
+    balance = 9_800.0
+    portfolio_value = 10_000.0
+    pnl = 200.0
+    risk = "Medium"
+    confidence = 65.0
+
+    positions = [
+        {
+            "symbol": "BTCUSDT",
+            "size": 0.15,
+            "entry_price": 50_000.0,
+            "pnl": 150.0,
+            "side": "LONG",
+        },
+        {
+            "symbol": "ETHUSDT",
+            "size": 1.0,
+            "entry_price": 2_500.0,
+            "pnl": 50.0,
+            "side": "LONG",
+        },
+    ]
+
+    open_orders = [
+        {
+            "symbol": "BTCUSDT",
+            "price": 49_500.0,
+            "size": 0.05,
+            "side": "BUY",
+            "type": "limit",
+        }
+    ]
+
+    return {
+        "mode": "test",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "equity": equity,
+        "balance": balance,
+        "portfolio_value": portfolio_value,
+        "pnl": pnl,
+        "risk": risk,
+        "confidence": confidence,
+        "positions": positions,
+        "open_orders": open_orders,
+        "exchange": "bybit-test",
+        "symbol": "BTCUSDT",
+        "timeframe": "1m",
+    }
+
+
+def _make_test_candles(symbol: str, timeframe: str = "1m", limit: int = 200) -> List[Dict]:
+    """
+    Генерируем синтетические свечи вокруг базовой цены.
+    Время: unix timestamp (секунды), шаг: 60 секунд.
+    Никаких внешних запросов, только локальная математика.
+    """
+    now = int(time.time())
+    step_sec = 60
+    base_price = 50_000.0 if symbol.upper().startswith("BTC") else 2_500.0
+
+    candles: List[Dict] = []
+    for i in range(limit):
+        t = now - (limit - i) * step_sec
+        offset = 300.0 * math.sin(i / 10.0)
+        noise = 50.0 * math.sin(i / 3.0)
+        open_ = base_price + offset + noise
+        close = open_ + (math.sin(i / 5.0) * 100.0)
+        high = max(open_, close) + 50.0
+        low = min(open_, close) - 50.0
+        volume = 10_000 + i * 10
+
+        candles.append(
+            {
+                "time": t,
+                "open": round(open_, 2),
+                "high": round(high, 2),
+                "low": round(low, 2),
+                "close": round(close, 2),
+                "volume": float(volume),
+            }
+        )
+
+    return candles
+
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
-    """Redirect root to trading core"""
-    return templates.TemplateResponse("trading_core.html", {"request": request})
+async def index():
+    """Redirect root to the unified dashboard"""
+    return RedirectResponse(url="/dashboard", status_code=307)
 
-@app.get("/dashboard_new", response_class=HTMLResponse)
-async def dashboard_new(request: Request):
-    """Main neural dashboard"""
-    return templates.TemplateResponse("dashboard_new.html", {"request": request})
-
-@app.get("/trading_core", response_class=HTMLResponse)
-async def trading_core(request: Request):
-    """Render the Trading Core dashboard"""
-    return templates.TemplateResponse("trading_core.html", {"request": request})
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard(request: Request):
+    """Render the unified dashboard"""
+    return templates.TemplateResponse("dashboard.html", {"request": request})
 
 # === REST API ENDPOINTS ===
 
 @app.get("/api/dashboard")
-async def api_dashboard():
-    """Return dynamic dashboard metrics"""
-    return JSONResponse({
-        "pnl": round(random.uniform(-2, 2), 2),
-        "risk": random.choice(["Low", "Medium", "High"]),
-        "confidence": round(random.uniform(50, 99), 1)
-    })
+async def api_dashboard_test_mode():
+    """
+    TEST-режим: всегда возвращаем фикстурный payload для дашборда.
+    Никаких обращений к бирже и внешним сервисам.
+    """
+    return _make_test_dashboard_payload()
 
 @app.get("/api/candles")
-async def api_candles(
-    symbol: str = Query("BTCUSDT", description="Trading pair symbol"),
-    interval: str = Query("60", description="Timeframe in minutes (1-1500) or standard (1m, 5m, 15m, etc.)"),
-    limit: int = Query(200, description="Number of candles to fetch"),
-    exchange: str = Query("bybit", description="Exchange name (bybit, binance)")
+async def api_candles_test_mode(
+    exchange: str = "bybit-test",
+    symbol: str = "BTCUSDT",
+    timeframe: str = "1m",
+    limit: int = 200,
+    mode: str = "test",
 ):
     """
-    Fetch OHLCV candles from specified exchange.
-    Supports timeframes from 1m to 1500m.
+    TEST-режим: возвращаем синтетические свечи для любого symbol/timeframe.
+    Никаких обращений к бирже, только локальная генерация.
     """
-    try:
-        # Use exchange provider if specified, otherwise fallback to old method
-        if exchange and exchange.lower() in ["bybit", "binance"]:
-            provider = create_exchange_provider(
-                exchange.lower(),
-                testnet=exchange_config.get(exchange.lower(), {}).get("testnet", True)
-            )
-            if provider:
-                candles = await provider.fetch_klines(symbol, interval, limit)
-            else:
-                candles = await fetch_ohlcv(symbol=symbol, interval=interval, limit=limit)
-        else:
-            candles = await fetch_ohlcv(symbol=symbol, interval=interval, limit=limit)
-        
-        if not candles:
-            # Fallback to mock data if fetch fails
-            candles = []
-            base_price = 42000.0
-            base_time = int(time.time()) - (limit * 60)
-            for i in range(limit):
-                price_change = random.uniform(-200, 200)
-                base_price += price_change
-                base_price = max(35000, min(50000, base_price))
-                candles.append({
-                    "time": base_time + (i * 60),
-                    "open": base_price + random.uniform(-50, 50),
-                    "high": base_price + random.uniform(50, 150),
-                    "low": base_price - random.uniform(50, 150),
-                    "close": base_price + random.uniform(-50, 50),
-                    "volume": random.uniform(100, 1000)
-                })
-        
-        return JSONResponse({
-            "symbol": symbol,
-            "interval": interval,
-            "exchange": exchange,
-            "candles": candles,
-            "count": len(candles)
-        })
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+    candles = _make_test_candles(symbol=symbol, timeframe=timeframe, limit=limit)
+    return {
+        "exchange": exchange,
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "mode": "test",
+        "candles": candles,
+        "count": len(candles),
+    }
+
+
+@app.get("/api/selfcheck")
+async def api_selfcheck():
+    """
+    Простая самопроверка TEST-режима.
+    """
+    dash = _make_test_dashboard_payload()
+    candles = _make_test_candles(symbol="BTCUSDT", timeframe="1m", limit=10)
+    return {
+        "ok": True,
+        "dashboard_sample": {
+            "equity": dash.get("equity"),
+            "balance": dash.get("balance"),
+            "pnl": dash.get("pnl"),
+            "risk": dash.get("risk"),
+            "confidence": dash.get("confidence"),
+        },
+        "candles_sample_len": len(candles),
+    }
 
 @app.post("/api/backtest/run")
 async def api_backtest_run(
@@ -683,6 +759,5 @@ def handle_command(command: str) -> str:
 
 if __name__ == "__main__":
     print("🚀 Launching CryptoBot Pro Dashboard")
-    print("📊 Trading Core: http://127.0.0.1:8000/trading_core")
-    print("🌐 Dashboard: http://127.0.0.1:8000/dashboard_new")
+    print("🌐 Dashboard: http://127.0.0.1:8000/dashboard")
     uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
