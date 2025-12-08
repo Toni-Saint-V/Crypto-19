@@ -13,12 +13,33 @@ INTERVAL_MAP = {
     "15m": "15",
     "30m": "30",
     "1h": "60",
+    "2h": "120",
     "4h": "240",
+    "12h": "720",
     "1d": "D",
+    "3d": "3D",
+    "1w": "W",
 }
 
 def _map_interval(interval: str) -> str:
-    return INTERVAL_MAP.get(interval, "1")
+    """
+    Map interval string to Bybit format.
+    Supports standard intervals and custom minutes (1-2000).
+    """
+    # Check if it's a standard interval
+    if interval in INTERVAL_MAP:
+        return INTERVAL_MAP[interval]
+    
+    # Check if it's a numeric string (minutes)
+    try:
+        minutes = int(interval)
+        if 1 <= minutes <= 2000:
+            return str(minutes)
+    except ValueError:
+        pass
+    
+    # Default to 1 minute
+    return "1"
 
 
 # ---------- get klines ----------
@@ -52,6 +73,7 @@ def get_klines(symbol: str = "BTCUSDT", interval: str = "1m", limit: int = 200):
             "high": float(it["high"]),
             "low": float(it["low"]),
             "close": float(it["close"]),
+            "volume": float(it.get("volume", 0))
         })
 
     return candles
