@@ -1,103 +1,73 @@
-// Dashboard JS logic placeholder
-document.addEventListener("DOMContentLoaded", () => {
-    console.log("[CBP] Dashboard loaded");
+// === CryptoBot Pro Dashboard Engine ===
+// Version 1.0 — Neural Dashboard System
 
-    const symbolEl = document.getElementById("symbol");
-    const tfEl = document.getElementById("tf");
-    const statusSymbol = document.getElementById("status-symbol");
-    const statusTf = document.getElementById("status-tf");
-    const statusBt = document.getElementById("status-bt");
-    const btnFetch = document.getElementById("btn-fetch");
-    const btnBacktest = document.getElementById("btn-backtest");
+let socket;
+const statusEl = document.getElementById("status");
+const pnlEl = document.getElementById("pnl");
+const riskEl = document.getElementById("risk");
+const confEl = document.getElementById("confidence");
+const timeEl = document.getElementById("time");
+const logEl = document.getElementById("log");
 
-    function updateStatus() {
-        if (statusSymbol && symbolEl) statusSymbol.textContent = symbolEl.value;
-        if (statusTf && tfEl) statusTf.textContent = tfEl.value;
+// 🕒 Обновление времени
+setInterval(() => {
+  const now = new Date();
+  timeEl.textContent = now.toLocaleTimeString();
+}, 1000);
+
+// 🔗 Подключение к WebSocket
+function initWebSocket() {
+  socket = new WebSocket("ws://localhost:8000/ws");
+  socket.onopen = () => {
+    statusEl.textContent = "🟢 Connected";
+    log("Connection established");
+  };
+  socket.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      updateDashboard(data);
+    } catch {
+      log(event.data);
     }
-
-    if (symbolEl && tfEl) {
-        symbolEl.addEventListener("change", updateStatus);
-        tfEl.addEventListener("change", updateStatus);
-        updateStatus();
-    }
-
-    async function runBacktest() {
-        try {
-            const payload = {
-                symbol: symbolEl ? symbolEl.value : "BTCUSDT",
-                tf: tfEl ? tfEl.value : "1m"
-            };
-            const res = await fetch("/api/backtest/run", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
-            });
-            if (!res.ok) throw new Error("HTTP " + res.status);
-            const data = await res.json();
-            console.log("[CBP] backtest run:", data);
-            if (statusBt) statusBt.textContent = data.message || "completed";
-            // Можно тут же дернуть /api/backtest/summary
-        } catch (e) {
-            console.error("[CBP] backtest error", e);
-            if (statusBt) statusBt.textContent = "Error";
-        }
-    }
-
-    if (btnBacktest) {
-        btnBacktest.addEventListener("click", runBacktest);
-    }
-
-    if (btnFetch) {
-        btnFetch.addEventListener("click", () => {
-            console.log("[CBP] fetch candles clicked");
-            // Здесь позже подключим вызов /api/fetch и отрисовку графика
-        });
-    }
-});
-
-
-// ------------------ CHART INIT ------------------
-async function loadCandles() {
-    const res = await fetch("/api/candles");
-    const data = await res.json();
-    if (!data || !data.data) return;
-
-    const chart = LightweightCharts.createChart(
-        document.getElementById("chart-root"),
-        {
-            width: document.getElementById("chart-root").clientWidth,
-            height: document.getElementById("chart-root").clientHeight,
-            layout: {
-                background: { color: '#080811' },
-                textColor: '#ffffff'
-            },
-            grid: {
-                vertLines: { color: '#1a1a1a' },
-                horzLines: { color: '#1a1a1a' }
-            },
-            timeScale: { timeVisible: true, secondsVisible: false }
-        }
-    );
-
-    const candleSeries = chart.addCandlestickSeries({
-        upColor: '#34c759',
-        downColor: '#ff453a',
-        borderVisible: false,
-        wickUpColor: '#34c759',
-        wickDownColor: '#ff453a'
-    });
-
-    const candles = data.data.map(c => ({
-        time: c.time,
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close
-    }));
-
-    candleSeries.setData(candles);
-    console.log("[CBP] Candles loaded:", candles.length);
+  };
+  socket.onclose = () => {
+    statusEl.textContent = "🔴 Disconnected";
+    log("Connection lost, retrying...");
+    setTimeout(initWebSocket, 3000);
+  };
 }
 
-// Run after DOM load
-document.addEventListener("DOMContentLoaded", loadCandles);
+function updateDashboard(data) {
+  if (data.pnl !== undefined) pnlEl.textContent = `${data.pnl.toFixed(2)}%`;
+  if (data.risk) riskEl.textContent = data.risk;
+  if (data.confidence) confEl.textContent = `${data.confidence}%`;
+}
+
+function log(message) {
+  const line = document.createElement("div");
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+  logEl.prepend(line);
+}
+
+// 🌈 Эффект “живого интерфейса” — плавная подсветка панелей
+function initPanelGlow() {
+  const panels = document.querySelectorAll(".panel");
+  panels.forEach((panel) => {
+    panel.addEventListener("mousemove", (e) => {
+      const rect = panel.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      panel.style.background = `radial-gradient(circle at ${x}px ${y}px, rgba(0,255,249,0.15), rgba(255,255,255,0.05))`;
+    });
+    panel.addEventListener("mouseleave", () => {
+      panel.style.background = "rgba(255,255,255,0.07)";
+    });
+  });
+}
+
+// 🚀 Запуск
+window.onload = () => {
+  initWebSocket();
+  initPanelGlow();
+  log("Dashboard initialized");
+};

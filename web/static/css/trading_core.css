@@ -1,0 +1,105 @@
+
+:root {
+  --bg:#050510;
+  --panel:#0e0e1a;
+  --accent:#00ffe0;
+  --accent2:#5af3ff;
+  --text:#e6e6f2;
+}
+body {
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Inter',sans-serif;
+  margin:0;
+  display:flex;
+  flex-direction:column;
+  height:100vh;
+  overflow:hidden;
+}
+.topbar {
+  background:#0c0c18;
+  border-bottom:1px solid #141428;
+  padding:6px 12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  box-shadow:0 0 10px #00ffe040;
+}
+.controls select,
+.controls input,
+.controls button {
+  margin-right:6px;
+  background:#141428;
+  color:var(--text);
+  border:none;
+  padding:4px 8px;
+  border-radius:6px;
+  transition:all .2s;
+}
+.controls button:hover {background:var(--accent);color:#000;}
+.status {color:var(--accent2);font-weight:bold;}
+main.grid {
+  flex:1;
+  display:grid;
+  grid-template-columns:240px 1fr 260px;
+  grid-template-rows:1fr;
+}
+#strategies,#signals {
+  background:var(--panel);
+  padding:12px;
+  overflow-y:auto;
+  border-right:1px solid #141428;
+}
+#signals {border-left:1px solid #141428;}
+#strategies h3,#signals h3 {color:var(--accent2);}
+#strategies ul {list-style:none;padding:0;}
+#strategies li {
+  padding:6px 8px;
+  margin:4px 0;
+  border-radius:4px;
+  cursor:pointer;
+}
+#strategies li.active {
+  background:var(--accent2);
+  color:#000;
+  font-weight:bold;
+}
+#chart-area {
+  background:#070712;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+#mainChart {width:95%;height:90%;}
+.sig {padding:6px;margin:4px 0;border-radius:4px;}
+.sig.new {background:#00ffe020;}
+.sig.ai  {background:#0055ff20;}
+.sig.bt  {background:#00ff5520;}
+#ai-console {
+  background:#0c0c18;
+  border-top:1px solid #141428;
+  padding:8px;
+  height:160px;
+  display:flex;
+  flex-direction:column;
+}
+#chat-log {flex:1;overflow-y:auto;margin-bottom:6px;font-size:13px;}
+#chat-inputs {display:flex;}
+#chat-input {
+  flex:1;padding:6px;
+  background:#141428;
+  border:none;
+  border-radius:6px;
+  color:var(--text);
+}
+#send {
+  background:var(--accent);
+  border:none;
+  padding:6px 10px;
+  border-radius:6px;
+  color:#000;
+  font-weight:bold;
+  margin-left:6px;
+  transition:all .2s;
+}
+#send:hover {background:var(--accent2);}

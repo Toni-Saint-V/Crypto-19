@@ -1,140 +1,67 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<title>CryptoBot Pro — Dashboard</title>
-<link rel="stylesheet" href="/static/css/dashboard_new.css">
-<script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
-<script defer src="/static/js/dashboard_new.js?v=9999"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🧠 CryptoBot Pro — Neural Dashboard</title>
+
+  <!-- Шрифты и стили -->
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
-
-<div class="cbp-page">
-  <div class="cbp-frame">
-
-    <!-- TOP BAR -->
-    <div class="cbp-topbar">
-      <div class="cbp-topbar-left">
-        <div class="cbp-title">CryptoBot Pro</div>
-        <div class="cbp-subtitle">Личный дашборд · Mock candles</div>
-      </div>
-      <div class="cbp-topbar-right">
-        <div class="cbp-status-column">
-          <div class="cbp-status-pill">WS <span id="st-inline-ws" class="cbp-dot cbp-dot-warn"></span></div>
-          <div class="cbp-status-pill">Net <span id="st-inline-net" class="cbp-dot cbp-dot-warn"></span></div>
-        </div>
-      </div>
+  <header>
+    <div class="logo">🧠 <span>CryptoBot Pro</span></div>
+    <div class="status">
+      <span id="status">🔗 Connecting...</span>
+      <span id="time"></span>
     </div>
+  </header>
 
-    <!-- MAIN GRID -->
-    <div class="cbp-main-row">
-
-      <!-- LEFT -->
-      <div class="cbp-left">
-
-        <div class="cbp-card cbp-backtest-card">
-          <div class="cbp-card-title">Backtest</div>
-          <div class="cbp-bt-row">Return <span id="bt-return">+0%</span></div>
-          <div class="cbp-bt-row">Trades <span id="bt-trades">0</span></div>
-          <div class="cbp-bt-row">Status <span id="bt-status">idle</span></div>
-          <div class="cbp-bt-actions">
-            <button id="btn-backtest" class="cbp-btn-primary cbp-btn-full">Run backtest</button>
-          </div>
-        </div>
-
-        <div class="cbp-card">
-          <div class="cbp-card-title">Signals</div>
-          <div id="signals-list" class="cbp-signal-empty">No signals yet</div>
-        </div>
-
+  <main>
+    <section class="panel backtest">
+      <h2>📊 Backtest Simulation</h2>
+      <canvas id="backtestChart"></canvas>
+      <div class="controls">
+        <button id="runBacktest">▶ Run</button>
+        <button id="pauseBacktest">⏸ Pause</button>
+        <button id="resetBacktest">🔄 Reset</button>
       </div>
+    </section>
 
-      <!-- CENTER -->
-      <div class="cbp-center">
+    <section class="panel ai">
+      <h2>🤖 AI Insight Sphere</h2>
+      <div id="sphereContainer"></div>
+      <p id="aiText">Waiting for data...</p>
+    </section>
 
-        <!-- FILTER BAR -->
-        <div class="cbp-chart-card">
-
-          <div class="cbp-chart-header">
-            <div class="cbp-chart-row">
-
-              <div class="cbp-chart-filters">
-                <div class="cbp-field-inline">
-                  <span>Пара</span>
-                  <select id="symbol">
-                    <option>BTCUSDT</option>
-                    <option>ETHUSDT</option>
-                    <option>SOLUSDT</option>
-                  </select>
-                </div>
-                <div class="cbp-field-inline">
-                  <span>Таймфрейм</span>
-                  <select id="tf">
-                    <option>1m</option>
-                    <option>5m</option>
-                    <option>15m</option>
-                    <option>1h</option>
-                  </select>
-                </div>
-                <div class="cbp-field-inline">
-                  <span>Стратегия</span>
-                  <select id="strategy">
-                    <option>Three-Candle (demo)</option>
-                  </select>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          <!-- CHART ROOT -->
-          <div class="cbp-chart-body">
-            <div id="chart-root" class="chart-root"></div>
-          </div>
-
-        </div>
-
+    <section class="panel portfolio">
+      <h2>💼 Portfolio Metrics</h2>
+      <div class="metrics">
+        <div><b>PNL:</b> <span id="pnl">0%</span></div>
+        <div><b>Risk Level:</b> <span id="risk">--</span></div>
+        <div><b>Confidence:</b> <span id="confidence">--</span></div>
       </div>
+    </section>
+  </main>
 
-      <!-- RIGHT -->
-      <div class="cbp-right">
+  <footer>
+    <div id="log"></div>
+  </footer>
 
-        <div class="cbp-card">
-          <div class="cbp-card-title">Equity</div>
-          <div class="cbp-card-value" id="eq-value">10 000 USDT</div>
-        </div>
+  <!-- Скрипты -->
+  <script src="/static/js/dashboard.js"></script>
+  <script src="/static/js/backtest.js"></script>
+  <script src="/static/js/ai_panel.js"></script>
 
-        <div class="cbp-card">
-          <div class="cbp-card-title">P&L</div>
-          <div class="cbp-card-value" id="pl-value">+2.3%</div>
-        </div>
+ style="text-align:center;margin-top:10px;font-weight:bold;"></div>
 
-        <div class="cbp-card">
-          <div class="cbp-card-title">Deals</div>
-          <div class="cbp-card-value" id="deals-value">0</div>
-        </div>
-
-      </div>
-
-    </div>
-
-    <!-- AI PANEL -->
-    <div class="cbp-card cbp-ai-card">
-      <div class="cbp-ai-header">
-        <span>AI Assistant beta</span>
-        <span class="cbp-pill">beta</span>
-      </div>
-      <div id="ai-messages" class="cbp-ai-messages"></div>
-      <div class="cbp-ai-input-block">
-        <textarea id="ai-input" rows="2"></textarea>
-        <button id="ai-send" class="cbp-btn-primary">Send</button>
-        <button id="ai-generate" class="cbp-btn-primary">Generate report</button>
-      </div>
-    </div>
-
-  </div>
+<div id="ai-panel-wrapper" style="display:flex;flex-direction:column;align-items:center;justify-content:center;margin-top:40px;">
+  <div id="ai-sphere" class="panel ai" style="width:400px;height:400px;"></div>
+  <div id="ai-confidence" style="text-align:center;margin-top:10px;font-weight:bold;color:#00ffaa;font-size:18px;">Confidence: --%</div>
 </div>
-
 </body>
+
 </html>

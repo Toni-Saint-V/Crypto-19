@@ -1,0 +1,59 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CryptoBot Pro — Trading Core</title>
+  <link rel="stylesheet" href="/static/css/trading_core.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="controls">
+      <select id="symbol"><option>BTCUSDT</option><option>ETHUSDT</option></select>
+      <select id="strategy"><option>Momentum ML v2</option><option>Reversion α</option></select>
+      <input type="number" id="tf" value="60" min="1" max="1500">
+      <button id="run">▶ Run</button>
+      <button id="pause">⏸ Pause</button>
+      <button id="settings">⚙</button>
+      <span class="status">🧠 Connected</span>
+    </div>
+  </header>
+
+  <main class="grid">
+    <aside id="strategies">
+      <h3>📋 Strategies</h3>
+      <ul>
+        <li class="active">Momentum ML v2</li>
+        <li>Reversion α</li>
+        <li>Ensemble β</li>
+      </ul>
+      <button id="new-strategy">＋ New</button>
+    </aside>
+
+    <section id="chart-area">
+      <canvas id="mainChart"></canvas>
+    </section>
+
+    <aside id="signals" class="collapsed">
+      <h3>🔔 Signals (3) <span id="close-signals">✕</span></h3>
+      <div id="signals-list">
+        <div class="sig new">[NEW] BTCUSDT BUY @ 42100</div>
+        <div class="sig ai">[AI] Risk 1.0 → 0.6%</div>
+        <div class="sig bt">[BT] Backtest + 23%</div>
+      </div>
+      <button id="clear-signals">Clear</button>
+    </aside>
+  </main>
+
+  <footer id="ai-console">
+    <div id="chat-log"></div>
+    <div id="chat-inputs">
+      <input id="chat-input" placeholder="Ask Anton..." />
+      <button id="send">Send</button>
+    </div>
+  </footer>
+
+  <script src="/static/js/trading_core.js"></script>
+</body>
+</html>
