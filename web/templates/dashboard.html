@@ -1,72 +1,421 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <title>CryptoBot Pro Dashboard</title>
-  <link rel="stylesheet" href="/static/css/dashboard.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoBot Pro - Панель управления</title>
+    
+    <!-- External Libraries -->
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 100%);
+            min-height: 100vh;
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+        }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .status-online { 
+            animation: pulse-green 2s infinite;
+        }
+        
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+        
+        .cbp-chart-wrapper {
+            width: 100%;
+            height: 100%;
+            min-height: 360px;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        #cbp-price-chart-root {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
 </head>
-<body>
-  <div class="cbp-page">
-    <header class="cbp-header">
-      <h1>CryptoBot Pro Dashboard</h1>
-      <div class="cbp-header-row">
-        <div class="cbp-field">
-          <span>Инструмент</span>
-          <select id="cbp-symbol-select">
-            <option value="BTCUSDT" selected>BTCUSDT</option>
-            <option value="ETHUSDT">ETHUSDT</option>
-          </select>
-        </div>
+<body class="text-white">
+    <div id="app" x-data="dashboardApp()">
+        <!-- Заголовок -->
+        <header class="bg-black/30 backdrop-blur-xl border-b border-white/10">
+            <div class="container mx-auto px-6 py-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-4">
+                        <h1 class="text-2xl font-bold gradient-text">CryptoBot Pro</h1>
+                        <div class="flex items-center space-x-2">
+                            <div :class="status === 'онлайн' ? 'bg-green-500' : 'bg-red-500'" 
+                                 class="w-3 h-3 rounded-full status-online"></div>
+                            <span class="text-sm text-gray-400" x-text="status"></span>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-6">
+                        <div class="text-sm">
+                            <span class="text-gray-400">Баланс:</span>
+                            <span class="font-semibold text-lg ml-2" data-cbp="balance" x-text="'$' + balance.toFixed(2)">$10 000.00</span>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-gray-400">П/У за 24ч:</span>
+                            <span :class="dailyPnl >= 0 ? 'text-green-400' : 'text-red-400'" 
+                                  class="font-semibold text-lg ml-2" 
+                                  data-cbp="daily-pnl"
+                                  x-text="(dailyPnl >= 0 ? '+' : '') + dailyPnl.toFixed(2) + '%'">+1.23%</span>
+                        </div>
+                        <button class="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg hover:opacity-90 transition">
+                            ⚙️ Настройки
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
 
-        <div class="cbp-field">
-          <span>Таймфрейм</span>
-          <select id="cbp-timeframe-select">
-            <option value="1m" selected>1m</option>
-            <option value="5m">5m</option>
-            <option value="15m">15m</option>
-            <option value="30m">30m</option>
-            <option value="1h">1h</option>
-            <option value="4h">4h</option>
-            <option value="1d">1d</option>
-          </select>
-        </div>
+        <!-- Основной контент -->
+        <main class="container mx-auto px-6 py-8">
+            <!-- Метрики -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="glass-card p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="text-gray-400 text-sm">Общая прибыль</div>
+                        <svg class="w-8 h-8 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <div class="text-3xl font-bold text-green-400" data-cbp="total-profit" x-text="'$' + totalProfit.toFixed(2)">$2 500.00</div>
+                    <div class="text-xs text-gray-500 mt-2">За все время</div>
+                </div>
 
-        <div class="cbp-field">
-          <span>Риск</span>
-          <select id="cbp-risk-select">
-            <option value="safe">Safe</option>
-            <option value="normal" selected>Normal</option>
-            <option value="aggressive">Aggressive</option>
-          </select>
-        </div>
-      </div>
-    </header>
+                <div class="glass-card p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="text-gray-400 text-sm">Винрейт</div>
+                        <svg class="w-8 h-8 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"></path>
+                            <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 1 1 0 000 2H6a2 2 0 100 4h2a2 2 0 100 4h2a1 1 0 100 2 2 2 0 01-2 2H4a2 2 0 01-2-2V7a2 2 0 012-2z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <div class="text-3xl font-bold" data-cbp="winrate" x-text="winRate.toFixed(1) + '%'">62.5%</div>
+                    <div class="text-xs text-gray-500 mt-2">Последние 100 сделок</div>
+                </div>
 
-    <main class="cbp-main">
-      <section class="cbp-metrics">
-        <div class="cbp-card">
-          <div class="cbp-card-label">Equity</div>
-          <div class="cbp-card-value" id="cbp-equity-value">—</div>
-        </div>
-        <div class="cbp-card">
-          <div class="cbp-card-label">PnL</div>
-          <div class="cbp-card-value" id="cbp-pnl-value">—</div>
-        </div>
-        <div class="cbp-card">
-          <div class="cbp-card-label">Confidence</div>
-          <div class="cbp-card-value" id="cbp-confidence-value">—</div>
-        </div>
-      </section>
+                <div class="glass-card p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="text-gray-400 text-sm">Активных позиций</div>
+                        <svg class="w-8 h-8 text-purple-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"></path>
+                        </svg>
+                    </div>
+                    <div class="text-3xl font-bold" data-cbp="active-positions" x-text="activePositions">2</div>
+                    <div class="text-xs text-gray-500 mt-2">Сейчас открыто</div>
+                </div>
 
-      <section class="cbp-chart-panel">
-        <div id="cbp-main-chart" class="cbp-main-chart"></div>
-      </section>
-    </main>
-  </div>
+                <div class="glass-card p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="text-gray-400 text-sm">Уровень риска</div>
+                        <svg class="w-8 h-8 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <div class="text-3xl font-bold" :class="riskScore > 70 ? 'text-red-400' : riskScore > 40 ? 'text-yellow-400' : 'text-green-400'" data-cbp="risk-level" x-text="riskScore + '%'">35%</div>
+                    <div class="text-xs text-gray-500 mt-2">Текущая экспозиция</div>
+                </div>
+            </div>
 
-  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
-  <script type="module" src="/static/js/cbp_state.js"></script>
-  <script type="module" src="/static/js/cbp_ui.js"></script>
-  <script type="module" src="/static/js/cbp_dashboard_main.js"></script>
+            <!-- Графики -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <!-- Основной график -->
+                <div class="lg:col-span-2 glass-card p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-semibold">График цены</h2>
+                        <div class="flex space-x-2">
+                            <select class="bg-white/10 rounded px-3 py-1 text-sm" x-model="selectedSymbol">
+                                <option value="BTCUSDT">BTC/USDT</option>
+                                <option value="ETHUSDT">ETH/USDT</option>
+                                <option value="SOLUSDT">SOL/USDT</option>
+                            </select>
+                            <select class="bg-white/10 rounded px-3 py-1 text-sm" x-model="selectedTimeframe">
+                                <option value="15">15м</option>
+                                <option value="60">1ч</option>
+                                <option value="240">4ч</option>
+                                <option value="1D">1д</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="cbp-chart-wrapper">
+                        <div id="cbp-price-chart-root"></div>
+                    </div>
+                </div>
+
+                <!-- AI Сигналы -->
+                <div class="glass-card p-6">
+                    <h2 class="text-xl font-semibold mb-4">AI Сигналы</h2>
+                    <div class="space-y-3 max-h-96 overflow-y-auto" data-cbp="ai-signals">
+                        <template x-for="signal in aiSignals" :key="signal.id">
+                            <div class="p-4 bg-white/5 rounded-lg">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="font-semibold" x-text="signal.symbol"></span>
+                                    <span :class="signal.type === 'КУПИТЬ' ? 'text-green-400' : 'text-red-400'" 
+                                          class="text-sm font-bold" x-text="signal.type"></span>
+                                </div>
+                                <div class="text-sm text-gray-400">
+                                    <div class="flex justify-between">
+                                        <span>Уверенность:</span>
+                                        <span x-text="signal.confidence + '%'"></span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Вход:</span>
+                                        <span x-text="'$' + signal.entry"></span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Цель:</span>
+                                        <span x-text="'$' + signal.target"></span>
+                                    </div>
+                                </div>
+                                <button class="mt-3 w-full py-1 bg-purple-600/50 rounded text-xs hover:bg-purple-600/70 transition">
+                                    Исполнить сделку
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Позиции и сделки -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Открытые позиции -->
+                <div class="glass-card p-6">
+                    <h2 class="text-xl font-semibold mb-4">Открытые позиции</h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="text-gray-400 border-b border-white/10">
+                                <tr>
+                                    <th class="text-left py-2">Символ</th>
+                                    <th class="text-left py-2">Сторона</th>
+                                    <th class="text-left py-2">Размер</th>
+                                    <th class="text-left py-2">Вход</th>
+                                    <th class="text-left py-2">П/У</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="position in positions" :key="position.id">
+                                    <tr class="border-b border-white/5">
+                                        <td class="py-3" x-text="position.symbol"></td>
+                                        <td class="py-3">
+                                            <span :class="position.side === 'ЛОНГ' ? 'text-green-400' : 'text-red-400'" 
+                                                  x-text="position.side"></span>
+                                        </td>
+                                        <td class="py-3" x-text="position.size"></td>
+                                        <td class="py-3" x-text="'$' + position.entry"></td>
+                                        <td class="py-3">
+                                            <span :class="position.pnl >= 0 ? 'text-green-400' : 'text-red-400'" 
+                                                  x-text="(position.pnl >= 0 ? '+' : '') + '$' + position.pnl.toFixed(2)"></span>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Последние сделки -->
+                <div class="glass-card p-6">
+                    <h2 class="text-xl font-semibold mb-4">Последние сделки</h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="text-gray-400 border-b border-white/10">
+                                <tr>
+                                    <th class="text-left py-2">Время</th>
+                                    <th class="text-left py-2">Символ</th>
+                                    <th class="text-left py-2">Тип</th>
+                                    <th class="text-left py-2">Цена</th>
+                                    <th class="text-left py-2">Результат</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="trade in recentTrades" :key="trade.id">
+                                    <tr class="border-b border-white/5">
+                                        <td class="py-3 text-gray-400" x-text="trade.time"></td>
+                                        <td class="py-3" x-text="trade.symbol"></td>
+                                        <td class="py-3">
+                                            <span :class="trade.side === 'КУПИТЬ' ? 'text-green-400' : 'text-red-400'" 
+                                                  x-text="trade.side"></span>
+                                        </td>
+                                        <td class="py-3" x-text="'$' + trade.price"></td>
+                                        <td class="py-3">
+                                            <span :class="trade.result >= 0 ? 'text-green-400' : 'text-red-400'" 
+                                                  x-text="(trade.result >= 0 ? '+' : '') + '$' + trade.result.toFixed(2)"></span>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Статус бар -->
+            <div class="mt-8 glass-card p-4">
+                <div class="flex items-center justify-between text-sm">
+                    <div class="flex items-center space-x-6">
+                        <span class="text-gray-400">Режим: <span class="text-white font-semibold">TESTNET</span></span>
+                        <span class="text-gray-400">Стратегия: <span class="text-white font-semibold">ML Advanced</span></span>
+                        <span class="text-gray-400">Автоторговля: <span class="text-green-400 font-semibold">ВКЛ</span></span>
+                    </div>
+                    <div class="flex items-center space-x-6">
+                        <span class="text-gray-400">CPU: <span class="text-white">12%</span></span>
+                        <span class="text-gray-400">RAM: <span class="text-white">34%</span></span>
+                        <span class="text-gray-400">Задержка API: <span class="text-white">45ms</span></span>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function dashboardApp() {
+            return {
+                // Статус
+                status: 'онлайн',
+                balance: 10000,
+                dailyPnl: 2.35,
+                totalProfit: 2847.50,
+                winRate: 68.5,
+                activePositions: 3,
+                riskScore: 35,
+                
+                // Настройки графика
+                selectedSymbol: 'BTCUSDT',
+                selectedTimeframe: '15',
+                
+                // Данные
+                aiSignals: [
+                    { id: 1, symbol: 'BTCUSDT', type: 'КУПИТЬ', confidence: 85, entry: 64250, target: 65100 },
+                    { id: 2, symbol: 'ETHUSDT', type: 'ПРОДАТЬ', confidence: 72, entry: 3580, target: 3450 },
+                    { id: 3, symbol: 'SOLUSDT', type: 'КУПИТЬ', confidence: 91, entry: 108.50, target: 112.00 }
+                ],
+                
+                positions: [
+                    { id: 1, symbol: 'BTCUSDT', side: 'ЛОНГ', size: 0.1, entry: 63800, pnl: 145.00 },
+                    { id: 2, symbol: 'ETHUSDT', side: 'ШОРТ', size: 0.5, entry: 3620, pnl: -20.00 },
+                    { id: 3, symbol: 'SOLUSDT', side: 'ЛОНГ', size: 10, entry: 107.00, pnl: 15.00 }
+                ],
+                
+                recentTrades: [
+                    { id: 1, time: '14:32', symbol: 'BTCUSDT', side: 'КУПИТЬ', price: 63800, result: 145.00 },
+                    { id: 2, time: '13:45', symbol: 'ETHUSDT', side: 'ПРОДАТЬ', price: 3620, result: -20.00 },
+                    { id: 3, time: '12:18', symbol: 'SOLUSDT', side: 'КУПИТЬ', price: 107.00, result: 15.00 },
+                    { id: 4, time: '11:30', symbol: 'BTCUSDT', side: 'ПРОДАТЬ', price: 63500, result: 85.00 },
+                    { id: 5, time: '10:55', symbol: 'ETHUSDT', side: 'КУПИТЬ', price: 3550, result: 120.00 }
+                ],
+                
+                init() {
+                    this.initChart();
+                    this.startDataUpdates();
+                },
+                
+                initChart() {
+                    const chartElement = document.getElementById('mainChart');
+                    const chart = LightweightCharts.createChart(chartElement, {
+                        layout: {
+                            background: { type: 'solid', color: 'transparent' },
+                            textColor: '#ffffff',
+                        },
+                        grid: {
+                            vertLines: { color: 'rgba(255, 255, 255, 0.05)' },
+                            horzLines: { color: 'rgba(255, 255, 255, 0.05)' },
+                        },
+                        rightPriceScale: {
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                        },
+                        timeScale: {
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            timeVisible: true,
+                            secondsVisible: false,
+                        },
+                    });
+                    
+                    const candleSeries = chart.addCandlestickSeries({
+                        upColor: '#22c55e',
+                        downColor: '#ef4444',
+                        borderUpColor: '#22c55e',
+                        borderDownColor: '#ef4444',
+                        wickUpColor: '#22c55e',
+                        wickDownColor: '#ef4444',
+                    });
+                    
+                    // Тестовые данные
+                    const data = [];
+                    let time = Math.floor(Date.now() / 1000) - 100 * 900;
+                    let price = 64000;
+                    
+                    for (let i = 0; i < 100; i++) {
+                        const change = (Math.random() - 0.5) * 200;
+                        price += change;
+                        const high = price + Math.random() * 100;
+                        const low = price - Math.random() * 100;
+                        const open = low + Math.random() * (high - low);
+                        const close = low + Math.random() * (high - low);
+                        
+                        data.push({
+                            time: time + i * 900,
+                            open,
+                            high,
+                            low,
+                            close
+                        });
+                    }
+                    
+                    candleSeries.setData(data);
+                    chart.timeScale().fitContent();
+                    
+                    this.chart = chart;
+                    this.candleSeries = candleSeries;
+                },
+                
+                startDataUpdates() {
+                    // Симуляция обновлений в реальном времени
+                    setInterval(() => {
+                        // Обновление метрик
+                        this.dailyPnl += (Math.random() - 0.5) * 0.1;
+                        this.balance += (Math.random() - 0.5) * 10;
+                        
+                        // Обновление П/У позиций
+                        this.positions.forEach(p => {
+                            p.pnl += (Math.random() - 0.5) * 5;
+                        });
+                    }, 5000);
+                }
+            }
+        }
+    </script>
+    
+    <!-- Dashboard Main Module -->
+    <script type="module" src="/static/js/cbp_dashboard_main.js"></script>
 </body>
 </html>

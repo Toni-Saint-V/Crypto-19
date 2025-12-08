@@ -31,6 +31,28 @@ export const dashboardState = {
     action: "",
     strategy_comment: "",
     lastUpdated: null
+  },
+  // Snapshot fields
+  balance: null,
+  dailyPnlPct: null,
+  totalProfit: null,
+  winratePct: null,
+  activePositions: null,
+  riskLevelPct: null,
+  candles: [],
+  aiSignals: [],
+  setSnapshot(snapshot) {
+    this.symbol = snapshot.symbol;
+    this.timeframe = snapshot.timeframe;
+    this.balance = snapshot.balance;
+    this.dailyPnlPct = snapshot.daily_pnl_pct;
+    this.totalProfit = snapshot.total_profit;
+    this.winratePct = snapshot.winrate_pct;
+    this.activePositions = snapshot.active_positions;
+    this.riskLevelPct = snapshot.risk_level_pct;
+    this.candles = snapshot.candles || [];
+    this.aiSignals = snapshot.ai_signals || [];
+    notify();
   }
 };
 

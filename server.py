@@ -689,6 +689,39 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         print("🔴 WebSocket disconnected")
 
+@app.websocket("/ws/dashboard")
+async def ws_dashboard(websocket: WebSocket):
+    """
+    Dashboard WebSocket endpoint for real-time snapshot updates.
+    Sends periodic dashboard snapshots to connected clients.
+    """
+    await websocket.accept()
+    try:
+        # При подключении: отправляем первый снапшот
+        snapshot = await get_dashboard_snapshot()
+        await websocket.send_json({
+            "type": "dashboard_update",
+            "payload": snapshot.dict(),
+        })
+
+        # Простой таймер: периодически отправляем обновлённый снапшот
+        while True:
+            await asyncio.sleep(5.0)
+            snapshot = await get_dashboard_snapshot()
+            await websocket.send_json({
+                "type": "dashboard_update",
+                "payload": snapshot.dict(),
+            })
+    except WebSocketDisconnect:
+        # тихо выходим без ошибок
+        pass
+    except Exception as exc:
+        print(f"[WS /ws/dashboard] error: {exc}")
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+
 # === HELPER FUNCTIONS ===
 
 def generate_ai_response(user_message: str) -> str:
