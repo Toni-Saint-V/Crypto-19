@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 from core.backtest.loader import load_dataset
 from core.backtest.diagnostics import diagnose
+from core.risk.risk_manager import RiskManager, RiskLimits
 import logging
 
 log = logging.getLogger(__name__)
@@ -17,38 +18,35 @@ log = logging.getLogger(__name__)
 class BacktestEngine:
     """Enhanced backtest engine with strategy support"""
     
-    def __init__(self):
+    def __init__(self, risk_limits: Optional[RiskLimits] = None):
         self.strategies = {}
+        self.risk_manager = RiskManager(limits=risk_limits)
         self._register_strategies()
     
     def _register_strategies(self):
-        """Register available strategies"""
+        """Register available strategies - only implemented ones"""
         try:
             from strategies.pattern3_extreme import pattern3_extreme
             self.strategies['pattern3_extreme'] = {
                 'function': pattern3_extreme,
                 'name': 'Three-Candle Swing Pattern with Extremum',
-                'description': 'Detects three-candle structure with swing-low, red pierce, and green engulfing reversal'
+                'description': 'Detects three-candle structure with swing-low, red pierce, and green engulfing reversal',
+                'available': True
             }
         except ImportError as e:
             log.warning(f"Could not import pattern3_extreme strategy: {e}")
         
-        # Placeholder for other strategies
-        self.strategies['momentum_ml_v2'] = {
-            'function': None,  # To be implemented
-            'name': 'Momentum ML v2',
-            'description': 'Momentum-based model using volatility features and AI confidence. Analyzes price momentum with machine learning predictions.'
-        }
-        self.strategies['reversion_alpha'] = {
-            'function': None,  # To be implemented
-            'name': 'Reversion α',
-            'description': 'Mean reversion with Bollinger deviation logic. Trades price reversions from extreme levels.'
-        }
-        self.strategies['ensemble_beta'] = {
-            'function': None,  # To be implemented
-            'name': 'Ensemble β',
-            'description': 'Combined signals from Momentum + Reversion strategies. Uses weighted ensemble approach.'
-        }
+        # Register Momentum ML v2 (beta)
+        try:
+            from strategies.momentum_ml_v2 import momentum_ml_v2
+            self.strategies['momentum_ml_v2'] = {
+                'function': momentum_ml_v2,
+                'name': 'Momentum ML v2 (Beta)',
+                'description': 'Momentum-based strategy using RSI and moving averages. Analyzes price momentum with technical indicators.',
+                'available': True
+            }
+        except ImportError as e:
+            log.warning(f"Could not import momentum_ml_v2 strategy: {e}")
     
     def run(
         self,
@@ -118,15 +116,46 @@ class BacktestEngine:
                 "timeframe": interval
             }
         
+        # Validate trades and enforce stop loss
+        validated_trades = []
+        for trade in trades:
+            # Validate stop loss
+            entry = trade.get('entry_price', 0)
+            stop = trade.get('stop', None)
+            direction = trade.get('direction', 'long')
+            
+            is_valid, final_stop, reason = self.risk_manager.validate_stop_loss(
+                entry, stop, direction
+            )
+            
+            if not is_valid:
+                log.warning(f"Trade rejected: {reason}. Entry: {entry}, Stop: {stop}")
+                continue  # Skip invalid trades
+            
+            # Update trade with validated stop loss
+            trade['stop'] = final_stop
+            validated_trades.append(trade)
+        
         # Calculate summary metrics
-        summary = self._calculate_summary(trades, risk_per_trade)
+        summary = self._calculate_summary(validated_trades, risk_per_trade)
+        
+        # Update risk manager with backtest results
+        if validated_trades:
+            initial_capital = 10000.0
+            final_capital = initial_capital + summary.get('total_pnl_usd', 0)
+            self.risk_manager.update_capital(final_capital)
+        
+        # Get risk status
+        risk_status = self.risk_manager.get_risk_status()
         
         return {
             "symbol": symbol,
             "strategy": strategy,
             "timeframe": interval,
-            "trades": trades,
-            "summary": summary
+            "trades": validated_trades,
+            "summary": summary,
+            "risk_status": risk_status,
+            "trades_rejected": len(trades) - len(validated_trades)
         }
     
     def _calculate_summary(self, trades: List[Dict], risk_per_trade: float) -> Dict[str, Any]:
@@ -222,13 +251,14 @@ class BacktestEngine:
             "total_strategies": len(summary_data)
         }
     
-    def get_available_strategies(self) -> Dict[str, Dict[str, str]]:
-        """Get list of available strategies with descriptions"""
+    def get_available_strategies(self) -> Dict[str, Dict[str, Any]]:
+        """Get list of available strategies with descriptions - only returns implemented strategies"""
         return {
             name: {
                 'name': info['name'],
                 'description': info['description'],
-                'available': info['function'] is not None
+                'available': info.get('available', info['function'] is not None)
             }
             for name, info in self.strategies.items()
+            if info.get('function') is not None or info.get('available', False)
         }

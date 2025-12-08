@@ -5,9 +5,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import logging
-logger = logging.getLogger(__name__)
 
-log = get_logger("notifications")
+log = logging.getLogger(__name__)
 
 class AlertType(Enum):
     PRICE = "💰"

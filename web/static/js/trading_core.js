@@ -27,6 +27,7 @@ const strategyNameMap = {
 };
 let currentSymbol = 'BTCUSDT';
 let currentTimeframe = '60';
+let currentExchange = 'bybit';
 let candlesData = [];
 let backtestTrades = [];
 let strategiesList = [];
@@ -127,7 +128,7 @@ function initializeChart() {
 
 async function loadCandles() {
   try {
-    const response = await fetch(`/api/candles?symbol=${currentSymbol}&interval=${currentTimeframe}&limit=500`);
+    const response = await fetch(`/api/candles?symbol=${currentSymbol}&interval=${currentTimeframe}&limit=500&exchange=${currentExchange}`);
     const data = await response.json();
     
     if (data.candles && data.candles.length > 0) {
@@ -268,6 +269,9 @@ async function runBacktest(strategy = null) {
     // Display statistics
     displayBacktestStats(result.summary || {});
     
+    // Display trades table
+    displayTradesTable(backtestTrades);
+    
     // Add signals for trades
     backtestTrades.forEach(trade => {
       addSignal('bt', `Trade: ${trade.result_R > 0 ? 'WIN' : 'LOSS'} ${trade.result_R.toFixed(2)}R @ ${trade.entry_price?.toFixed(2) || 'N/A'}`);
@@ -352,36 +356,124 @@ function displayBacktestStats(summary) {
     return;
   }
   
+  // Calculate additional metrics
+  const winRate = summary.winrate || 0;
+  const totalTrades = summary.total_trades || 0;
+  const winningTrades = summary.winning_trades || 0;
+  const losingTrades = summary.losing_trades || 0;
+  const avgR = summary.avg_R || 0;
+  const maxDD = summary.max_dd || 0;
+  const pnlPct = summary.pnl_% || 0;
+  const sharpe = summary.sharpe || 0;
+  const totalPnlUsd = summary.total_pnl_usd || 0;
+  
   statsEl.innerHTML = `
     <div class="stat-card">
-      <div class="stat-item">
-        <span class="stat-label">Total Return:</span>
-        <span class="stat-value ${summary.pnl_% >= 0 ? 'positive' : 'negative'}">
-          ${summary.pnl_% >= 0 ? '+' : ''}${summary.pnl_%?.toFixed(2) || 0}%
-        </span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">Total Trades:</span>
-        <span class="stat-value">${summary.total_trades || 0}</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">Win Rate:</span>
-        <span class="stat-value">${summary.winrate?.toFixed(1) || 0}%</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">Avg R:</span>
-        <span class="stat-value">${summary.avg_R?.toFixed(2) || 0}</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">Max Drawdown:</span>
-        <span class="stat-value negative">${summary.max_dd?.toFixed(2) || 0}%</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">Sharpe Ratio:</span>
-        <span class="stat-value">${summary.sharpe?.toFixed(2) || 0}</span>
+      <h4>📊 Key Metrics</h4>
+      <div class="stat-grid">
+        <div class="stat-item">
+          <span class="stat-label" title="Total return percentage">Total Return:</span>
+          <span class="stat-value ${pnlPct >= 0 ? 'positive' : 'negative'}">
+            ${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%
+          </span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label" title="Total P&L in USD">Total P&L:</span>
+          <span class="stat-value ${totalPnlUsd >= 0 ? 'positive' : 'negative'}">
+            ${totalPnlUsd >= 0 ? '+' : ''}$${totalPnlUsd.toFixed(2)}
+          </span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label" title="Total number of trades">Total Trades:</span>
+          <span class="stat-value">${totalTrades}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label" title="Percentage of winning trades">Win Rate:</span>
+          <span class="stat-value">${winRate.toFixed(1)}%</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label" title="Winning trades count">Wins:</span>
+          <span class="stat-value positive">${winningTrades}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label" title="Losing trades count">Losses:</span>
+          <span class="stat-value negative">${losingTrades}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label" title="Average R-multiple per trade">Avg R:</span>
+          <span class="stat-value ${avgR >= 0 ? 'positive' : 'negative'}">
+            ${avgR >= 0 ? '+' : ''}${avgR.toFixed(2)}R
+          </span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label" title="Maximum drawdown percentage">Max Drawdown:</span>
+          <span class="stat-value negative">${maxDD.toFixed(2)}%</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label" title="Sharpe ratio (risk-adjusted return)">Sharpe Ratio:</span>
+          <span class="stat-value">${sharpe.toFixed(2)}</span>
+        </div>
       </div>
     </div>
   `;
+}
+
+function displayTradesTable(trades) {
+  const tradesContent = document.getElementById('trades-content');
+  
+  if (!trades || trades.length === 0) {
+    tradesContent.innerHTML = '<p class="no-trades">No trades yet. Run a backtest to see trades.</p>';
+    return;
+  }
+  
+  // Sort trades by entry time (newest first)
+  const sortedTrades = [...trades].sort((a, b) => {
+    const timeA = parseTime(a.entry_time) || 0;
+    const timeB = parseTime(b.entry_time) || 0;
+    return timeB - timeA;
+  });
+  
+  const tableHTML = `
+    <table class="trades-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Entry</th>
+          <th>SL</th>
+          <th>TP</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${sortedTrades.map(trade => {
+          const entryTime = trade.entry_time ? new Date(trade.entry_time).toLocaleString() : 'N/A';
+          const resultR = trade.result_R || 0;
+          const resultClass = resultR > 0 ? 'positive' : resultR < 0 ? 'negative' : '';
+          const resultText = resultR > 0 ? `+${resultR.toFixed(2)}R` : `${resultR.toFixed(2)}R`;
+          
+          return `
+            <tr class="trade-row ${resultClass}" data-entry-time="${trade.entry_time}">
+              <td>${entryTime}</td>
+              <td>${trade.entry_price?.toFixed(2) || 'N/A'}</td>
+              <td>${trade.stop?.toFixed(2) || 'N/A'}</td>
+              <td>${trade.tp?.toFixed(2) || 'N/A'}</td>
+              <td class="${resultClass}">${resultText}</td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+  
+  tradesContent.innerHTML = tableHTML;
+  
+  // Add hover effect to highlight trades on chart
+  document.querySelectorAll('.trade-row').forEach(row => {
+    row.addEventListener('mouseenter', () => {
+      const entryTime = row.dataset.entryTime;
+      // Could highlight corresponding marker on chart here
+    });
+  });
 }
 
 function parseTime(timeValue) {
@@ -674,6 +766,61 @@ function setupEventHandlers() {
     selectStrategy(e.target.value);
   });
   
+  // Data source selector
+  document.getElementById('data-source-select').addEventListener('change', (e) => {
+    const source = e.target.value;
+    const exchangeGroup = document.getElementById('exchange-group');
+    const csvGroup = document.getElementById('csv-group');
+    
+    if (source === 'csv') {
+      exchangeGroup.style.display = 'none';
+      csvGroup.style.display = 'block';
+    } else {
+      exchangeGroup.style.display = 'block';
+      csvGroup.style.display = 'none';
+    }
+  });
+  
+  // Exchange selector
+  document.getElementById('exchange-select').addEventListener('change', (e) => {
+    currentExchange = e.target.value;
+    loadCandles(); // Reload candles with new exchange
+    addChatMessage('system', `Exchange changed to: ${currentExchange}`);
+  });
+  
+  // CSV upload
+  document.getElementById('upload-csv-btn').addEventListener('click', async () => {
+    const fileInput = document.getElementById('csv-file-input');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+      addChatMessage('system', 'Please select a CSV file first');
+      return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+      addChatMessage('system', 'Uploading CSV file...');
+      const response = await fetch('/api/data/upload-csv', {
+        method: 'POST',
+        body: formData
+      });
+      
+      const data = await response.json();
+      if (data.message) {
+        addChatMessage('system', `${data.message} (${data.rows} rows)`);
+        loadCandles(); // Reload with CSV data
+      } else {
+        addChatMessage('system', `Error: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Error uploading CSV:', error);
+      addChatMessage('system', 'Failed to upload CSV file');
+    }
+  });
+  
   document.getElementById('mode-select').addEventListener('change', (e) => {
     isLiveMode = e.target.value === 'live';
     document.getElementById('current-mode').textContent = isLiveMode ? 'Live' : 'Backtest';
@@ -700,24 +847,63 @@ function setupEventHandlers() {
   const chatInput = document.getElementById('chat-input');
   const sendBtn = document.getElementById('send-btn');
   
-  function sendChatMessage() {
+  async function sendChatMessage() {
     const message = chatInput.value.trim();
     if (!message) return;
-    
-    if (!wsAI || wsAI.readyState !== WebSocket.OPEN) {
-      addChatMessage('system', 'WebSocket not connected. Please wait...');
-      return;
-    }
     
     // Add user message to chat
     addChatMessage('user', message);
     
-    // Send to WebSocket
-    wsAI.send(JSON.stringify({
-      type: 'message',
-      text: message,
-      timestamp: Date.now()
-    }));
+    // Build context
+    const context = {
+      strategy: currentStrategy,
+      symbol: currentSymbol,
+      timeframe: currentTimeframe,
+      is_live_mode: isLiveMode,
+      last_backtest: backtestTrades.length > 0 ? {
+        trades_count: backtestTrades.length,
+        summary: {} // Will be populated from last backtest result
+      } : null
+    };
+    
+    // Try WebSocket first, fallback to REST API
+    if (wsAI && wsAI.readyState === WebSocket.OPEN) {
+      // Send to WebSocket with context
+      wsAI.send(JSON.stringify({
+        type: 'message',
+        text: message,
+        strategy: currentStrategy,
+        symbol: currentSymbol,
+        timeframe: currentTimeframe,
+        mode: isLiveMode ? 'live' : 'backtest',
+        timestamp: Date.now()
+      }));
+    } else {
+      // Fallback to REST API
+      try {
+        addChatMessage('system', 'Toni is thinking...');
+        const response = await fetch('/api/toni/ask', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query: message,
+            context: context
+          })
+        });
+        
+        const data = await response.json();
+        if (data.answer) {
+          addChatMessage('ai', data.answer);
+        } else {
+          addChatMessage('system', 'Toni is currently unavailable. Please try again later.');
+        }
+      } catch (error) {
+        console.error('Error asking Toni:', error);
+        addChatMessage('system', 'Failed to get response from Toni. Please try again.');
+      }
+    }
     
     chatInput.value = '';
   }
@@ -738,6 +924,67 @@ function setupEventHandlers() {
   document.getElementById('new-strategy-btn').addEventListener('click', () => {
     addChatMessage('system', 'New strategy creation (coming soon)');
   });
+  
+  // Resume trading button
+  document.getElementById('resume-trading-btn').addEventListener('click', async () => {
+    try {
+      const response = await fetch('/api/risk/resume', { method: 'POST' });
+      const data = await response.json();
+      if (data.message) {
+        addChatMessage('system', data.message);
+        updateRiskStatus(data.status);
+      }
+    } catch (error) {
+      console.error('Error resuming trading:', error);
+      addChatMessage('system', 'Failed to resume trading');
+    }
+  });
+  
+  // Load risk status on init
+  loadRiskStatus();
+  setInterval(loadRiskStatus, 5000); // Update every 5 seconds
+}
+
+async function loadRiskStatus() {
+  try {
+    const response = await fetch('/api/risk/status');
+    const status = await response.json();
+    updateRiskStatus(status);
+  } catch (error) {
+    console.error('Error loading risk status:', error);
+  }
+}
+
+function updateRiskStatus(status) {
+  const statusValue = document.getElementById('risk-status-value');
+  const positions = document.getElementById('risk-positions');
+  const drawdown = document.getElementById('risk-drawdown');
+  const dailyLoss = document.getElementById('risk-daily-loss');
+  const resumeBtn = document.getElementById('resume-trading-btn');
+  
+  if (!status) return;
+  
+  // Update status
+  statusValue.textContent = status.status || 'Safe';
+  statusValue.className = `risk-value risk-${status.status || 'safe'}`;
+  
+  // Update positions
+  positions.textContent = `${status.open_positions || 0}/${status.max_positions || 5}`;
+  
+  // Update drawdown
+  drawdown.textContent = `${status.current_drawdown?.toFixed(2) || '0.00'}%`;
+  drawdown.className = `risk-value ${status.current_drawdown > 15 ? 'risk-warning' : ''}`;
+  
+  // Update daily loss
+  dailyLoss.textContent = `${status.daily_loss_percent?.toFixed(2) || '0.00'}%`;
+  dailyLoss.className = `risk-value ${status.daily_loss_percent > 3 ? 'risk-warning' : ''}`;
+  
+  // Show resume button if trading is paused
+  if (status.is_trading_paused) {
+    resumeBtn.style.display = 'block';
+  } else {
+    resumeBtn.style.display = 'none';
+  }
 }
 
 // ============================================

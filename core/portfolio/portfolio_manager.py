@@ -5,10 +5,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 import numpy as np
 import logging
-logger = logging.getLogger(__name__)
 from core.services.fetch_bybit_klines import fetch_klines
 
-log = get_logger("portfolio_manager")
+log = logging.getLogger(__name__)
 
 class AllocationStrategy(Enum):
     EQUAL_WEIGHT = "equal"
@@ -87,7 +86,7 @@ class PortfolioManager:
         allocation_strategy: AllocationStrategy = AllocationStrategy.RISK_PARITY,
         rebalance_frequency: RebalanceFrequency = RebalanceFrequency.DAILY
     ):
-        self.api = None()
+        self.api = None
         self.initial_capital = initial_capital
         self.max_positions = max_positions
         self.allocation_strategy = allocation_strategy

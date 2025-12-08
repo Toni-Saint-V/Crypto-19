@@ -530,20 +530,41 @@ body {
 }
 
 .stat-card {
-  display: flex;
-  gap: 20px;
-  flex-wrap: wrap;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 12px;
+}
+
+.stat-card h4 {
+  margin-bottom: 12px;
+  color: var(--accent-blue);
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
 }
 
 .stat-item {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-input);
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
 }
 
 .stat-label {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -562,8 +583,163 @@ body {
   color: var(--accent-red);
 }
 
+/* Risk Status Panel */
+.risk-status {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+.risk-status h4 {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-blue);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+.risk-status-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.risk-status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  background: var(--bg-input);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.risk-label {
+  color: var(--text-secondary);
+}
+
+.risk-value {
+  font-weight: 600;
+  color: var(--accent-blue);
+}
+
+.risk-value.risk-safe {
+  color: var(--accent-green);
+}
+
+.risk-value.risk-warning {
+  color: #ffaa00;
+}
+
+.risk-value.risk-limit_reached,
+.risk-value.risk-critical {
+  color: var(--accent-red);
+}
+
+.risk-btn {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--accent-red);
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.risk-btn:hover {
+  background: #ff2255;
+  transform: translateY(-1px);
+}
+
 /* Trades List */
 .trades-list {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+.trades-list h4 {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-blue);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+#trades-content {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.trades-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  margin-top: 8px;
+}
+
+.trades-table thead {
+  background: var(--bg-input);
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.trades-table th {
+  padding: 8px 6px;
+  text-align: left;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.trades-table td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.trades-table tbody tr {
+  transition: background var(--transition-fast);
+}
+
+.trades-table tbody tr:hover {
+  background: var(--bg-hover);
+  cursor: pointer;
+}
+
+.trades-table .positive {
+  color: var(--accent-green);
+  font-weight: 600;
+}
+
+.trades-table .negative {
+  color: var(--accent-red);
+  font-weight: 600;
+}
+
+.trade-row.positive {
+  border-left: 2px solid var(--accent-green);
+}
+
+.trade-row.negative {
+  border-left: 2px solid var(--accent-red);
+}
+
+.no-trades {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 20px;
+  font-size: 13px;
+}
   margin-top: 20px;
   padding-top: 20px;
   border-top: 1px solid var(--border-color);

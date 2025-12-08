@@ -75,6 +75,28 @@
             <input type="number" id="leverage" value="1" min="1" max="10" step="1">
           </div>
         </div>
+        <div class="risk-status" id="risk-status-panel">
+          <h4>⚠️ Risk Status</h4>
+          <div class="risk-status-content">
+            <div class="risk-status-item">
+              <span class="risk-label">Status:</span>
+              <span class="risk-value" id="risk-status-value">Safe</span>
+            </div>
+            <div class="risk-status-item">
+              <span class="risk-label">Open Positions:</span>
+              <span class="risk-value" id="risk-positions">0/5</span>
+            </div>
+            <div class="risk-status-item">
+              <span class="risk-label">Drawdown:</span>
+              <span class="risk-value" id="risk-drawdown">0.00%</span>
+            </div>
+            <div class="risk-status-item">
+              <span class="risk-label">Daily Loss:</span>
+              <span class="risk-value" id="risk-daily-loss">0.00%</span>
+            </div>
+            <button id="resume-trading-btn" class="risk-btn" style="display: none;">Resume Trading</button>
+          </div>
+        </div>
       </div>
     </aside>
 
@@ -111,6 +133,25 @@
           <select id="strategy-select" class="chart-select">
             <!-- Will be populated dynamically -->
           </select>
+        </div>
+        <div class="control-group">
+          <label>Data Source</label>
+          <select id="data-source-select" class="chart-select">
+            <option value="exchange" selected>Exchange API</option>
+            <option value="csv">Local CSV</option>
+          </select>
+        </div>
+        <div class="control-group" id="exchange-group">
+          <label>Exchange</label>
+          <select id="exchange-select" class="chart-select">
+            <option value="bybit" selected>Bybit</option>
+            <option value="binance">Binance</option>
+          </select>
+        </div>
+        <div class="control-group" id="csv-group" style="display: none;">
+          <label>CSV File</label>
+          <input type="file" id="csv-file-input" accept=".csv" class="chart-select">
+          <button id="upload-csv-btn" class="control-btn">Upload</button>
         </div>
         <div class="control-group">
           <label>Mode</label>

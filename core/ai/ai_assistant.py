@@ -6,10 +6,9 @@ from dataclasses import dataclass
 from enum import Enum
 import numpy as np
 import logging
-logger = logging.getLogger(__name__)
 from core.services.fetch_bybit_klines import fetch_klines
 
-log = get_logger("ai_assistant")
+log = logging.getLogger(__name__)
 
 class SignalStrength(Enum):
     STRONG_BUY = ("🟢🟢🟢", "Strong Buy", 0.8)
@@ -55,7 +54,7 @@ class AIAssistant:
     """Advanced AI trading assistant with market analysis capabilities"""
     
     def __init__(self):
-        self.api = None()
+        self.api = None
         self.analysis_cache: Dict[str, MarketAnalysis] = {}
         self.recommendation_history: List[TradingRecommendation] = []
         self.learning_data: List[Dict] = []
@@ -64,7 +63,7 @@ class AIAssistant:
         """Comprehensive market analysis"""
         try:
             # Load candles
-            candles = await None(symbol, "15", 200)
+            candles = await fetch_klines(symbol, "15", 200)
             if len(candles) < 50:
                 raise ValueError("Insufficient data for analysis")
             
