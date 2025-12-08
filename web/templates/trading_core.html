@@ -1,56 +1,137 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CryptoBot Pro — Trading Core</title>
   <link rel="stylesheet" href="/static/css/trading_core.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 </head>
 <body>
-  <header class="topbar">
-    <div class="controls">
-      <select id="symbol"><option>BTCUSDT</option><option>ETHUSDT</option></select>
-      <select id="strategy"><option>Momentum ML v2</option><option>Reversion α</option></select>
-      <input type="number" id="tf" value="60" min="1" max="1500">
-      <button id="run">▶ Run</button>
-      <button id="pause">⏸ Pause</button>
-      <button id="settings">⚙</button>
-      <span class="status">🧠 Connected</span>
+  <!-- Top Header Bar -->
+  <header class="top-header">
+    <div class="header-left">
+      <div class="logo">⚡ CryptoBot Pro</div>
+      <div class="status-indicator" id="connection-status">
+        <span class="status-dot"></span>
+        <span class="status-text">Connecting...</span>
+      </div>
+    </div>
+    <div class="header-center">
+      <div class="header-info">
+        <span class="info-label">Symbol:</span>
+        <span class="info-value" id="current-symbol">BTCUSDT</span>
+      </div>
+      <div class="header-info">
+        <span class="info-label">Timeframe:</span>
+        <span class="info-value" id="current-timeframe">60m</span>
+      </div>
+      <div class="header-info">
+        <span class="info-label">Strategy:</span>
+        <span class="info-value" id="current-strategy">Momentum ML v2</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="header-info">
+        <span class="info-label">PNL:</span>
+        <span class="info-value pnl" id="current-pnl">+0.00%</span>
+      </div>
+      <div class="header-controls">
+        <button id="run-btn" class="control-btn run">▶ Run</button>
+        <button id="pause-btn" class="control-btn pause">⏸ Pause</button>
+        <button id="settings-btn" class="control-btn settings">⚙</button>
+      </div>
     </div>
   </header>
 
-  <main class="grid">
-    <aside id="strategies">
-      <h3>📋 Strategies</h3>
-      <ul>
-        <li class="active">Momentum ML v2</li>
-        <li>Reversion α</li>
-        <li>Ensemble β</li>
-      </ul>
-      <button id="new-strategy">＋ New</button>
+  <!-- Main Grid Layout -->
+  <main class="grid-container">
+    <!-- Left Panel: Strategies -->
+    <aside id="strategies-panel" class="panel left-panel">
+      <div class="panel-header">
+        <h3>📋 Strategies</h3>
+        <button id="new-strategy-btn" class="icon-btn">＋</button>
+      </div>
+      <div class="panel-content">
+        <ul id="strategies-list">
+          <li class="strategy-item active" data-strategy="momentum-ml-v2">
+            <span class="strategy-name">Momentum ML v2</span>
+            <span class="strategy-status">●</span>
+          </li>
+          <li class="strategy-item" data-strategy="reversion-alpha">
+            <span class="strategy-name">Reversion α</span>
+            <span class="strategy-status">○</span>
+          </li>
+          <li class="strategy-item" data-strategy="ensemble-beta">
+            <span class="strategy-name">Ensemble β</span>
+            <span class="strategy-status">○</span>
+          </li>
+        </ul>
+      </div>
     </aside>
 
-    <section id="chart-area">
-      <canvas id="mainChart"></canvas>
+    <!-- Center: Chart Area -->
+    <section id="chart-area" class="chart-section">
+      <div class="chart-container">
+        <canvas id="mainChart"></canvas>
+      </div>
+      <div class="chart-controls">
+        <select id="symbol-select" class="chart-select">
+          <option value="BTCUSDT">BTCUSDT</option>
+          <option value="ETHUSDT">ETHUSDT</option>
+          <option value="BNBUSDT">BNBUSDT</option>
+        </select>
+        <select id="timeframe-select" class="chart-select">
+          <option value="15">15m</option>
+          <option value="60" selected>60m</option>
+          <option value="240">4h</option>
+          <option value="1440">1d</option>
+        </select>
+        <select id="strategy-select" class="chart-select">
+          <option value="momentum-ml-v2" selected>Momentum ML v2</option>
+          <option value="reversion-alpha">Reversion α</option>
+          <option value="ensemble-beta">Ensemble β</option>
+        </select>
+      </div>
     </section>
 
-    <aside id="signals" class="collapsed">
-      <h3>🔔 Signals (3) <span id="close-signals">✕</span></h3>
-      <div id="signals-list">
-        <div class="sig new">[NEW] BTCUSDT BUY @ 42100</div>
-        <div class="sig ai">[AI] Risk 1.0 → 0.6%</div>
-        <div class="sig bt">[BT] Backtest + 23%</div>
+    <!-- Right Panel: Signals Feed -->
+    <aside id="signals-panel" class="panel right-panel">
+      <div class="panel-header">
+        <h3>🔔 Signals <span class="signal-count" id="signal-count">0</span></h3>
+        <button id="close-signals-btn" class="icon-btn">✕</button>
       </div>
-      <button id="clear-signals">Clear</button>
+      <div class="panel-content">
+        <div id="signals-list" class="signals-list">
+          <!-- Signals will be dynamically added here -->
+        </div>
+        <button id="clear-signals-btn" class="clear-btn">Clear All</button>
+      </div>
     </aside>
   </main>
 
-  <footer id="ai-console">
-    <div id="chat-log"></div>
-    <div id="chat-inputs">
-      <input id="chat-input" placeholder="Ask Anton..." />
-      <button id="send">Send</button>
+  <!-- Bottom: AI Chat Console -->
+  <footer id="ai-console" class="ai-console">
+    <div class="console-header">
+      <h3>🤖 AI Assistant (Anton)</h3>
+      <span class="console-status" id="ai-status">Ready</span>
+    </div>
+    <div id="chat-log" class="chat-log">
+      <div class="chat-message system">
+        <span class="chat-time"></span>
+        <span class="chat-author">System:</span>
+        <span class="chat-text">AI Assistant initialized. Type a message to start.</span>
+      </div>
+    </div>
+    <div id="chat-inputs" class="chat-inputs">
+      <input 
+        type="text" 
+        id="chat-input" 
+        placeholder="Ask Anton about strategies, backtests, or market analysis..." 
+        autocomplete="off"
+      />
+      <button id="send-btn" class="send-btn">Send</button>
     </div>
   </footer>
 
