@@ -14,11 +14,18 @@ import json
 import random
 import os
 import time
+import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+
+log = logging.getLogger(__name__)
 from core.backtest.engine import BacktestEngine
 from web.bybit_client import fetch_ohlcv, get_klines
 from core.ml.ml_service import MLService
+from core.ai.toni_service import ToniAIService, ToniContext
+from core.risk.risk_manager import RiskManager, RiskLimits
+from core.exchange.factory import create_exchange_provider
+import yaml
 
 # === FASTAPI INITIALIZATION ===
 app = FastAPI(title="CryptoBot Pro — Neural Dashboard")
@@ -90,9 +97,45 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+# === LOAD CONFIG ===
+def load_config():
+    """Load configuration from config.yaml"""
+    try:
+        with open("config.yaml", "r") as f:
+            return yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        log.warning("config.yaml not found, using defaults")
+        return {}
+
+config = load_config()
+risk_config = config.get("risk", {})
+risk_limits = RiskLimits(
+    max_open_positions=risk_config.get("max_open_positions", 5),
+    max_drawdown_percent=risk_config.get("max_drawdown_percent", 20.0),
+    daily_loss_limit_percent=risk_config.get("daily_loss_limit_percent", 5.0),
+    default_stop_loss_percent=risk_config.get("default_stop_loss_percent", 2.0)
+)
+
 # === SERVICES ===
-backtest_engine = BacktestEngine()
+backtest_engine = BacktestEngine(risk_limits=risk_limits)
 ml_service = MLService()
+global_risk_manager = RiskManager(limits=risk_limits)
+
+# Default exchange provider
+default_exchange = config.get("exchange", {}).get("default", "bybit")
+exchange_config = config.get("exchange", {})
+default_provider = create_exchange_provider(
+    default_exchange,
+    testnet=exchange_config.get(default_exchange, {}).get("testnet", True)
+)
+
+# Initialize Toni AI Service
+toni_mode = os.getenv("TONI_MODE", "stub")
+toni_api_key = os.getenv("OPENAI_API_KEY")
+toni_service = ToniAIService(mode=toni_mode, api_key=toni_api_key)
+
+# Store last backtest context for Toni
+last_backtest_context = None
 
 # === ROUTES ===
 
@@ -126,14 +169,26 @@ async def api_dashboard():
 async def api_candles(
     symbol: str = Query("BTCUSDT", description="Trading pair symbol"),
     interval: str = Query("60", description="Timeframe in minutes (1-1500) or standard (1m, 5m, 15m, etc.)"),
-    limit: int = Query(200, description="Number of candles to fetch")
+    limit: int = Query(200, description="Number of candles to fetch"),
+    exchange: str = Query("bybit", description="Exchange name (bybit, binance)")
 ):
     """
-    Fetch OHLCV candles from Bybit Testnet.
+    Fetch OHLCV candles from specified exchange.
     Supports timeframes from 1m to 1500m.
     """
     try:
-        candles = await fetch_ohlcv(symbol=symbol, interval=interval, limit=limit)
+        # Use exchange provider if specified, otherwise fallback to old method
+        if exchange and exchange.lower() in ["bybit", "binance"]:
+            provider = create_exchange_provider(
+                exchange.lower(),
+                testnet=exchange_config.get(exchange.lower(), {}).get("testnet", True)
+            )
+            if provider:
+                candles = await provider.fetch_klines(symbol, interval, limit)
+            else:
+                candles = await fetch_ohlcv(symbol=symbol, interval=interval, limit=limit)
+        else:
+            candles = await fetch_ohlcv(symbol=symbol, interval=interval, limit=limit)
         
         if not candles:
             # Fallback to mock data if fetch fails
@@ -156,6 +211,7 @@ async def api_candles(
         return JSONResponse({
             "symbol": symbol,
             "interval": interval,
+            "exchange": exchange,
             "candles": candles,
             "count": len(candles)
         })
@@ -200,6 +256,10 @@ async def api_backtest_run(
         
         result["equity_curve"] = equity_curve
         result["initial_capital"] = initial_capital
+        
+        # Store context for Toni AI
+        global last_backtest_context
+        last_backtest_context = result
         
         return JSONResponse(result)
     except Exception as e:
@@ -276,6 +336,89 @@ async def api_ml_predict(
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
+@app.get("/api/risk/status")
+async def api_risk_status():
+    """Get current risk management status"""
+    try:
+        status = global_risk_manager.get_risk_status()
+        return JSONResponse(status)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.post("/api/data/upload-csv")
+async def api_upload_csv(request: Request):
+    """Upload CSV file for backtesting"""
+    try:
+        form = await request.form()
+        file = form.get("file")
+        
+        if not file:
+            return JSONResponse({"error": "No file provided"}, status_code=400)
+        
+        # Save uploaded file temporarily
+        import tempfile
+        import shutil
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp_file:
+            shutil.copyfileobj(file.file, tmp_file)
+            tmp_path = tmp_file.name
+        
+        # Load CSV using provider
+        from core.exchange.csv_provider import CSVExchangeProvider
+        provider = CSVExchangeProvider()
+        if provider.load_csv(tmp_path):
+            # Store provider in session/cache (simplified - in production use proper storage)
+            return JSONResponse({
+                "message": "CSV loaded successfully",
+                "rows": len(provider.data_cache) if provider.data_cache is not None else 0
+            })
+        else:
+            return JSONResponse({"error": "Failed to load CSV file"}, status_code=400)
+            
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.post("/api/risk/resume")
+async def api_risk_resume():
+    """Resume trading after risk pause (manual override)"""
+    try:
+        global_risk_manager.resume_trading()
+        return JSONResponse({"message": "Trading resumed", "status": global_risk_manager.get_risk_status()})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.post("/api/toni/ask")
+async def api_toni_ask(request: Request):
+    """Ask Toni AI a question"""
+    try:
+        data = await request.json()
+        query = data.get("query", "")
+        context_data = data.get("context", {})
+        
+        if not query:
+            return JSONResponse({"error": "Query is required"}, status_code=400)
+        
+        # Build context
+        context = ToniContext(
+            last_backtest=context_data.get("last_backtest"),
+            current_strategy=context_data.get("strategy"),
+            current_symbol=context_data.get("symbol"),
+            current_timeframe=context_data.get("timeframe"),
+            is_live_mode=context_data.get("is_live_mode", False),
+            additional_data=context_data.get("additional_data", {})
+        )
+        
+        # Get answer from Toni
+        answer = await toni_service.answer(query, context)
+        
+        return JSONResponse({
+            "answer": answer,
+            "mode": toni_service.mode.value,
+            "timestamp": time.time()
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
 # === WEBSOCKET ENDPOINTS ===
 
 @app.websocket("/ws/ai")
@@ -322,11 +465,21 @@ async def websocket_ai(websocket: WebSocket):
                 if message_data.get("type") == "message" or "text" in message_data:
                     user_message = message_data.get("text") or message_data.get("message", "")
                     
-                    # Simulate AI response
-                    await asyncio.sleep(random.uniform(0.5, 1.5))
+                    # Build context from current state
+                    context = ToniContext(
+                        last_backtest=last_backtest_context,
+                        current_strategy=message_data.get("strategy"),
+                        current_symbol=message_data.get("symbol"),
+                        current_timeframe=message_data.get("timeframe"),
+                        is_live_mode=message_data.get("mode") == "live"
+                    )
                     
-                    # Generate contextual response
-                    response = generate_ai_response(user_message)
+                    # Get response from Toni AI
+                    try:
+                        response = await toni_service.answer(user_message, context)
+                    except Exception as e:
+                        log.error(f"Toni AI error: {e}")
+                        response = f"Sorry, I encountered an error. Please try again. ({str(e)})"
                     
                     await websocket.send_json({
                         "type": "response",

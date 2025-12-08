@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 from core.backtest.loader import load_dataset
 from core.backtest.diagnostics import diagnose
+from core.risk.risk_manager import RiskManager, RiskLimits
 import logging
 
 log = logging.getLogger(__name__)
@@ -17,8 +18,9 @@ log = logging.getLogger(__name__)
 class BacktestEngine:
     """Enhanced backtest engine with strategy support"""
     
-    def __init__(self):
+    def __init__(self, risk_limits: Optional[RiskLimits] = None):
         self.strategies = {}
+        self.risk_manager = RiskManager(limits=risk_limits)
         self._register_strategies()
     
     def _register_strategies(self):
@@ -114,15 +116,46 @@ class BacktestEngine:
                 "timeframe": interval
             }
         
+        # Validate trades and enforce stop loss
+        validated_trades = []
+        for trade in trades:
+            # Validate stop loss
+            entry = trade.get('entry_price', 0)
+            stop = trade.get('stop', None)
+            direction = trade.get('direction', 'long')
+            
+            is_valid, final_stop, reason = self.risk_manager.validate_stop_loss(
+                entry, stop, direction
+            )
+            
+            if not is_valid:
+                log.warning(f"Trade rejected: {reason}. Entry: {entry}, Stop: {stop}")
+                continue  # Skip invalid trades
+            
+            # Update trade with validated stop loss
+            trade['stop'] = final_stop
+            validated_trades.append(trade)
+        
         # Calculate summary metrics
-        summary = self._calculate_summary(trades, risk_per_trade)
+        summary = self._calculate_summary(validated_trades, risk_per_trade)
+        
+        # Update risk manager with backtest results
+        if validated_trades:
+            initial_capital = 10000.0
+            final_capital = initial_capital + summary.get('total_pnl_usd', 0)
+            self.risk_manager.update_capital(final_capital)
+        
+        # Get risk status
+        risk_status = self.risk_manager.get_risk_status()
         
         return {
             "symbol": symbol,
             "strategy": strategy,
             "timeframe": interval,
-            "trades": trades,
-            "summary": summary
+            "trades": validated_trades,
+            "summary": summary,
+            "risk_status": risk_status,
+            "trades_rejected": len(trades) - len(validated_trades)
         }
     
     def _calculate_summary(self, trades: List[Dict], risk_per_trade: float) -> Dict[str, Any]:

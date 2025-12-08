@@ -583,6 +583,78 @@ body {
   color: var(--accent-red);
 }
 
+/* Risk Status Panel */
+.risk-status {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+.risk-status h4 {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-blue);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+.risk-status-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.risk-status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  background: var(--bg-input);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.risk-label {
+  color: var(--text-secondary);
+}
+
+.risk-value {
+  font-weight: 600;
+  color: var(--accent-blue);
+}
+
+.risk-value.risk-safe {
+  color: var(--accent-green);
+}
+
+.risk-value.risk-warning {
+  color: #ffaa00;
+}
+
+.risk-value.risk-limit_reached,
+.risk-value.risk-critical {
+  color: var(--accent-red);
+}
+
+.risk-btn {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--accent-red);
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.risk-btn:hover {
+  background: #ff2255;
+  transform: translateY(-1px);
+}
+
 /* Trades List */
 .trades-list {
   margin-top: 20px;

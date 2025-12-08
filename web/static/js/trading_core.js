@@ -27,6 +27,7 @@ const strategyNameMap = {
 };
 let currentSymbol = 'BTCUSDT';
 let currentTimeframe = '60';
+let currentExchange = 'bybit';
 let candlesData = [];
 let backtestTrades = [];
 let strategiesList = [];
@@ -127,7 +128,7 @@ function initializeChart() {
 
 async function loadCandles() {
   try {
-    const response = await fetch(`/api/candles?symbol=${currentSymbol}&interval=${currentTimeframe}&limit=500`);
+    const response = await fetch(`/api/candles?symbol=${currentSymbol}&interval=${currentTimeframe}&limit=500&exchange=${currentExchange}`);
     const data = await response.json();
     
     if (data.candles && data.candles.length > 0) {
@@ -791,24 +792,63 @@ function setupEventHandlers() {
   const chatInput = document.getElementById('chat-input');
   const sendBtn = document.getElementById('send-btn');
   
-  function sendChatMessage() {
+  async function sendChatMessage() {
     const message = chatInput.value.trim();
     if (!message) return;
-    
-    if (!wsAI || wsAI.readyState !== WebSocket.OPEN) {
-      addChatMessage('system', 'WebSocket not connected. Please wait...');
-      return;
-    }
     
     // Add user message to chat
     addChatMessage('user', message);
     
-    // Send to WebSocket
-    wsAI.send(JSON.stringify({
-      type: 'message',
-      text: message,
-      timestamp: Date.now()
-    }));
+    // Build context
+    const context = {
+      strategy: currentStrategy,
+      symbol: currentSymbol,
+      timeframe: currentTimeframe,
+      is_live_mode: isLiveMode,
+      last_backtest: backtestTrades.length > 0 ? {
+        trades_count: backtestTrades.length,
+        summary: {} // Will be populated from last backtest result
+      } : null
+    };
+    
+    // Try WebSocket first, fallback to REST API
+    if (wsAI && wsAI.readyState === WebSocket.OPEN) {
+      // Send to WebSocket with context
+      wsAI.send(JSON.stringify({
+        type: 'message',
+        text: message,
+        strategy: currentStrategy,
+        symbol: currentSymbol,
+        timeframe: currentTimeframe,
+        mode: isLiveMode ? 'live' : 'backtest',
+        timestamp: Date.now()
+      }));
+    } else {
+      // Fallback to REST API
+      try {
+        addChatMessage('system', 'Toni is thinking...');
+        const response = await fetch('/api/toni/ask', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query: message,
+            context: context
+          })
+        });
+        
+        const data = await response.json();
+        if (data.answer) {
+          addChatMessage('ai', data.answer);
+        } else {
+          addChatMessage('system', 'Toni is currently unavailable. Please try again later.');
+        }
+      } catch (error) {
+        console.error('Error asking Toni:', error);
+        addChatMessage('system', 'Failed to get response from Toni. Please try again.');
+      }
+    }
     
     chatInput.value = '';
   }
@@ -829,6 +869,67 @@ function setupEventHandlers() {
   document.getElementById('new-strategy-btn').addEventListener('click', () => {
     addChatMessage('system', 'New strategy creation (coming soon)');
   });
+  
+  // Resume trading button
+  document.getElementById('resume-trading-btn').addEventListener('click', async () => {
+    try {
+      const response = await fetch('/api/risk/resume', { method: 'POST' });
+      const data = await response.json();
+      if (data.message) {
+        addChatMessage('system', data.message);
+        updateRiskStatus(data.status);
+      }
+    } catch (error) {
+      console.error('Error resuming trading:', error);
+      addChatMessage('system', 'Failed to resume trading');
+    }
+  });
+  
+  // Load risk status on init
+  loadRiskStatus();
+  setInterval(loadRiskStatus, 5000); // Update every 5 seconds
+}
+
+async function loadRiskStatus() {
+  try {
+    const response = await fetch('/api/risk/status');
+    const status = await response.json();
+    updateRiskStatus(status);
+  } catch (error) {
+    console.error('Error loading risk status:', error);
+  }
+}
+
+function updateRiskStatus(status) {
+  const statusValue = document.getElementById('risk-status-value');
+  const positions = document.getElementById('risk-positions');
+  const drawdown = document.getElementById('risk-drawdown');
+  const dailyLoss = document.getElementById('risk-daily-loss');
+  const resumeBtn = document.getElementById('resume-trading-btn');
+  
+  if (!status) return;
+  
+  // Update status
+  statusValue.textContent = status.status || 'Safe';
+  statusValue.className = `risk-value risk-${status.status || 'safe'}`;
+  
+  // Update positions
+  positions.textContent = `${status.open_positions || 0}/${status.max_positions || 5}`;
+  
+  // Update drawdown
+  drawdown.textContent = `${status.current_drawdown?.toFixed(2) || '0.00'}%`;
+  drawdown.className = `risk-value ${status.current_drawdown > 15 ? 'risk-warning' : ''}`;
+  
+  // Update daily loss
+  dailyLoss.textContent = `${status.daily_loss_percent?.toFixed(2) || '0.00'}%`;
+  dailyLoss.className = `risk-value ${status.daily_loss_percent > 3 ? 'risk-warning' : ''}`;
+  
+  // Show resume button if trading is paused
+  if (status.is_trading_paused) {
+    resumeBtn.style.display = 'block';
+  } else {
+    resumeBtn.style.display = 'none';
+  }
 }
 
 // ============================================
