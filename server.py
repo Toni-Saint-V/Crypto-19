@@ -26,6 +26,7 @@ from core.ai.toni_service import ToniAIService, ToniContext
 from core.risk.risk_manager import RiskManager, RiskLimits
 from core.exchange.factory import create_exchange_provider
 from core.market_data.service import MarketDataService
+from core.dashboard.service import DashboardSnapshot, get_dashboard_snapshot
 import yaml
 
 # === FASTAPI INITIALIZATION ===
@@ -251,6 +252,15 @@ async def api_dashboard_test_mode():
     Никаких обращений к бирже и внешним сервисам.
     """
     return _make_test_dashboard_payload()
+
+
+@app.get("/api/dashboard/snapshot", response_model=DashboardSnapshot)
+async def api_get_dashboard_snapshot(
+    symbol: str = Query("BTCUSDT", description="Trading pair symbol"),
+    timeframe: str = Query("15m", description="Requested timeframe"),
+):
+    """Return the structured dashboard snapshot."""
+    return await get_dashboard_snapshot(symbol=symbol, timeframe=timeframe)
 
 @app.get("/api/candles")
 async def api_candles_test_mode(
