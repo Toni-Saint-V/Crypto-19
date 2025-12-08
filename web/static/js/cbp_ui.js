@@ -10,7 +10,9 @@ import {
 let signalCounter = 0;
 
 export function initUI() {
-  const symbolSelect = document.getElementById("symbol-select");
+  const symbolSelect =
+    document.getElementById("cbp-symbol-select") ||
+    document.getElementById("symbol-select");
   if (symbolSelect) {
     symbolSelect.value = dashboardState.symbol;
     symbolSelect.addEventListener("change", (event) => {
@@ -18,7 +20,9 @@ export function initUI() {
     });
   }
 
-  const exchangeSelect = document.getElementById("cbp-exchange-select");
+  const exchangeSelect =
+    document.getElementById("cbp-exchange-select") ||
+    document.getElementById("exchange-select");
   if (exchangeSelect) {
     exchangeSelect.value = dashboardState.exchange;
     exchangeSelect.addEventListener("change", (event) => {
@@ -26,7 +30,9 @@ export function initUI() {
     });
   }
 
-  const timeframeSelect = document.getElementById("cbp-timeframe-select");
+  const timeframeSelect =
+    document.getElementById("cbp-timeframe-select") ||
+    document.getElementById("timeframe-select");
   if (timeframeSelect) {
     timeframeSelect.value = dashboardState.timeframe;
     timeframeSelect.addEventListener("change", (event) => {
@@ -34,7 +40,9 @@ export function initUI() {
     });
   }
 
-  const riskSelect = document.getElementById("cbp-risk-select");
+  const riskSelect =
+    document.getElementById("cbp-risk-select") ||
+    document.getElementById("risk-select");
   if (riskSelect) {
     riskSelect.value = dashboardState.riskProfile;
     riskSelect.addEventListener("change", (event) => {
@@ -66,10 +74,16 @@ function render(state) {
   setText("mode-label", capitalize(state.mode));
   setText("chart-subtitle", `${state.exchange?.toUpperCase() ?? ""} · ${state.symbol} · ${state.timeframe}`);
   setText("ai-mode-label", capitalize(state.mode));
-  setText("equity-value", `${formatNumber(state.metrics.equity)} USDT`);
-  setText("pnl-value", formatPercent(state.metrics.pnlPercent));
+  const equityText = `${formatNumber(state.metrics.equity)} USDT`;
+  setText("cbp-equity-value", equityText);
+  setText("equity-value", equityText);
+  const pnlText = formatPercent(state.metrics.pnlPercent);
+  setText("cbp-pnl-value", pnlText);
+  setText("pnl-value", pnlText);
+  const confidenceText = formatPercent(state.metrics.confidence, true);
+  setText("cbp-confidence-value", confidenceText);
+  setText("confidence-value", confidenceText);
   setText("risk-value", state.metrics.riskLevel ?? "--");
-  setText("confidence-value", formatPercent(state.metrics.confidence, true));
   setText("ai-confidence", formatPercent(state.aiData.confidence, true));
   setText("ai-summary", state.aiData.summary ?? "");
   setText("ai-action", state.aiData.action ?? "");
@@ -81,15 +95,21 @@ function render(state) {
   highlightButtons("[data-mode]", state.mode, "data-mode", "cbp-mode-btn--active");
   highlightButtons("[data-tf]", state.timeframe, "data-tf", "cbp-tf-btn--active");
 
-  const exchangeSelect = document.getElementById("cbp-exchange-select");
+  const exchangeSelect =
+    document.getElementById("cbp-exchange-select") ||
+    document.getElementById("exchange-select");
   if (exchangeSelect && exchangeSelect.value !== state.exchange) {
     exchangeSelect.value = state.exchange;
   }
-  const timeframeSelect = document.getElementById("cbp-timeframe-select");
+  const timeframeSelect =
+    document.getElementById("cbp-timeframe-select") ||
+    document.getElementById("timeframe-select");
   if (timeframeSelect && timeframeSelect.value !== state.timeframe) {
     timeframeSelect.value = state.timeframe;
   }
-  const riskSelect = document.getElementById("cbp-risk-select");
+  const riskSelect =
+    document.getElementById("cbp-risk-select") ||
+    document.getElementById("risk-select");
   if (riskSelect && riskSelect.value !== state.riskProfile) {
     riskSelect.value = state.riskProfile;
   }
