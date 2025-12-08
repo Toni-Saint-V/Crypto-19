@@ -268,6 +268,9 @@ async function runBacktest(strategy = null) {
     // Display statistics
     displayBacktestStats(result.summary || {});
     
+    // Display trades table
+    displayTradesTable(backtestTrades);
+    
     // Add signals for trades
     backtestTrades.forEach(trade => {
       addSignal('bt', `Trade: ${trade.result_R > 0 ? 'WIN' : 'LOSS'} ${trade.result_R.toFixed(2)}R @ ${trade.entry_price?.toFixed(2) || 'N/A'}`);
@@ -352,36 +355,124 @@ function displayBacktestStats(summary) {
     return;
   }
   
+  // Calculate additional metrics
+  const winRate = summary.winrate || 0;
+  const totalTrades = summary.total_trades || 0;
+  const winningTrades = summary.winning_trades || 0;
+  const losingTrades = summary.losing_trades || 0;
+  const avgR = summary.avg_R || 0;
+  const maxDD = summary.max_dd || 0;
+  const pnlPct = summary.pnl_% || 0;
+  const sharpe = summary.sharpe || 0;
+  const totalPnlUsd = summary.total_pnl_usd || 0;
+  
   statsEl.innerHTML = `
     <div class="stat-card">
-      <div class="stat-item">
-        <span class="stat-label">Total Return:</span>
-        <span class="stat-value ${summary.pnl_% >= 0 ? 'positive' : 'negative'}">
-          ${summary.pnl_% >= 0 ? '+' : ''}${summary.pnl_%?.toFixed(2) || 0}%
-        </span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">Total Trades:</span>
-        <span class="stat-value">${summary.total_trades || 0}</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">Win Rate:</span>
-        <span class="stat-value">${summary.winrate?.toFixed(1) || 0}%</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">Avg R:</span>
-        <span class="stat-value">${summary.avg_R?.toFixed(2) || 0}</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">Max Drawdown:</span>
-        <span class="stat-value negative">${summary.max_dd?.toFixed(2) || 0}%</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">Sharpe Ratio:</span>
-        <span class="stat-value">${summary.sharpe?.toFixed(2) || 0}</span>
+      <h4>📊 Key Metrics</h4>
+      <div class="stat-grid">
+        <div class="stat-item">
+          <span class="stat-label" title="Total return percentage">Total Return:</span>
+          <span class="stat-value ${pnlPct >= 0 ? 'positive' : 'negative'}">
+            ${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%
+          </span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label" title="Total P&L in USD">Total P&L:</span>
+          <span class="stat-value ${totalPnlUsd >= 0 ? 'positive' : 'negative'}">
+            ${totalPnlUsd >= 0 ? '+' : ''}$${totalPnlUsd.toFixed(2)}
+          </span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label" title="Total number of trades">Total Trades:</span>
+          <span class="stat-value">${totalTrades}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label" title="Percentage of winning trades">Win Rate:</span>
+          <span class="stat-value">${winRate.toFixed(1)}%</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label" title="Winning trades count">Wins:</span>
+          <span class="stat-value positive">${winningTrades}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label" title="Losing trades count">Losses:</span>
+          <span class="stat-value negative">${losingTrades}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label" title="Average R-multiple per trade">Avg R:</span>
+          <span class="stat-value ${avgR >= 0 ? 'positive' : 'negative'}">
+            ${avgR >= 0 ? '+' : ''}${avgR.toFixed(2)}R
+          </span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label" title="Maximum drawdown percentage">Max Drawdown:</span>
+          <span class="stat-value negative">${maxDD.toFixed(2)}%</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label" title="Sharpe ratio (risk-adjusted return)">Sharpe Ratio:</span>
+          <span class="stat-value">${sharpe.toFixed(2)}</span>
+        </div>
       </div>
     </div>
   `;
+}
+
+function displayTradesTable(trades) {
+  const tradesContent = document.getElementById('trades-content');
+  
+  if (!trades || trades.length === 0) {
+    tradesContent.innerHTML = '<p class="no-trades">No trades yet. Run a backtest to see trades.</p>';
+    return;
+  }
+  
+  // Sort trades by entry time (newest first)
+  const sortedTrades = [...trades].sort((a, b) => {
+    const timeA = parseTime(a.entry_time) || 0;
+    const timeB = parseTime(b.entry_time) || 0;
+    return timeB - timeA;
+  });
+  
+  const tableHTML = `
+    <table class="trades-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Entry</th>
+          <th>SL</th>
+          <th>TP</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${sortedTrades.map(trade => {
+          const entryTime = trade.entry_time ? new Date(trade.entry_time).toLocaleString() : 'N/A';
+          const resultR = trade.result_R || 0;
+          const resultClass = resultR > 0 ? 'positive' : resultR < 0 ? 'negative' : '';
+          const resultText = resultR > 0 ? `+${resultR.toFixed(2)}R` : `${resultR.toFixed(2)}R`;
+          
+          return `
+            <tr class="trade-row ${resultClass}" data-entry-time="${trade.entry_time}">
+              <td>${entryTime}</td>
+              <td>${trade.entry_price?.toFixed(2) || 'N/A'}</td>
+              <td>${trade.stop?.toFixed(2) || 'N/A'}</td>
+              <td>${trade.tp?.toFixed(2) || 'N/A'}</td>
+              <td class="${resultClass}">${resultText}</td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+  
+  tradesContent.innerHTML = tableHTML;
+  
+  // Add hover effect to highlight trades on chart
+  document.querySelectorAll('.trade-row').forEach(row => {
+    row.addEventListener('mouseenter', () => {
+      const entryTime = row.dataset.entryTime;
+      // Could highlight corresponding marker on chart here
+    });
+  });
 }
 
 function parseTime(timeValue) {
