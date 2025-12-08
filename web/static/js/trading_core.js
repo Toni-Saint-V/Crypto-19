@@ -781,6 +781,13 @@ function setupEventHandlers() {
     }
   });
   
+  // Exchange selector
+  document.getElementById('exchange-select').addEventListener('change', (e) => {
+    currentExchange = e.target.value;
+    loadCandles(); // Reload candles with new exchange
+    addChatMessage('system', `Exchange changed to: ${currentExchange}`);
+  });
+  
   // CSV upload
   document.getElementById('upload-csv-btn').addEventListener('click', async () => {
     const fileInput = document.getElementById('csv-file-input');
