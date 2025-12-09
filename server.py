@@ -263,26 +263,72 @@ async def api_get_dashboard_snapshot(
     return await get_dashboard_snapshot(symbol=symbol, timeframe=timeframe)
 
 @app.get("/api/candles")
-async def api_candles_test_mode(
-    exchange: str = "bybit-test",
-    symbol: str = "BTCUSDT",
-    timeframe: str = "1m",
-    limit: int = 200,
-    mode: str = "test",
+async def api_candles(
+    exchange: str = Query("bybit", description="Exchange name"),
+    symbol: str = Query("BTCUSDT", description="Trading pair"),
+    timeframe: str = Query("15m", description="Timeframe"),
+    limit: int = Query(500, description="Number of candles"),
+    mode: str = Query("live", description="Mode: live or test"),
 ):
     """
-    TEST-режим: возвращаем синтетические свечи для любого symbol/timeframe.
-    Никаких обращений к бирже, только локальная генерация.
+    Get real market data candles from exchange or test mode.
     """
-    candles = _make_test_candles(symbol=symbol, timeframe=timeframe, limit=limit)
-    return {
-        "exchange": exchange,
-        "symbol": symbol,
-        "timeframe": timeframe,
-        "mode": "test",
-        "candles": candles,
-        "count": len(candles),
-    }
+    try:
+        if mode == "test":
+            # Test mode: return synthetic candles
+            candles = _make_test_candles(symbol=symbol, timeframe=timeframe, limit=limit)
+            return {
+                "exchange": exchange,
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "mode": "test",
+                "candles": candles,
+                "count": len(candles),
+            }
+        else:
+            # Live mode: get real data from exchange
+            market_service = MarketDataService()
+            ohlcv_data = await market_service.get_candles(
+                exchange=exchange,
+                symbol=symbol,
+                timeframe=timeframe,
+                limit=limit,
+                mode="live"
+            )
+            
+            # Convert OHLCV to dict format
+            candles = []
+            for candle in ohlcv_data:
+                candles.append({
+                    "time": candle.time,
+                    "open": float(candle.open),
+                    "high": float(candle.high),
+                    "low": float(candle.low),
+                    "close": float(candle.close),
+                    "volume": float(candle.volume),
+                })
+            
+            return {
+                "exchange": exchange,
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "mode": "live",
+                "candles": candles,
+                "count": len(candles),
+            }
+    except Exception as e:
+        log.error(f"Error fetching candles: {e}")
+        # Fallback to test data on error
+        candles = _make_test_candles(symbol=symbol, timeframe=timeframe, limit=limit)
+        return {
+            "exchange": exchange,
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "mode": "test",
+            "candles": candles,
+            "count": len(candles),
+            "error": str(e),
+        }
 
 
 @app.get("/api/selfcheck")
@@ -304,20 +350,66 @@ async def api_selfcheck():
         "candles_sample_len": len(candles),
     }
 
+@app.post("/api/ai/chat")
+async def api_ai_chat(request: Request):
+    """AI chat endpoint for conversational interface"""
+    try:
+        body = await request.json()
+        user_message = body.get("message", "")
+        context = body.get("context", {})
+        
+        # Use Toni AI service (created at module scope)
+        try:
+            response = await toni_service.generate_response(
+                user_message,
+                ToniContext(
+                    symbol=context.get("symbol", "BTCUSDT"),
+                    timeframe=context.get("timeframe", "15m"),
+                    balance=context.get("balance", 10000)
+                )
+            )
+        except Exception as e:
+            log.warning(f"Toni service error, using fallback: {e}")
+            # Fallback to simple response generator
+            response = generate_ai_response(user_message)
+        
+        return JSONResponse({
+            "response": response,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+    except Exception as e:
+        log.error(f"AI chat error: {e}")
+        return JSONResponse({
+            "response": "Извините, произошла ошибка. Попробуйте позже.",
+            "error": str(e)
+        }, status_code=500)
+
 @app.post("/api/backtest/run")
-async def api_backtest_run(
-    symbol: str = Query("BTCUSDT"),
-    interval: str = Query("60"),
-    strategy: str = Query("pattern3_extreme"),
-    risk_per_trade: float = Query(100.0),
-    rr_ratio: float = Query(4.0),
-    limit: int = Query(500)
-):
+async def api_backtest_run(request: Request):
     """
     Run backtest with specified parameters.
+    Accepts JSON body or query parameters.
     Returns trades, equity curve, and performance metrics.
     """
     try:
+        # Try to get parameters from JSON body first
+        try:
+            body = await request.json()
+            symbol = body.get("symbol", "BTCUSDT")
+            interval = body.get("interval", "60")
+            strategy = body.get("strategy", "pattern3_extreme")
+            risk_per_trade = float(body.get("risk_per_trade", 100.0))
+            rr_ratio = float(body.get("rr_ratio", 4.0))
+            limit = int(body.get("limit", 500))
+        except:
+            # Fallback to query parameters
+            symbol = request.query_params.get("symbol", "BTCUSDT")
+            interval = request.query_params.get("interval", "60")
+            strategy = request.query_params.get("strategy", "pattern3_extreme")
+            risk_per_trade = float(request.query_params.get("risk_per_trade", 100.0))
+            rr_ratio = float(request.query_params.get("rr_ratio", 4.0))
+            limit = int(request.query_params.get("limit", 500))
+        
         result = backtest_engine.run(
             symbol=symbol,
             interval=interval,

@@ -10,6 +10,12 @@ export function initPriceChart() {
     return;
   }
 
+  const PlotlyLib = window.Plotly;
+  if (!PlotlyLib || typeof PlotlyLib.newPlot !== "function") {
+    console.error("[CBP Plotly] Plotly.newPlot is not available", window.Plotly);
+    return;
+  }
+
   const layout = {
     margin: { t: 10, r: 10, b: 20, l: 40 },
     xaxis: {
@@ -42,12 +48,10 @@ export function initPriceChart() {
       };
     }
 
-    // Handle time conversion: can be unix timestamp (seconds or ms) or ISO string
     const x = candles.map(c => {
       if (typeof c.time === "string") {
         return new Date(c.time);
       } else if (typeof c.time === "number") {
-        // If timestamp > 1e12, it's in milliseconds, otherwise seconds
         return new Date(c.time > 1e12 ? c.time : c.time * 1000);
       }
       return new Date(c.time);
@@ -72,19 +76,18 @@ export function initPriceChart() {
 
   function initialRender() {
     const trace = buildTrace(dashboardState.candles);
-    Plotly.newPlot(rootId, [trace], layout, config);
+    PlotlyLib.newPlot(rootId, [trace], layout, config);
   }
 
   function updateChart() {
     const trace = buildTrace(dashboardState.candles);
-    Plotly.react(rootId, [trace], layout, config);
+    PlotlyLib.react(rootId, [trace], layout, config);
   }
 
   window.addEventListener("cbp:dashboard_update", updateChart);
   window.addEventListener("resize", () => {
-    Plotly.Plots.resize(rootEl);
+    PlotlyLib.Plots.resize(rootEl);
   });
 
   initialRender();
 }
-
