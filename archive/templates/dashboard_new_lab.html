@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🧠 CryptoBot Pro — Neural Dashboard</title>
+
+  <!-- Шрифты и стили -->
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+  <header>
+    <div class="logo">🧠 <span>CryptoBot Pro</span></div>
+    <div class="status">
+      <span id="status">🔗 Connecting...</span>
+      <span id="time"></span>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel backtest">
+      <h2>📊 Backtest Simulation</h2>
+      <canvas id="backtestChart"></canvas>
+      <div class="controls">
+        <button id="runBacktest">▶ Run</button>
+        <button id="pauseBacktest">⏸ Pause</button>
+        <button id="resetBacktest">🔄 Reset</button>
+      </div>
+    </section>
+
+    <section class="panel ai">
+      <h2>🤖 AI Insight Sphere</h2>
+      <div id="sphereContainer"></div>
+      <p id="aiText">Waiting for data...</p>
+    </section>
+
+    <section class="panel portfolio">
+      <h2>💼 Portfolio Metrics</h2>
+      <div class="metrics">
+        <div><b>PNL:</b> <span id="pnl">0%</span></div>
+        <div><b>Risk Level:</b> <span id="risk">--</span></div>
+        <div><b>Confidence:</b> <span id="confidence">--</span></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div id="log"></div>
+  </footer>
+
+  <!-- Скрипты -->
+  <script src="/static/js/dashboard.js"></script>
+  <script src="/static/js/backtest.js"></script>
+  <script src="/static/js/ai_panel.js"></script>
+
+ style="text-align:center;margin-top:10px;font-weight:bold;"></div>
+
+<div id="ai-panel-wrapper" style="display:flex;flex-direction:column;align-items:center;justify-content:center;margin-top:40px;">
+  <div id="ai-sphere" class="panel ai" style="width:400px;height:400px;"></div>
+  <div id="ai-confidence" style="text-align:center;margin-top:10px;font-weight:bold;color:#00ffaa;font-size:18px;">Confidence: --%</div>
+</div>
+</body>
+
+</html>

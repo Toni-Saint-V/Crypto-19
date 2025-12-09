@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CryptoBot Pro v8.0 — Trading Core</title>
+  <link rel="stylesheet" href="/static/css/trading_core.css">
+  <script src="/static/lib/lightweight-charts.js"></script>
+</head>
+<body>
+  <!-- Top Header Bar -->
+  <header class="top-header">
+    <div class="header-left">
+      <div class="logo">⚡ CryptoBot Pro v8.0</div>
+      <div class="status-indicator" id="connection-status">
+        <span class="status-dot"></span>
+        <span class="status-text">Connecting...</span>
+      </div>
+    </div>
+    <div class="header-center">
+      <div class="header-info">
+        <span class="info-label">Symbol:</span>
+        <span class="info-value" id="current-symbol">BTCUSDT</span>
+      </div>
+      <div class="header-info">
+        <span class="info-label">Timeframe:</span>
+        <span class="info-value" id="current-timeframe">60m</span>
+      </div>
+      <div class="header-info">
+        <span class="info-label">Strategy:</span>
+        <span class="info-value" id="current-strategy">Pattern3 Extreme</span>
+      </div>
+      <div class="header-info">
+        <span class="info-label">Mode:</span>
+        <span class="info-value" id="current-mode">Backtest</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="header-info">
+        <span class="info-label">PNL:</span>
+        <span class="info-value pnl" id="current-pnl">+0.00%</span>
+      </div>
+      <div class="header-controls">
+        <button id="run-btn" class="control-btn run">▶ Run</button>
+        <button id="pause-btn" class="control-btn pause">⏸ Pause</button>
+        <button id="settings-btn" class="control-btn settings">⚙</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Grid Layout -->
+  <main class="grid-container">
+    <!-- Left Panel: Strategy Library -->
+    <aside id="strategies-panel" class="panel left-panel">
+      <div class="panel-header">
+        <h3>📋 Strategy Library</h3>
+        <button id="new-strategy-btn" class="icon-btn" title="Create new strategy">＋</button>
+      </div>
+      <div class="panel-content">
+        <ul id="strategies-list">
+          <!-- Strategies will be loaded dynamically -->
+        </ul>
+        <div class="risk-settings">
+          <h4>⚙️ Risk Settings</h4>
+          <div class="risk-input-group">
+            <label>Risk per Trade ($)</label>
+            <input type="number" id="risk-usd" value="100" min="1" max="10000" step="10">
+          </div>
+          <div class="risk-input-group">
+            <label>R:R Ratio</label>
+            <input type="number" id="rr-ratio" value="4.0" min="0.5" max="10" step="0.5">
+          </div>
+          <div class="risk-input-group">
+            <label>Leverage</label>
+            <input type="number" id="leverage" value="1" min="1" max="10" step="1">
+          </div>
+        </div>
+        <div class="risk-status" id="risk-status-panel">
+          <h4>⚠️ Risk Status</h4>
+          <div class="risk-status-content">
+            <div class="risk-status-item">
+              <span class="risk-label">Status:</span>
+              <span class="risk-value" id="risk-status-value">Safe</span>
+            </div>
+            <div class="risk-status-item">
+              <span class="risk-label">Open Positions:</span>
+              <span class="risk-value" id="risk-positions">0/5</span>
+            </div>
+            <div class="risk-status-item">
+              <span class="risk-label">Drawdown:</span>
+              <span class="risk-value" id="risk-drawdown">0.00%</span>
+            </div>
+            <div class="risk-status-item">
+              <span class="risk-label">Daily Loss:</span>
+              <span class="risk-value" id="risk-daily-loss">0.00%</span>
+            </div>
+            <button id="resume-trading-btn" class="risk-btn" style="display: none;">Resume Trading</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Center: Chart Area -->
+    <section id="chart-area" class="chart-section">
+      <div class="chart-container">
+        <div id="mainChart"></div>
+      </div>
+      <div class="chart-controls">
+        <div class="control-group">
+          <label>Symbol</label>
+          <select id="symbol-select" class="chart-select">
+            <option value="BTCUSDT">BTCUSDT</option>
+            <option value="ETHUSDT">ETHUSDT</option>
+            <option value="BNBUSDT">BNBUSDT</option>
+            <option value="SOLUSDT">SOLUSDT</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>Timeframe</label>
+          <select id="timeframe-select" class="chart-select">
+            <option value="1">1m</option>
+            <option value="5">5m</option>
+            <option value="15">15m</option>
+            <option value="30">30m</option>
+            <option value="60" selected>60m</option>
+            <option value="240">4h</option>
+            <option value="1440">1d</option>
+            <option value="1500">1500m</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>Strategy</label>
+          <select id="strategy-select" class="chart-select">
+            <!-- Will be populated dynamically -->
+          </select>
+        </div>
+        <div class="control-group">
+          <label>Data Source</label>
+          <select id="data-source-select" class="chart-select">
+            <option value="exchange" selected>Exchange API</option>
+            <option value="csv">Local CSV</option>
+          </select>
+        </div>
+        <div class="control-group" id="exchange-group">
+          <label>Exchange</label>
+          <select id="exchange-select" class="chart-select">
+            <option value="bybit" selected>Bybit</option>
+            <option value="binance">Binance</option>
+          </select>
+        </div>
+        <div class="control-group" id="csv-group" style="display: none;">
+          <label>CSV File</label>
+          <input type="file" id="csv-file-input" accept=".csv" class="chart-select">
+          <button id="upload-csv-btn" class="control-btn">Upload</button>
+        </div>
+        <div class="control-group">
+          <label>Mode</label>
+          <select id="mode-select" class="chart-select">
+            <option value="backtest" selected>Backtest</option>
+            <option value="live">Live (Testnet)</option>
+          </select>
+        </div>
+        <button id="run-backtest-btn" class="control-btn run">Run Backtest</button>
+      </div>
+      <div class="chart-stats" id="chart-stats">
+        <!-- Backtest statistics will appear here -->
+      </div>
+    </section>
+
+    <!-- Right Panel: Signals & Trades -->
+    <aside id="signals-panel" class="panel right-panel">
+      <div class="panel-header">
+        <h3>🔔 Signals <span class="signal-count" id="signal-count">0</span></h3>
+        <button id="close-signals-btn" class="icon-btn" title="Close panel">✕</button>
+      </div>
+      <div class="panel-content">
+        <div id="signals-list" class="signals-list">
+          <!-- Signals will be dynamically added here -->
+        </div>
+        <div id="trades-list" class="trades-list">
+          <h4>Recent Trades</h4>
+          <div id="trades-content"></div>
+        </div>
+        <button id="clear-signals-btn" class="clear-btn">Clear All</button>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Bottom: AI Chat Console -->
+  <footer id="ai-console" class="ai-console">
+    <div class="console-header">
+      <h3>🤖 Toni AI Assistant</h3>
+      <span class="console-status" id="ai-status">Ready</span>
+    </div>
+    <div id="chat-log" class="chat-log">
+      <div class="chat-message system">
+        <span class="chat-time"></span>
+        <span class="chat-author">System:</span>
+        <span class="chat-text">Toni AI initialized. Ask about strategies, backtests, or market analysis.</span>
+      </div>
+    </div>
+    <div id="chat-inputs" class="chat-inputs">
+      <input 
+        type="text" 
+        id="chat-input" 
+        placeholder="Ask Toni about strategies, backtests, or market analysis..." 
+        autocomplete="off"
+      />
+      <button id="send-btn" class="send-btn">Send</button>
+    </div>
+  </footer>
+
+  <script src="/static/js/trading_core.js"></script>
+</body>
+</html>
