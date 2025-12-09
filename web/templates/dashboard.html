@@ -64,12 +64,16 @@
             background: #050811;
             position: relative;
             min-height: 300px;
+            display: flex;
+            align-items: stretch;
         }
         
         #main-chart {
             width: 100%;
             height: 100%;
             min-height: 300px;
+            flex: 1;
+            position: relative;
         }
         
         .trade-tooltip {
@@ -276,6 +280,23 @@
             display: inline-block;
         }
     </style>
+
+<style data-cbp-main-chart-style>
+  .cbp-main-chart-wrapper {
+    width: 100%;
+    height: 100%;
+  }
+  #main-chart {
+    width: 100%;
+    height: 100%;
+    min-height: 380px;
+  }
+  .tradingview-widget-container,
+  .tradingview-widget-container__widget,
+  .tradingview-widget-copyright {
+    display: none !important;
+  }
+</style>
 </head>
 <body>
     <div id="app" class="dashboard-container" x-data="dashboardApp()" x-init="init()" :data-mode="mode">
@@ -411,8 +432,9 @@
                     </h2>
                 </div>
                 <div class="chart-container flex-1 min-h-0">
-                    <div id="main-chart"></div>
+                    <div id="main-chart" style="width: 100%; height: 100%;"></div>
                     <div id="trade-tooltip" class="trade-tooltip"></div>
+                    <div id="chart-loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #8b949e; font-size: 14px; z-index: 1;">Загрузка графика...</div>
                 </div>
             </div>
         </div>
@@ -608,7 +630,7 @@
                         }, 400);
                     }
                     
-                    // Initialize chart after DOM is ready
+                    // Initialize chart after DOM is ready and container has size
                     setTimeout(() => {
                         this.ensureChartInitialized();
                         if (!window.__cbp_main_bootstrapped) {
@@ -617,7 +639,7 @@
                         if (this.mode === 'real' || this.mode === 'test') {
                             this.loadPrediction();
                         }
-                    }, 200);
+                    }, 300);
                     
                     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
                     const wsUrl = `${protocol}//${window.location.host}/ws/dashboard`;
@@ -638,6 +660,14 @@
                         return;
                     }
                     
+                    // Проверяем размеры контейнера
+                    const rect = chartEl.getBoundingClientRect();
+                    if (rect.width === 0 || rect.height === 0) {
+                        console.log('[Dashboard] Chart container has zero size, waiting...');
+                        setTimeout(() => this.ensureChartInitialized(), 100);
+                        return;
+                    }
+                    
                     // Check if chart is already initialized by main module
                     if (window.cbpDashboard?.initChart) {
                         window.cbpDashboard.initChart();
@@ -646,8 +676,10 @@
                         import('/static/js/cbp_charts.js').then(module => {
                             if (module.initChart) {
                                 module.initChart();
-                                this.updateChart();
+                                setTimeout(() => this.updateChart(), 200);
                             }
+                        }).catch(err => {
+                            console.error('[Dashboard] Failed to import chart module:', err);
                         });
                     }
                 },

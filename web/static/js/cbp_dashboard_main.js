@@ -134,14 +134,30 @@ async function bootstrap() {
     const timeframe = paramsPanel.getValue('timeframe') || '15m';
     await loadDashboardData(symbol, timeframe);
     
-    // Initialize chart
-    setTimeout(() => {
+    // Initialize chart - wait for container to have size
+    const initChartWithDelay = () => {
+      const chartContainer = document.getElementById('main-chart');
+      if (!chartContainer) {
+        setTimeout(initChartWithDelay, 100);
+        return;
+      }
+      
+      const rect = chartContainer.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        setTimeout(initChartWithDelay, 100);
+        return;
+      }
+      
       initChart();
       const symbol = paramsPanel.getValue('symbol') || 'BTCUSDT';
       const timeframe = paramsPanel.getValue('timeframe') || '15m';
       const exchange = paramsPanel.getValue('exchange') || 'bybit';
-      updateChart({ symbol, timeframe, exchange });
-    }, 200);
+      setTimeout(() => {
+        updateChart({ symbol, timeframe, exchange });
+      }, 300);
+    };
+    
+    setTimeout(initChartWithDelay, 300);
     
     // Setup WebSocket
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
