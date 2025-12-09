@@ -36,6 +36,21 @@ class Candle(BaseModel):
     volume: float
 
 
+class Trade(BaseModel):
+    """Represents a trade for display on chart and ticker."""
+    
+    entry_time: Union[float, int, str]
+    entry_price: float
+    exit_time: Optional[Union[float, int, str]] = None
+    exit_price: Optional[float] = None
+    side: str  # "buy" / "sell"
+    direction: Optional[str] = None  # "long" / "short"
+    size: Optional[float] = None
+    pnl: Optional[float] = None
+    result_R: Optional[float] = None
+    symbol: str
+
+
 class DashboardSnapshot(BaseModel):
     """Unified snapshot for the dashboard cards and chart."""
 
@@ -52,6 +67,7 @@ class DashboardSnapshot(BaseModel):
 
     candles: List[Candle]
     ai_signals: List[AISignal]
+    trades: List[Trade] = []  # Trades for chart markers and ticker
 
 
 async def get_dashboard_snapshot(
@@ -66,6 +82,9 @@ async def get_dashboard_snapshot(
     # Get real market data
     market_service = MarketDataService()
     candles_data = []
+    import logging
+    log = logging.getLogger(__name__)
+    
     try:
         ohlcv_data = await market_service.get_candles(
             exchange="bybit",
@@ -74,22 +93,36 @@ async def get_dashboard_snapshot(
             limit=500,
             mode="live"
         )
-        candles_data = [
-            Candle(
-                time=c.time,
-                open=float(c.open),
-                high=float(c.high),
-                low=float(c.low),
-                close=float(c.close),
-                volume=float(c.volume),
-            )
-            for c in ohlcv_data
-        ]
+        
+        # Validate and convert OHLCV to Candle format
+        if ohlcv_data:
+            for c in ohlcv_data:
+                try:
+                    # Validate OHLCV object has required attributes
+                    if not hasattr(c, 'time') or not hasattr(c, 'open'):
+                        log.warning(f"Skipping invalid candle: missing required attributes")
+                        continue
+                    
+                    candles_data.append(
+                        Candle(
+                            time=int(c.time),
+                            open=float(c.open),
+                            high=float(c.high),
+                            low=float(c.low),
+                            close=float(c.close),
+                            volume=float(c.volume) if hasattr(c, 'volume') else 0.0,
+                        )
+                    )
+                except (ValueError, TypeError, AttributeError) as e:
+                    log.warning(f"Error converting candle to Candle model: {e}, skipping")
+                    continue
+        else:
+            log.info(f"No OHLCV data returned for {symbol} {timeframe}")
+            
     except Exception as e:
-        # Fallback to empty candles on error
-        import logging
-        log = logging.getLogger(__name__)
-        log.warning(f"Failed to load real candles: {e}")
+        # Fallback to empty candles on error - don't crash the server
+        log.error(f"Failed to load real candles for {symbol} {timeframe}: {e}", exc_info=True)
+        candles_data = []
 
     # Generate AI signals (placeholder for now)
     ai_signals: List[AISignal] = [
@@ -103,6 +136,30 @@ async def get_dashboard_snapshot(
         )
     ] if candles_data else []
 
+    # Generate sample trades for demonstration (replace with real trades later)
+    trades: List[Trade] = []
+    if candles_data:
+        # Add a few sample trades based on recent candles
+        try:
+            last_candle = candles_data[-1]
+            entry_price = float(last_candle.close)
+            
+            # Sample trade 1
+            trades.append(Trade(
+                entry_time=candles_data[-10].time if len(candles_data) >= 10 else candles_data[0].time,
+                entry_price=entry_price * 0.99,
+                exit_time=last_candle.time,
+                exit_price=entry_price,
+                side="buy",
+                direction="long",
+                size=0.1,
+                pnl=entry_price * 0.01 * 0.1,
+                result_R=1.0,
+                symbol=symbol
+            ))
+        except Exception as e:
+            log.warning(f"Error generating sample trades: {e}")
+
     return DashboardSnapshot(
         balance=10000.0,
         daily_pnl_pct=1.23,
@@ -114,4 +171,5 @@ async def get_dashboard_snapshot(
         timeframe=timeframe,
         candles=candles_data,
         ai_signals=ai_signals,
+        trades=trades,
     )

@@ -360,12 +360,13 @@ async def api_ai_chat(request: Request):
         
         # Use Toni AI service (created at module scope)
         try:
-            response = await toni_service.generate_response(
+            response = await toni_service.answer(
                 user_message,
                 ToniContext(
-                    symbol=context.get("symbol", "BTCUSDT"),
-                    timeframe=context.get("timeframe", "15m"),
-                    balance=context.get("balance", 10000)
+                    current_symbol=context.get("symbol", "BTCUSDT"),
+                    current_timeframe=context.get("timeframe", "15m"),
+                    is_live_mode=True,
+                    additional_data={"balance": context.get("balance", 10000)}
                 )
             )
         except Exception as e:
@@ -401,8 +402,9 @@ async def api_backtest_run(request: Request):
             risk_per_trade = float(body.get("risk_per_trade", 100.0))
             rr_ratio = float(body.get("rr_ratio", 4.0))
             limit = int(body.get("limit", 500))
-        except:
-            # Fallback to query parameters
+        except (ValueError, KeyError, TypeError) as json_error:
+            # Fallback to query parameters if JSON parsing fails
+            log.debug(f"JSON body parsing failed, using query params: {json_error}")
             symbol = request.query_params.get("symbol", "BTCUSDT")
             interval = request.query_params.get("interval", "60")
             strategy = request.query_params.get("strategy", "pattern3_extreme")

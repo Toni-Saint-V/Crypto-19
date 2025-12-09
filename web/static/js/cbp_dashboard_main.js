@@ -3,7 +3,14 @@
 import { fetchDashboardSnapshot } from "./cbp_api.js";
 import { dashboardState } from "./cbp_state.js";
 import { initDashboardRealtime } from "./cbp_realtime.js";
-import { initPriceChart } from "./cbp_plotly_chart.js";
+import { initChart, updateChart } from "./cbp_charts.js";
+import { TradeTicker } from "./cbp_ticker.js";
+import { ParamsPanel } from "./cbp_params_panel.js";
+import { AIPanel } from "./cbp_ai_panel.js";
+
+let ticker = null;
+let paramsPanel = null;
+let aiPanel = null;
 
 function bindStaticUI() {
   const els = {
@@ -13,7 +20,6 @@ function bindStaticUI() {
     winrate: document.querySelector("[data-cbp='winrate']"),
     activePositions: document.querySelector("[data-cbp='active-positions']"),
     riskLevel: document.querySelector("[data-cbp='risk-level']"),
-    aiSignalsContainer: document.querySelector("[data-cbp='ai-signals']"),
   };
 
   function renderSnapshot() {
@@ -24,7 +30,6 @@ function bindStaticUI() {
     if (els.dailyPnl && s.dailyPnlPct != null) {
       const sign = s.dailyPnlPct >= 0 ? "+" : "";
       els.dailyPnl.textContent = `${sign}${s.dailyPnlPct.toFixed(2)}%`;
-      // Update color class
       if (s.dailyPnlPct >= 0) {
         els.dailyPnl.classList.remove("text-red-400");
         els.dailyPnl.classList.add("text-green-400");
@@ -44,7 +49,6 @@ function bindStaticUI() {
     }
     if (els.riskLevel && s.riskLevelPct != null) {
       els.riskLevel.textContent = `${s.riskLevelPct.toFixed(0)}%`;
-      // Update color class based on risk level
       els.riskLevel.classList.remove("text-red-400", "text-yellow-400", "text-green-400");
       if (s.riskLevelPct > 70) {
         els.riskLevel.classList.add("text-red-400");
@@ -54,83 +58,98 @@ function bindStaticUI() {
         els.riskLevel.classList.add("text-green-400");
       }
     }
-
-    if (els.aiSignalsContainer) {
-      els.aiSignalsContainer.innerHTML = "";
-      (s.aiSignals || []).forEach(sig => {
-        const item = document.createElement("div");
-        item.className = "p-4 bg-white/5 rounded-lg ai-signal-item";
-
-        const sideLabel = sig.side?.toUpperCase() === "BUY" ? "КУПИТЬ" : "ПРОДАТЬ";
-        const conf = typeof sig.confidence === "number"
-          ? `${sig.confidence.toFixed(1)}%`
-          : "";
-
-        item.innerHTML = `
-          <div class="flex items-center justify-between mb-2">
-            <span class="font-semibold">${sig.symbol}</span>
-            <span class="text-sm font-bold ${sideLabel === "КУПИТЬ" ? "text-green-400" : "text-red-400"}">${sideLabel}</span>
-          </div>
-          <div class="text-sm text-gray-400">
-            <div class="flex justify-between">
-              <span>Уверенность:</span>
-              <span>${conf}</span>
-            </div>
-            <div class="flex justify-between">
-              <span>Вход:</span>
-              <span>$${sig.entry}</span>
-            </div>
-            <div class="flex justify-between">
-              <span>Цель:</span>
-              <span>$${sig.target}</span>
-            </div>
-            ${sig.stop ? `<div class="flex justify-between"><span>Stop:</span><span>$${sig.stop}</span></div>` : ""}
-          </div>
-          <button class="mt-3 w-full py-1 bg-purple-600/50 rounded text-xs hover:bg-purple-600/70 transition">
-            Исполнить сделку
-          </button>
-        `;
-
-        els.aiSignalsContainer.appendChild(item);
-      });
-    }
   }
 
   renderSnapshot();
   window.addEventListener("cbp:dashboard_update", renderSnapshot);
-
-  // Self-check
-  Object.entries(els).forEach(([key, el]) => {
-    if (!el && key !== "aiSignalsContainer") {
-      console.warn(`[CBP SelfCheck] Missing element for`, key);
-    }
-  });
 }
 
 async function bootstrap() {
-  const symbol = "BTCUSDT"; // TODO: связать с UI
-  const timeframe = "15m";
+  console.log("[CBP] Initializing dashboard...");
+  
+  try {
+    // Initialize UI bindings
+    bindStaticUI();
+    
+    // Initialize ticker
+    ticker = new TradeTicker('trade-ticker');
+    
+    // Initialize params panel
+    paramsPanel = new ParamsPanel('params-panel');
+    paramsPanel.onChange((key, value, allValues) => {
+      console.log(`[CBP] Param changed: ${key} = ${value}`);
+      // Update chart when params change
+      const symbol = allValues.symbol || 'BTCUSDT';
+      const timeframe = allValues.timeframe || '15m';
+      const exchange = allValues.exchange || 'bybit';
+      
+      updateChart({
+        symbol,
+        timeframe,
+        exchange
+      });
+      
+      // Reload dashboard data
+      loadDashboardData(symbol, timeframe);
+    });
+    
+    // Initialize AI panel
+    aiPanel = new AIPanel('ai-panel');
+    
+    // Load initial data
+    const symbol = paramsPanel.getValue('symbol') || 'BTCUSDT';
+    const timeframe = paramsPanel.getValue('timeframe') || '15m';
+    await loadDashboardData(symbol, timeframe);
+    
+    // Initialize chart
+    setTimeout(() => {
+      initChart();
+      const symbol = paramsPanel.getValue('symbol') || 'BTCUSDT';
+      const timeframe = paramsPanel.getValue('timeframe') || '15m';
+      const exchange = paramsPanel.getValue('exchange') || 'bybit';
+      updateChart({ symbol, timeframe, exchange });
+    }, 200);
+    
+    // Setup WebSocket
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws/dashboard`;
+    initDashboardRealtime({ wsUrl });
+    
+    // Periodic updates
+    setInterval(async () => {
+      const symbol = paramsPanel?.getValue('symbol') || 'BTCUSDT';
+      const timeframe = paramsPanel?.getValue('timeframe') || '15m';
+      await loadDashboardData(symbol, timeframe);
+    }, 5000);
+    
+    console.log("[CBP] Dashboard initialized successfully");
+  } catch (error) {
+    console.error("[CBP] Failed to initialize dashboard:", error);
+  }
+}
 
+async function loadDashboardData(symbol, timeframe) {
   try {
     const snapshot = await fetchDashboardSnapshot({ symbol, timeframe });
     dashboardState.setSnapshot(snapshot);
-    console.log("[CBP] Initial snapshot loaded");
-  } catch (e) {
-    console.error("[CBP] Failed to load snapshot", e);
+    
+    // Update ticker with trades if available
+    if (snapshot.trades && ticker) {
+      ticker.setTrades(snapshot.trades);
+    }
+    
+    console.log(`[CBP] Dashboard data loaded for ${symbol} ${timeframe}`);
+  } catch (error) {
+    console.error("[CBP] Failed to load dashboard data:", error);
   }
-
-  bindStaticUI();
-  initPriceChart();
-
-  // Determine WebSocket URL
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const wsUrl = `${protocol}//${window.location.host}/ws/dashboard`;
-  
-  initDashboardRealtime({
-    wsUrl: wsUrl,
-  });
-
-  console.log("[CBP] Dashboard initialized");
 }
+
+// Export for global access
+window.cbpDashboard = {
+  ticker,
+  paramsPanel,
+  aiPanel,
+  loadDashboardData
+};
 
 document.addEventListener("DOMContentLoaded", bootstrap);

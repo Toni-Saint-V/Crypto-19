@@ -3,11 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CryptoBot Pro - Advanced Dashboard</title>
+    <title>CryptoBot Pro - Dashboard</title>
     
     <!-- External Libraries -->
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     
@@ -16,19 +15,26 @@
         
         * {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            overflow: hidden;
         }
         
         body {
             background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3e 50%, #0f0f23 100%);
-            min-height: 100vh;
-            overflow-x: hidden;
+            color: #d0d4e4;
         }
         
         .glass-card {
             background: rgba(15, 23, 42, 0.7);
             backdrop-filter: blur(20px);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
+            border-radius: 12px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
         }
         
@@ -51,9 +57,8 @@
         
         .chart-container {
             width: 100%;
-            height: 600px;
-            min-height: 500px;
-            border-radius: 16px;
+            height: 100%;
+            border-radius: 12px;
             overflow: hidden;
             background: #050811;
             position: relative;
@@ -62,52 +67,6 @@
         #main-chart {
             width: 100%;
             height: 100%;
-        }
-        
-        .controls-panel {
-            transition: all 0.3s ease;
-            transform: translateX(0);
-        }
-        
-        .controls-panel.hidden {
-            transform: translateX(-100%);
-            opacity: 0;
-            pointer-events: none;
-        }
-        
-        .ticker {
-            overflow: hidden;
-            white-space: nowrap;
-        }
-        
-        .ticker-content {
-            display: inline-block;
-            animation: scroll 30s linear infinite;
-        }
-        
-        @keyframes scroll {
-            0% { transform: translateX(100%); }
-            100% { transform: translateX(-100%); }
-        }
-        
-        .trade-marker {
-            position: absolute;
-            width: 0;
-            height: 0;
-            cursor: pointer;
-            z-index: 10;
-        }
-        
-        .trade-marker.buy {
-            border-left: 8px solid transparent;
-            border-right: 8px solid transparent;
-            border-bottom: 12px solid #22c55e;
-        }
-        
-        .trade-marker.sell {
-            border-left: 8px solid transparent;
-            border-right: 8px solid transparent;
-            border-top: 12px solid #ef4444;
         }
         
         .trade-tooltip {
@@ -128,38 +87,19 @@
             opacity: 1;
         }
         
-        .ai-chat {
-            max-height: 400px;
-            overflow-y: auto;
+        .ticker {
+            height: 32px;
+            overflow: hidden;
+            white-space: nowrap;
+            position: relative;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
         }
         
-        .ai-chat::-webkit-scrollbar {
-            width: 6px;
-        }
-        
-        .ai-chat::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 3px;
-        }
-        
-        .ai-chat::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 3px;
-        }
-        
-        .slide-in {
-            animation: slideIn 0.3s ease-out;
-        }
-        
-        @keyframes slideIn {
-            from {
-                transform: translateX(-100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
+        .ticker-content {
+            display: inline-block;
+            white-space: nowrap;
+            padding: 0 20px;
         }
         
         .param-input {
@@ -169,6 +109,7 @@
             padding: 8px 12px;
             color: white;
             transition: all 0.2s;
+            width: 100%;
         }
         
         .param-input:focus {
@@ -177,341 +118,168 @@
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
         
-        .toggle-btn {
-            position: fixed;
-            top: 50%;
-            left: 0;
-            transform: translateY(-50%);
-            z-index: 100;
-            background: rgba(102, 126, 234, 0.9);
-            border: none;
-            border-radius: 0 12px 12px 0;
-            padding: 12px 8px;
-            cursor: pointer;
-            color: white;
-            font-size: 20px;
-            transition: all 0.3s;
+        .mode-toggle {
+            display: inline-flex;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 2px;
+            gap: 2px;
         }
         
-        .toggle-btn:hover {
-            background: rgba(102, 126, 234, 1);
-            transform: translateY(-50%) translateX(4px);
+        .mode-btn {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: none;
+            background: transparent;
+            color: #8b949e;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        
+        .mode-btn.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .ai-chat-messages {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .ai-chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .ai-chat-messages::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+        }
+        
+        .ai-chat-messages::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+        
+        /* No vertical scroll */
+        .dashboard-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
     </style>
 </head>
-<body class="text-white">
-    <div id="app" x-data="dashboardApp()">
-        <!-- Заголовок с бегущей строкой -->
-        <header class="bg-black/40 backdrop-blur-xl border-b border-white/10 sticky top-0 z-50">
-            <div class="container mx-auto px-6 py-4">
-                <div class="flex items-center justify-between mb-2">
-                    <div class="flex items-center space-x-4">
-                        <h1 class="text-3xl font-bold gradient-text">CryptoBot Pro</h1>
-                        <div class="flex items-center space-x-2">
-                            <div :class="status === 'онлайн' ? 'bg-green-500' : 'bg-red-500'" 
-                                 class="w-3 h-3 rounded-full status-online"></div>
-                            <span class="text-sm text-gray-400" x-text="status"></span>
-                        </div>
-                    </div>
-                    <div class="flex items-center space-x-6">
-                        <div class="text-sm">
-                            <span class="text-gray-400">Баланс:</span>
-                            <span class="font-semibold text-lg ml-2" data-cbp="balance" x-text="'$' + balance.toFixed(2)">$10 000.00</span>
-                        </div>
-                        <div class="text-sm">
-                            <span class="text-gray-400">П/У за 24ч:</span>
-                            <span :class="dailyPnl >= 0 ? 'text-green-400' : 'text-red-400'" 
-                                  class="font-semibold text-lg ml-2" 
-                                  data-cbp="daily-pnl"
-                                  x-text="(dailyPnl >= 0 ? '+' : '') + dailyPnl.toFixed(2) + '%'">+1.23%</span>
-                        </div>
-                    </div>
+<body>
+    <div id="app" class="dashboard-container" x-data="dashboardApp()" x-init="init()">
+        <!-- Header with mode toggle -->
+        <header class="px-6 py-3 border-b border-white/10 flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <h1 class="text-2xl font-bold gradient-text">CryptoBot Pro</h1>
+                <div class="flex items-center space-x-2">
+                    <div :class="status === 'онлайн' ? 'bg-green-500' : 'bg-red-500'" 
+                         class="w-2 h-2 rounded-full status-online"></div>
+                    <span class="text-sm text-gray-400" x-text="status"></span>
                 </div>
-                <!-- Бегущая строка (опционально) -->
-                <div x-show="showTicker" class="ticker bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-lg p-2">
-                    <div class="ticker-content text-sm text-gray-300">
-                        <span x-text="tickerText"></span>
-                    </div>
+            </div>
+            <div class="flex items-center space-x-6">
+                <div class="text-sm">
+                    <span class="text-gray-400">Баланс:</span>
+                    <span class="font-semibold ml-2" data-cbp="balance" x-text="'$' + (balance || 0).toFixed(2)">$10 000.00</span>
+                </div>
+                <div class="text-sm">
+                    <span class="text-gray-400">П/У за 24ч:</span>
+                    <span :class="(dailyPnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'" 
+                          class="font-semibold ml-2" 
+                          data-cbp="daily-pnl"
+                          x-text="((dailyPnl || 0) >= 0 ? '+' : '') + (dailyPnl || 0).toFixed(2) + '%'">+1.23%</span>
+                </div>
+                <!-- Mode Toggle -->
+                <div class="mode-toggle">
+                    <button @click="setMode('real')" :class="{'active': mode === 'real'}" class="mode-btn">Real</button>
+                    <button @click="setMode('test')" :class="{'active': mode === 'test'}" class="mode-btn">Test</button>
+                    <button @click="setMode('backtest')" :class="{'active': mode === 'backtest'}" class="mode-btn">BackTest</button>
                 </div>
             </div>
         </header>
 
-        <!-- Кнопка переключения панели параметров -->
-        <button @click="toggleControls()" class="toggle-btn" x-text="controlsVisible ? '◀' : '▶'"></button>
-
-        <!-- Панель параметров (выезжающая) -->
-        <div class="controls-panel fixed left-0 top-0 h-full w-80 bg-black/90 backdrop-blur-xl border-r border-white/10 z-40 p-6 overflow-y-auto"
-             :class="{'hidden': !controlsVisible}">
-            <h2 class="text-xl font-bold mb-6 gradient-text">Параметры графика</h2>
-            
-            <!-- Валюта (топ 10 крипты) -->
-            <div class="mb-6">
-                <label class="block text-sm text-gray-400 mb-2">Валюта</label>
-                <select x-model="chartParams.symbol" @change="updateChart()" class="param-input w-full">
-                    <template x-for="symbol in topCryptos" :key="symbol.value">
-                        <option :value="symbol.value" x-text="symbol.label"></option>
-                    </template>
-                </select>
-            </div>
-            
-            <!-- Биржа -->
-            <div class="mb-6">
-                <label class="block text-sm text-gray-400 mb-2">Биржа</label>
-                <select x-model="chartParams.exchange" @change="updateChart()" class="param-input w-full">
-                    <option value="bybit">Bybit</option>
-                    <option value="binance">Binance</option>
-                </select>
-            </div>
-            
-            <!-- Таймфрейм -->
-            <div class="mb-6">
-                <label class="block text-sm text-gray-400 mb-2">Таймфрейм</label>
-                <div class="flex gap-2 mb-2">
-                    <input type="number" x-model="chartParams.timeframeValue" 
-                           @change="updateChart()" 
-                           class="param-input flex-1" 
-                           placeholder="Значение" 
-                           min="1">
-                    <select x-model="chartParams.timeframeUnit" @change="updateChart()" class="param-input w-24">
-                        <option value="m">Минуты</option>
-                        <option value="h">Часы</option>
-                        <option value="d">Дни</option>
-                    </select>
+        <!-- Metrics Row (Compact) -->
+        <div class="px-6 py-3">
+            <div class="grid grid-cols-4 gap-3">
+                <div class="glass-card p-4">
+                    <div class="text-xs text-gray-400 mb-1">Общая прибыль</div>
+                    <div class="text-xl font-bold text-green-400" data-cbp="total-profit" x-text="'$' + (totalProfit || 0).toFixed(2)">$2 500.00</div>
                 </div>
-                <div class="flex flex-wrap gap-2 mt-2">
-                    <button @click="setQuickTimeframe('1m')" class="px-3 py-1 bg-white/10 rounded text-xs hover:bg-white/20">1м</button>
-                    <button @click="setQuickTimeframe('5m')" class="px-3 py-1 bg-white/10 rounded text-xs hover:bg-white/20">5м</button>
-                    <button @click="setQuickTimeframe('15m')" class="px-3 py-1 bg-white/10 rounded text-xs hover:bg-white/20">15м</button>
-                    <button @click="setQuickTimeframe('1h')" class="px-3 py-1 bg-white/10 rounded text-xs hover:bg-white/20">1ч</button>
-                    <button @click="setQuickTimeframe('4h')" class="px-3 py-1 bg-white/10 rounded text-xs hover:bg-white/20">4ч</button>
-                    <button @click="setQuickTimeframe('1d')" class="px-3 py-1 bg-white/10 rounded text-xs hover:bg-white/20">1д</button>
+                <div class="glass-card p-4">
+                    <div class="text-xs text-gray-400 mb-1">Винрейт</div>
+                    <div class="text-xl font-bold" data-cbp="winrate" x-text="(winRate || 0).toFixed(1) + '%'">62.5%</div>
+                </div>
+                <div class="glass-card p-4">
+                    <div class="text-xs text-gray-400 mb-1">Активных позиций</div>
+                    <div class="text-xl font-bold" data-cbp="active-positions" x-text="activePositions || 0">2</div>
+                </div>
+                <div class="glass-card p-4">
+                    <div class="text-xs text-gray-400 mb-1">Уровень риска</div>
+                    <div class="text-xl font-bold" :class="(riskScore || 0) > 70 ? 'text-red-400' : (riskScore || 0) > 40 ? 'text-yellow-400' : 'text-green-400'" 
+                         data-cbp="risk-level" x-text="(riskScore || 0) + '%'">35%</div>
                 </div>
             </div>
-            
-            <!-- Стратегия -->
-            <div class="mb-6">
-                <label class="block text-sm text-gray-400 mb-2">Стратегия</label>
-                <select x-model="chartParams.strategy" @change="updateChart()" class="param-input w-full">
-                    <option value="momentum_ml_v2">Momentum ML v2</option>
-                    <option value="pattern3_extreme">Pattern3 Extreme</option>
-                    <option value="example_strategy">Example Strategy</option>
-                </select>
-            </div>
-            
-            <!-- Риск в долларах -->
-            <div class="mb-6">
-                <label class="block text-sm text-gray-400 mb-2">Риск на сделку ($)</label>
-                <input type="number" x-model="chartParams.riskDollars" 
-                       @change="updateChart()" 
-                       class="param-input w-full" 
-                       placeholder="100" 
-                       min="1" 
-                       step="0.01">
-            </div>
-            
-            <!-- Кнопка бэктеста -->
-            <button @click="runBacktest()" 
-                    :disabled="backtestRunning"
-                    class="w-full py-3 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50">
-                <span x-show="!backtestRunning">🚀 Запустить бэктест</span>
-                <span x-show="backtestRunning">⏳ Запуск...</span>
-            </button>
         </div>
 
-        <!-- Основной контент -->
-        <main class="container mx-auto px-6 py-8" :style="controlsVisible ? 'margin-left: 320px;' : ''">
-            <!-- Метрики -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <div class="glass-card p-6">
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="text-gray-400 text-sm">Общая прибыль</div>
-                        <svg class="w-8 h-8 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clip-rule="evenodd"></path>
-                        </svg>
-                    </div>
-                    <div class="text-3xl font-bold text-green-400" data-cbp="total-profit" x-text="'$' + totalProfit.toFixed(2)">$2 500.00</div>
-                    <div class="text-xs text-gray-500 mt-2">За все время</div>
-                </div>
+        <!-- Ticker -->
+        <div class="px-6 mb-3">
+            <div id="trade-ticker" class="ticker"></div>
+        </div>
 
-                <div class="glass-card p-6">
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="text-gray-400 text-sm">Винрейт</div>
-                        <svg class="w-8 h-8 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"></path>
-                            <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 1 1 0 000 2H6a2 2 0 100 4h2a2 2 0 100 4h2a1 1 0 100 2 2 2 0 01-2 2H4a2 2 0 01-2-2V7a2 2 0 012-2z" clip-rule="evenodd"></path>
-                        </svg>
-                    </div>
-                    <div class="text-3xl font-bold" data-cbp="winrate" x-text="winRate.toFixed(1) + '%'">62.5%</div>
-                    <div class="text-xs text-gray-500 mt-2">Последние 100 сделок</div>
+        <!-- Main Content: Chart + Params Sidebar -->
+        <div class="flex-1 flex gap-4 px-6 pb-4 min-h-0">
+            <!-- Chart Area -->
+            <div class="flex-1 glass-card p-4 flex flex-col min-w-0">
+                <div class="flex items-center justify-between mb-2">
+                    <h2 class="text-sm font-semibold">
+                        <span x-text="chartParams.symbol || 'BTCUSDT'"></span> 
+                        <span class="text-gray-400" x-text="getTimeframeString()"></span>
+                    </h2>
                 </div>
-
-                <div class="glass-card p-6">
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="text-gray-400 text-sm">Активных позиций</div>
-                        <svg class="w-8 h-8 text-purple-500" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"></path>
-                        </svg>
-                    </div>
-                    <div class="text-3xl font-bold" data-cbp="active-positions" x-text="activePositions">2</div>
-                    <div class="text-xs text-gray-500 mt-2">Сейчас открыто</div>
-                </div>
-
-                <div class="glass-card p-6">
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="text-gray-400 text-sm">Уровень риска</div>
-                        <svg class="w-8 h-8 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
-                        </svg>
-                    </div>
-                    <div class="text-3xl font-bold" :class="riskScore > 70 ? 'text-red-400' : riskScore > 40 ? 'text-yellow-400' : 'text-green-400'" data-cbp="risk-level" x-text="riskScore + '%'">35%</div>
-                    <div class="text-xs text-gray-500 mt-2">Текущая экспозиция</div>
+                <div class="chart-container flex-1">
+                    <div id="main-chart"></div>
+                    <div id="trade-tooltip" class="trade-tooltip"></div>
                 </div>
             </div>
 
-            <!-- График и AI панель -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                <!-- Основной график -->
-                <div class="lg:col-span-2 glass-card p-6">
-                    <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-xl font-semibold">
-                            <span x-text="chartParams.symbol"></span> 
-                            <span class="text-gray-400 text-sm" x-text="getTimeframeString()"></span>
-                        </h2>
-                        <div class="flex space-x-2">
-                            <button @click="toggleControls()" class="px-4 py-2 bg-white/10 rounded-lg hover:bg-white/20 transition text-sm">
-                                ⚙️ Параметры
-                            </button>
-                        </div>
-                    </div>
-                    <div class="chart-container">
-                        <div id="main-chart"></div>
-                        <div id="trade-tooltip" class="trade-tooltip"></div>
-                    </div>
-                </div>
-
-                <!-- AI Диалоговое окно -->
-                <div class="glass-card p-6 flex flex-col">
-                    <h2 class="text-xl font-semibold mb-4">🤖 AI Ассистент</h2>
-                    <div class="ai-chat flex-1 mb-4 space-y-3" x-ref="chatContainer">
-                        <template x-for="(msg, idx) in aiMessages" :key="idx">
-                            <div :class="msg.role === 'user' ? 'text-right' : 'text-left'">
-                                <div :class="msg.role === 'user' ? 'bg-blue-600/30 ml-auto' : 'bg-white/5'" 
-                                     class="inline-block p-3 rounded-lg max-w-[80%] text-sm">
-                                    <div x-text="msg.text"></div>
-                                    <div class="text-xs text-gray-400 mt-1" x-text="msg.time"></div>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                    <div class="flex gap-2">
-                        <input type="text" 
-                               x-model="aiInput" 
-                               @keyup.enter="sendAIMessage()"
-                               placeholder="Спросите AI..."
-                               class="flex-1 param-input text-sm">
-                        <button @click="sendAIMessage()" 
-                                class="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg hover:opacity-90 transition">
-                            ➤
-                        </button>
-                    </div>
-                    <!-- AI Сигналы -->
-                    <div class="mt-4 pt-4 border-t border-white/10">
-                        <h3 class="text-sm font-semibold mb-2">📊 Сигналы</h3>
-                        <div class="space-y-2 max-h-32 overflow-y-auto" data-cbp="ai-signals">
-                            <template x-for="signal in aiSignals" :key="signal.id">
-                                <div class="p-2 bg-white/5 rounded-lg text-xs">
-                                    <div class="flex justify-between items-center">
-                                        <span x-text="signal.symbol"></span>
-                                        <span :class="signal.side === 'buy' ? 'text-green-400' : 'text-red-400'" 
-                                              x-text="signal.side === 'buy' ? 'КУПИТЬ' : 'ПРОДАТЬ'"></span>
-                                    </div>
-                                    <div class="text-gray-400 mt-1">
-                                        Уверенность: <span x-text="signal.confidence + '%'"></span>
-                                    </div>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-                </div>
+            <!-- Params Sidebar (Always Visible) -->
+            <div class="w-80 glass-card p-4 flex flex-col min-h-0">
+                <h2 class="text-sm font-semibold mb-4">Параметры</h2>
+                <div id="params-panel" class="flex-1 overflow-y-auto"></div>
             </div>
+        </div>
 
-            <!-- Статистика бэктеста и сделки -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                <!-- Статистика бэктеста -->
-                <div class="glass-card p-6" x-show="backtestStats">
-                    <h2 class="text-xl font-semibold mb-4">📈 Статистика бэктеста</h2>
-                    <div class="grid grid-cols-2 gap-4" x-show="backtestStats">
-                        <div>
-                            <div class="text-gray-400 text-sm">Общая прибыль</div>
-                            <div class="text-2xl font-bold" :class="backtestStats.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'"
-                                 x-text="'$' + (backtestStats.totalProfit || 0).toFixed(2)">$0.00</div>
-                        </div>
-                        <div>
-                            <div class="text-gray-400 text-sm">Винрейт</div>
-                            <div class="text-2xl font-bold" x-text="(backtestStats.winRate || 0).toFixed(1) + '%'">0%</div>
-                        </div>
-                        <div>
-                            <div class="text-gray-400 text-sm">Всего сделок</div>
-                            <div class="text-2xl font-bold" x-text="backtestStats.totalTrades || 0">0</div>
-                        </div>
-                        <div>
-                            <div class="text-gray-400 text-sm">Средний R</div>
-                            <div class="text-2xl font-bold" x-text="(backtestStats.avgR || 0).toFixed(2)">0.00</div>
-                        </div>
-                        <div>
-                            <div class="text-gray-400 text-sm">Макс. просадка</div>
-                            <div class="text-2xl font-bold text-red-400" x-text="(backtestStats.maxDrawdown || 0).toFixed(2) + '%'">0%</div>
-                        </div>
-                        <div>
-                            <div class="text-gray-400 text-sm">Sharpe Ratio</div>
-                            <div class="text-2xl font-bold" x-text="(backtestStats.sharpeRatio || 0).toFixed(2)">0.00</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Текущие сделки -->
-                <div class="glass-card p-6">
-                    <h2 class="text-xl font-semibold mb-4">💼 Текущие сделки</h2>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-sm">
-                            <thead class="text-gray-400 border-b border-white/10">
-                                <tr>
-                                    <th class="text-left py-2">Символ</th>
-                                    <th class="text-left py-2">Сторона</th>
-                                    <th class="text-left py-2">Размер</th>
-                                    <th class="text-left py-2">Вход</th>
-                                    <th class="text-left py-2">П/У</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <template x-for="position in positions" :key="position.id">
-                                    <tr class="border-b border-white/5">
-                                        <td class="py-3" x-text="position.symbol"></td>
-                                        <td class="py-3">
-                                            <span :class="position.side === 'ЛОНГ' ? 'text-green-400' : 'text-red-400'" 
-                                                  x-text="position.side"></span>
-                                        </td>
-                                        <td class="py-3" x-text="position.size"></td>
-                                        <td class="py-3" x-text="'$' + position.entry"></td>
-                                        <td class="py-3">
-                                            <span :class="position.pnl >= 0 ? 'text-green-400' : 'text-red-400'" 
-                                                  x-text="(position.pnl >= 0 ? '+' : '') + '$' + position.pnl.toFixed(2)"></span>
-                                        </td>
-                                    </tr>
-                                </template>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+        <!-- AI Assistant Panel (Full Width Bottom) -->
+        <div class="px-6 pb-4">
+            <div class="glass-card p-4">
+                <div id="ai-panel"></div>
             </div>
-        </main>
+        </div>
     </div>
 
-    <script>
+    <script type="module">
+        import { initChart, updateChart } from '/static/js/cbp_charts.js';
+        import { TradeTicker } from '/static/js/cbp_ticker.js';
+        import { ParamsPanel } from '/static/js/cbp_params_panel.js';
+        import { AIPanel } from '/static/js/cbp_ai_panel.js';
+        import { fetchDashboardSnapshot } from '/static/js/cbp_api.js';
+        import { dashboardState } from '/static/js/cbp_state.js';
+        import { initDashboardRealtime } from '/static/js/cbp_realtime.js';
+
+        // Initialize components
+        let ticker = null;
+        let paramsPanel = null;
+        let aiPanel = null;
+
         function dashboardApp() {
             return {
-                // Статус
                 status: 'онлайн',
+                mode: 'real',
                 balance: 10000,
                 dailyPnl: 2.35,
                 totalProfit: 2847.50,
@@ -519,345 +287,109 @@
                 activePositions: 3,
                 riskScore: 35,
                 
-                // Параметры графика
                 chartParams: {
                     symbol: 'BTCUSDT',
                     exchange: 'bybit',
-                    timeframeValue: 15,
-                    timeframeUnit: 'm',
+                    timeframe: '15m',
                     strategy: 'momentum_ml_v2',
                     riskDollars: 100
                 },
                 
-                // UI состояние
-                controlsVisible: false,
-                showTicker: true,
-                tickerText: '🚀 CryptoBot Pro - Профессиональная торговля криптовалютой | Реальное время | AI аналитика',
-                
-                // AI чат
-                aiMessages: [
-                    { role: 'ai', text: 'Привет! Я AI ассистент CryptoBot Pro. Могу помочь с анализом рынка, стратегиями и сигналами. Что вас интересует?', time: new Date().toLocaleTimeString('ru-RU') }
-                ],
-                aiInput: '',
-                
-                // Данные
-                topCryptos: [
-                    { value: "BTCUSDT", label: "BTC/USDT" },
-                    { value: "ETHUSDT", label: "ETH/USDT" },
-                    { value: "BNBUSDT", label: "BNB/USDT" },
-                    { value: "SOLUSDT", label: "SOL/USDT" },
-                    { value: "XRPUSDT", label: "XRP/USDT" },
-                    { value: "ADAUSDT", label: "ADA/USDT" },
-                    { value: "DOGEUSDT", label: "DOGE/USDT" },
-                    { value: "TRXUSDT", label: "TRX/USDT" },
-                    { value: "DOTUSDT", label: "DOT/USDT" },
-                    { value: "MATICUSDT", label: "MATIC/USDT" }
-                ],
-                
-                aiSignals: [],
-                positions: [
-                    { id: 1, symbol: 'BTCUSDT', side: 'ЛОНГ', size: 0.1, entry: 63800, pnl: 145.00 },
-                    { id: 2, symbol: 'ETHUSDT', side: 'ШОРТ', size: 0.5, entry: 3620, pnl: -20.00 }
-                ],
-                
-                // Бэктест
-                backtestRunning: false,
-                backtestStats: null,
-                
                 init() {
-                    this.loadInitialData();
-                    this.startDataUpdates();
+                    // Initialize ticker
+                    ticker = new TradeTicker('trade-ticker');
+                    
+                    // Initialize params panel
+                    paramsPanel = new ParamsPanel('params-panel');
+                    paramsPanel.onChange((key, value, allValues) => {
+                        this.chartParams[key] = value;
+                        if (key === 'timeframe') {
+                            this.chartParams.timeframe = value;
+                        }
+                        this.updateChart();
+                    });
+                    
+                    // Initialize AI panel
+                    aiPanel = new AIPanel('ai-panel');
+                    
+                    // Initialize chart
+                    setTimeout(() => {
+                        initChart();
+                        this.loadDashboardData();
+                    }, 100);
+                    
+                    // Setup WebSocket
+                    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+                    const wsUrl = `${protocol}//${window.location.host}/ws/dashboard`;
+                    initDashboardRealtime({ wsUrl });
+                    
+                    // Periodic updates
+                    setInterval(() => {
+                        this.loadDashboardData();
+                    }, 5000);
                 },
                 
-                toggleControls() {
-                    this.controlsVisible = !this.controlsVisible;
+                setMode(newMode) {
+                    this.mode = newMode;
+                    this.updateChart();
                 },
                 
                 getTimeframeString() {
-                    return `${this.chartParams.timeframeValue}${this.chartParams.timeframeUnit}`;
-                },
-                
-                setQuickTimeframe(tf) {
-                    const match = tf.match(/(\d+)([mhd])/);
-                    if (match) {
-                        this.chartParams.timeframeValue = parseInt(match[1]);
-                        this.chartParams.timeframeUnit = match[2];
-                        this.updateChart();
-                    }
-                },
-                
-                async updateChart() {
-                    const timeframe = `${this.chartParams.timeframeValue}${this.chartParams.timeframeUnit}`;
-                    
-                    // Импортируем функцию обновления графика
-                    const { updateChart } = await import('/static/js/cbp_advanced_chart.js');
-                    updateChart({
-                        symbol: this.chartParams.symbol,
-                        timeframe: timeframe,
-                        exchange: this.chartParams.exchange
-                    });
-                    
-                    // Обновляем данные дашборда
-                    this.loadDashboardData();
-                },
-                
-                async loadInitialData() {
-                    await this.loadDashboardData();
-                    await this.loadAISignals();
+                    return this.chartParams.timeframe || '15m';
                 },
                 
                 async loadDashboardData() {
                     try {
-                        const timeframe = `${this.chartParams.timeframeValue}${this.chartParams.timeframeUnit}`;
-                        const response = await fetch(`/api/dashboard/snapshot?symbol=${this.chartParams.symbol}&timeframe=${timeframe}`);
-                        if (response.ok) {
-                            const data = await response.json();
-                            this.balance = data.balance || this.balance;
-                            this.dailyPnl = data.daily_pnl_pct || this.dailyPnl;
-                            this.totalProfit = data.total_profit || this.totalProfit;
-                            this.winRate = data.winrate_pct || this.winRate;
-                            this.activePositions = data.active_positions || this.activePositions;
-                            this.riskScore = data.risk_level_pct || this.riskScore;
-                            
-                            if (data.positions) {
-                                this.positions = data.positions.map(p => ({
-                                    id: p.id || Math.random(),
-                                    symbol: p.symbol,
-                                    side: p.side === 'long' ? 'ЛОНГ' : 'ШОРТ',
-                                    size: p.size || 0,
-                                    entry: p.entry_price || p.entry || 0,
-                                    pnl: p.pnl || 0
-                                }));
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Failed to load dashboard data:', error);
-                    }
-                },
-                
-                async loadAISignals() {
-                    try {
                         const timeframe = this.getTimeframeString();
-                        const response = await fetch(`/api/dashboard/snapshot?symbol=${this.chartParams.symbol}&timeframe=${timeframe}`);
-                        if (response.ok) {
-                            const data = await response.json();
-                            this.aiSignals = (data.ai_signals || []).map(s => ({
-                                id: s.id || Math.random(),
-                                symbol: s.symbol,
-                                side: s.side,
-                                confidence: s.confidence || 0,
-                                entry: s.entry || 0,
-                                target: s.target || 0
-                            }));
+                        const snapshot = await fetchDashboardSnapshot({ 
+                            symbol: this.chartParams.symbol, 
+                            timeframe: timeframe 
+                        });
+                        dashboardState.setSnapshot(snapshot);
+                        
+                        // Update UI
+                        this.balance = snapshot.balance || this.balance;
+                        this.dailyPnl = snapshot.daily_pnl_pct || this.dailyPnl;
+                        this.totalProfit = snapshot.total_profit || this.totalProfit;
+                        this.winRate = snapshot.winrate_pct || this.winRate;
+                        this.activePositions = snapshot.active_positions || this.activePositions;
+                        this.riskScore = snapshot.risk_level_pct || this.riskScore;
+                        
+                        // Update ticker with trades
+                        if (snapshot.trades && ticker) {
+                            ticker.setTrades(snapshot.trades);
                         }
                     } catch (error) {
-                        console.error('Failed to load AI signals:', error);
+                        console.error('[Dashboard] Failed to load data:', error);
                     }
                 },
                 
-                async sendAIMessage() {
-                    if (!this.aiInput.trim()) return;
-                    
-                    const userMessage = this.aiInput.trim();
-                    this.aiInput = '';
-                    
-                    // Добавляем сообщение пользователя
-                    this.aiMessages.push({
-                        role: 'user',
-                        text: userMessage,
-                        time: new Date().toLocaleTimeString('ru-RU')
-                    });
-                    
-                    // Прокручиваем чат вниз
-                    this.$nextTick(() => {
-                        const container = this.$refs.chatContainer;
-                        if (container) {
-                            container.scrollTop = container.scrollHeight;
-                        }
-                    });
-                    
-                    // Отправляем запрос к AI
-                    try {
-                        const response = await fetch('/api/ai/chat', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                message: userMessage,
-                                context: {
-                                    symbol: this.chartParams.symbol,
-                                    timeframe: this.getTimeframeString(),
-                                    balance: this.balance
-                                }
-                            })
-                        });
-                        
-                        let aiResponse = 'Извините, не могу обработать запрос.';
-                        if (response.ok) {
-                            const data = await response.json();
-                            aiResponse = data.response || data.message || aiResponse;
-                        }
-                        
-                        this.aiMessages.push({
-                            role: 'ai',
-                            text: aiResponse,
-                            time: new Date().toLocaleTimeString('ru-RU')
-                        });
-                        
-                        // Прокручиваем чат вниз
-                        this.$nextTick(() => {
-                            const container = this.$refs.chatContainer;
-                            if (container) {
-                                container.scrollTop = container.scrollHeight;
-                            }
-                        });
-                    } catch (error) {
-                        console.error('AI chat error:', error);
-                        this.aiMessages.push({
-                            role: 'ai',
-                            text: 'Ошибка соединения с AI. Попробуйте позже.',
-                            time: new Date().toLocaleTimeString('ru-RU')
-                        });
-                    }
-                },
-                
-                async runBacktest() {
-                    this.backtestRunning = true;
-                    
-                    try {
-                        const timeframe = `${this.chartParams.timeframeValue}${this.chartParams.timeframeUnit}`;
-                        // Use the full timeframe string (e.g., "15m") as interval for the backtest
-                        const interval = timeframe;
-                        
-                        const response = await fetch('/api/backtest/run', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                symbol: this.chartParams.symbol,
-                                interval: interval,
-                                strategy: this.chartParams.strategy,
-                                risk_per_trade: this.chartParams.riskDollars,
-                                rr_ratio: 4.0,
-                                limit: 500
-                            })
-                        });
-                        
-                        if (response.ok) {
-                            const result = await response.json();
-                            
-                            // Вычисляем статистику
-                            const trades = result.trades || [];
-                            const winningTrades = trades.filter(t => (t.result_R || 0) > 0);
-                            const losingTrades = trades.filter(t => (t.result_R || 0) <= 0);
-                            
-                            const totalProfit = trades.reduce((sum, t) => sum + ((t.result_R || 0) * this.chartParams.riskDollars), 0);
-                            const winRate = trades.length > 0 ? (winningTrades.length / trades.length) * 100 : 0;
-                            const avgR = trades.length > 0 ? trades.reduce((sum, t) => sum + (t.result_R || 0), 0) / trades.length : 0;
-                            
-                            // Максимальная просадка
-                            const equityCurve = result.equity_curve || [];
-                            let maxDrawdown = 0;
-                            let peak = equityCurve[0] || 10000;
-                            equityCurve.forEach(equity => {
-                                if (equity > peak) peak = equity;
-                                const drawdown = ((peak - equity) / peak) * 100;
-                                if (drawdown > maxDrawdown) maxDrawdown = drawdown;
-                            });
-                            
-                            this.backtestStats = {
-                                totalProfit: totalProfit,
-                                winRate: winRate,
-                                totalTrades: trades.length,
-                                avgR: avgR,
-                                maxDrawdown: maxDrawdown,
-                                sharpeRatio: avgR > 0 ? (avgR / Math.sqrt(trades.length)) * Math.sqrt(252) : 0
-                            };
-                            
-                            // Обновляем график с результатами бэктеста
-                            await this.updateChartWithBacktest(result);
-                            
-                            // Добавляем сообщение в AI чат
-                            this.aiMessages.push({
-                                role: 'ai',
-                                text: `✅ Бэктест завершен! Прибыль: $${totalProfit.toFixed(2)}, Винрейт: ${winRate.toFixed(1)}%, Сделок: ${trades.length}`,
-                                time: new Date().toLocaleTimeString('ru-RU')
-                            });
-                        } else {
-                            throw new Error('Backtest failed');
-                        }
-                    } catch (error) {
-                        console.error('Backtest error:', error);
-                        this.aiMessages.push({
-                            role: 'ai',
-                            text: '❌ Ошибка при запуске бэктеста. Проверьте параметры.',
-                            time: new Date().toLocaleTimeString('ru-RU')
-                        });
-                    } finally {
-                        this.backtestRunning = false;
-                    }
-                },
-                
-                async updateChartWithBacktest(backtestResult) {
-                    // Импортируем функцию обновления графика
-                    const { updateChart } = await import('/static/js/cbp_advanced_chart.js');
-                    
-                    // Преобразуем сделки из бэктеста в формат для графика
-                    const trades = (backtestResult.trades || []).map(trade => {
-                        // Определяем направление сделки (стратегии должны включать direction/side)
-                        // Fallback к result_R только если direction/side отсутствует
-                        const side = trade.side || trade.direction || (trade.result_R > 0 ? 'buy' : 'sell');
-                        
-                        // Вычисляем exit_price и exit_time на основе result_R
-                        let exit_price = trade.exit_price || trade.exit || null;
-                        let exit_time = trade.exit_time || trade.exit_timestamp || null;
-                        
-                        // Если нет exit_price, но есть result_R, вычисляем его
-                        if (!exit_price && trade.entry_price && trade.result_R !== undefined) {
-                            const entry = trade.entry_price;
-                            const stop = trade.stop || (entry * 0.98);
-                            const risk = Math.abs(entry - stop);
-                            if (risk > 0) {
-                                exit_price = entry + (trade.result_R * risk * (side === 'buy' || side === 'long' ? 1 : -1));
-                            }
-                        }
-                        
-                        return {
-                            side: side,
-                            entry_time: trade.entry_time || trade.entry_timestamp,
-                            exit_time: exit_time,
-                            entry_price: trade.entry_price || trade.entry,
-                            exit_price: exit_price,
-                            pnl: trade.pnl || (trade.result_R * this.chartParams.riskDollars),
-                            result_R: trade.result_R,
-                            size: trade.size || 1,
-                            risk_per_trade: this.chartParams.riskDollars,
-                            stop: trade.stop,
-                            tp: trade.tp
-                        };
-                    });
-                    
-                    // Обновляем график, передавая данные о сделках
-                    updateChart({
+                updateChart() {
+                    const params = {
                         symbol: this.chartParams.symbol,
                         timeframe: this.getTimeframeString(),
                         exchange: this.chartParams.exchange,
-                        trades: trades
-                    });
-                },
-                
-                startDataUpdates() {
-                    // Обновление данных каждые 5 секунд
-                    setInterval(() => {
-                        this.loadDashboardData();
-                        this.loadAISignals();
-                    }, 5000);
+                        mode: this.mode
+                    };
+                    updateChart(params);
                 }
-            }
+            };
+        }
+        
+        // Make dashboardApp available globally for Alpine
+        window.dashboardApp = dashboardApp;
+        
+        // Initialize when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                console.log('[CBP] Dashboard modules loaded');
+            });
+        } else {
+            console.log('[CBP] Dashboard modules loaded');
         }
     </script>
     
     <!-- Dashboard Main Module -->
     <script type="module" src="/static/js/cbp_dashboard_main.js"></script>
-    <script type="module" src="/static/js/cbp_advanced_chart.js"></script>
-    <script type="module" src="/static/js/cbp_ai_chat.js"></script>
 </body>
 </html>

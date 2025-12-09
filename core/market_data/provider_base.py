@@ -31,17 +31,74 @@ class MarketDataProvider(ABC):
 
     @staticmethod
     def normalize_payload(payload: Iterable[dict]) -> list[OHLCV]:
+        """
+        Normalize payload to OHLCV format with validation.
+        Handles various input formats safely.
+        """
         candles: list[OHLCV] = []
-        for row in payload:
-            candles.append(
-                OHLCV(
-                    time=int(row["time"]),
-                    open=float(row["open"]),
-                    high=float(row["high"]),
-                    low=float(row["low"]),
-                    close=float(row["close"]),
-                    volume=float(row.get("volume", 0.0)),
+        import logging
+        log = logging.getLogger(__name__)
+        
+        if not payload:
+            return []
+        
+        for idx, row in enumerate(payload):
+            try:
+                # Validate row is a dict
+                if not isinstance(row, dict):
+                    log.warning(f"normalize_payload: row {idx} is not a dict, skipping: {type(row)}")
+                    continue
+                
+                # Extract and validate required fields
+                time_val = row.get("time")
+                if time_val is None:
+                    log.warning(f"normalize_payload: row {idx} missing 'time' field, skipping")
+                    continue
+                
+                # Convert time to int (handle both int and string timestamps)
+                if isinstance(time_val, str):
+                    try:
+                        time_val = int(float(time_val))
+                    except (ValueError, TypeError):
+                        log.warning(f"normalize_payload: row {idx} invalid time format: {time_val}")
+                        continue
+                else:
+                    time_val = int(time_val)
+                
+                # Extract OHLCV values with safe defaults
+                open_val = float(row.get("open", 0))
+                high_val = float(row.get("high", 0))
+                low_val = float(row.get("low", 0))
+                close_val = float(row.get("close", 0))
+                volume_val = float(row.get("volume", 0.0))
+                
+                # Validate values are finite
+                if not all(
+                    isinstance(v, (int, float)) and 
+                    (v == v) and  # Check for NaN
+                    abs(v) != float('inf')
+                    for v in [open_val, high_val, low_val, close_val, volume_val]
+                ):
+                    log.warning(f"normalize_payload: row {idx} contains invalid numeric values, skipping")
+                    continue
+                
+                candles.append(
+                    OHLCV(
+                        time=time_val,
+                        open=open_val,
+                        high=high_val,
+                        low=low_val,
+                        close=close_val,
+                        volume=max(0.0, volume_val),  # Ensure non-negative volume
+                    )
                 )
-            )
-        candles.sort(key=lambda c: c.time)
+            except (KeyError, ValueError, TypeError) as e:
+                log.warning(f"normalize_payload: error processing row {idx}: {e}, skipping")
+                continue
+        
+        if candles:
+            candles.sort(key=lambda c: c.time)
+        else:
+            log.warning("normalize_payload: no valid candles after normalization")
+        
         return candles
