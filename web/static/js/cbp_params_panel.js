@@ -3,6 +3,7 @@
 /**
  * Parameters panel module for dashboard configuration
  * Uses JSON-based config for easy extensibility
+ * Supports custom timeframes
  */
 
 const DEFAULT_CONFIG = {
@@ -36,7 +37,8 @@ const DEFAULT_CONFIG = {
         type: "timeframe",
         label: "Таймфрейм",
         value: "15m",
-        quickOptions: ["1m", "5m", "15m", "1h", "4h", "1d"]
+        quickOptions: ["1m", "5m", "15m", "30m", "1h", "4h", "1d"],
+        customAllowed: true
     },
     strategy: {
         type: "select",
@@ -94,12 +96,12 @@ export class ParamsPanel {
     }
     
     renderParam(key, param) {
-        let html = `<div class="param-group mb-4">`;
-        html += `<label class="block text-sm text-gray-400 mb-2">${param.label}</label>`;
+        let html = `<div class="param-group mb-2.5">`;
+        html += `<label class="block text-xs text-gray-400 mb-1">${param.label}</label>`;
         
         switch (param.type) {
             case "select":
-                html += `<select data-param="${key}" class="param-input w-full">`;
+                html += `<select data-param="${key}" class="param-input w-full text-xs">`;
                 param.options.forEach(opt => {
                     const selected = this.values[key] === opt.value ? 'selected' : '';
                     html += `<option value="${opt.value}" ${selected}>${opt.label}</option>`;
@@ -108,26 +110,56 @@ export class ParamsPanel {
                 break;
                 
             case "timeframe":
-                html += `<div class="flex flex-col gap-2">`;
-                html += `<div class="flex gap-2">`;
+                html += `<div class="flex flex-col gap-1.5">`;
+                // Quick buttons
+                html += `<div class="flex flex-wrap gap-1">`;
                 param.quickOptions.forEach(opt => {
                     const active = this.values[key] === opt ? 'bg-blue-600' : 'bg-white/10';
-                    html += `<button data-tf="${opt}" class="px-3 py-1 ${active} rounded text-xs hover:bg-white/20 transition">${opt}</button>`;
+                    html += `<button data-tf="${opt}" class="px-1.5 py-0.5 ${active} rounded text-xs hover:bg-white/20 transition">${opt}</button>`;
                 });
                 html += `</div>`;
+                
+                // Custom timeframe input
+                if (param.customAllowed) {
+                    html += `<div class="mt-1">`;
+                    html += `<input type="text" 
+                                   data-param-custom-tf="${key}" 
+                                   class="param-input w-full text-xs" 
+                                   placeholder="Произвольный TF (7m, 2h, 3d)"
+                                   value="${this.isCustomTimeframe(this.values[key], param.quickOptions) ? this.values[key] : ''}">`;
+                    html += `<div class="text-xs text-gray-500 mt-0.5" style="font-size: 10px;">Формат: число + единица (m/h/d)</div>`;
+                    html += `</div>`;
+                }
                 html += `</div>`;
                 break;
                 
             case "number":
-                html += `<input type="number" data-param="${key}" class="param-input w-full" value="${param.value}" min="${param.min || 0}" step="${param.step || 1}">`;
+                html += `<input type="number" data-param="${key}" class="param-input w-full text-xs" value="${param.value}" min="${param.min || 0}" step="${param.step || 1}">`;
                 break;
                 
             default:
-                html += `<input type="text" data-param="${key}" class="param-input w-full" value="${param.value}">`;
+                html += `<input type="text" data-param="${key}" class="param-input w-full text-xs" value="${param.value}">`;
         }
         
         html += `</div>`;
         return html;
+    }
+    
+    isCustomTimeframe(tf, quickOptions) {
+        return tf && !quickOptions.includes(tf);
+    }
+    
+    validateTimeframe(tf) {
+        if (!tf || typeof tf !== 'string') return false;
+        const match = tf.match(/^(\d+)([mhd])$/i);
+        if (!match) return false;
+        const num = parseInt(match[1]);
+        const unit = match[2].toLowerCase();
+        if (num <= 0) return false;
+        if (unit === 'm' && num > 10080) return false; // Max 10080 minutes (7 days)
+        if (unit === 'h' && num > 168) return false; // Max 168 hours (7 days)
+        if (unit === 'd' && num > 365) return false; // Max 365 days
+        return true;
     }
     
     attachListeners() {
@@ -139,6 +171,31 @@ export class ParamsPanel {
                 const key = e.target.getAttribute('data-param');
                 const value = e.target.type === 'number' ? parseFloat(e.target.value) : e.target.value;
                 this.setValue(key, value);
+            });
+        });
+        
+        // Custom timeframe input
+        this.container.querySelectorAll('[data-param-custom-tf]').forEach(el => {
+            el.addEventListener('blur', (e) => {
+                const key = e.target.getAttribute('data-param-custom-tf');
+                const value = e.target.value.trim();
+                if (value && this.validateTimeframe(value)) {
+                    this.setValue(key, value);
+                    // Update button states
+                    this.container.querySelectorAll('[data-tf]').forEach(b => {
+                        b.classList.remove('bg-blue-600');
+                        b.classList.add('bg-white/10');
+                    });
+                } else if (value) {
+                    alert('Неверный формат таймфрейма. Используйте формат: число + единица (m/h/d), например: 7m, 2h, 3d');
+                    e.target.value = '';
+                }
+            });
+            
+            el.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.target.blur();
+                }
             });
         });
         
@@ -154,12 +211,26 @@ export class ParamsPanel {
                 });
                 e.target.classList.remove('bg-white/10');
                 e.target.classList.add('bg-blue-600');
+                
+                // Clear custom input
+                const customInput = this.container.querySelector('[data-param-custom-tf="timeframe"]');
+                if (customInput) {
+                    customInput.value = '';
+                }
             });
         });
     }
     
     setValue(key, value) {
         if (this.values[key] === value) return;
+        
+        // Validate timeframe if custom
+        if (key === 'timeframe' && this.isCustomTimeframe(value, this.config.timeframe.quickOptions)) {
+            if (!this.validateTimeframe(value)) {
+                console.warn(`[CBP Params] Invalid timeframe: ${value}`);
+                return;
+            }
+        }
         
         this.values[key] = value;
         this.notifyChange(key, value);
@@ -193,4 +264,3 @@ export class ParamsPanel {
         this.render();
     }
 }
-

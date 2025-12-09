@@ -30,11 +30,11 @@ export class AIPanel {
         if (!this.container) return;
         
         this.container.innerHTML = `
-            <div class="ai-panel-header mb-2">
-                <h3 class="text-sm font-semibold">🤖 AI Ассистент</h3>
+            <div class="ai-panel-header mb-1.5 flex-shrink-0">
+                <h3 class="text-xs font-semibold">🤖 AI Ассистент</h3>
             </div>
-            <div class="ai-chat-messages flex-1 overflow-y-auto mb-2" id="ai-chat-messages"></div>
-            <div class="ai-chat-input flex gap-2">
+            <div class="ai-chat-messages flex-1 mb-1.5 min-h-0" id="ai-chat-messages"></div>
+            <div class="ai-chat-input flex gap-1.5 flex-shrink-0">
                 <input 
                     type="text" 
                     id="ai-chat-input" 
@@ -43,7 +43,7 @@ export class AIPanel {
                 >
                 <button 
                     id="ai-chat-send" 
-                    class="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg hover:opacity-90 transition text-sm"
+                    class="px-2.5 py-1 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg hover:opacity-90 transition text-xs"
                 >
                     ➤
                 </button>
@@ -99,17 +99,21 @@ export class AIPanel {
             const bgClass = isUser ? 'bg-blue-600/30 ml-auto' : 'bg-white/5';
             
             return `
-                <div class="${alignClass} mb-2">
-                    <div class="${bgClass} inline-block p-3 rounded-lg max-w-[80%] text-sm">
+                <div class="${alignClass} mb-1.5">
+                    <div class="${bgClass} inline-block p-2 rounded-lg max-w-[85%] text-xs">
                         <div>${this.escapeHtml(msg.text)}</div>
-                        <div class="text-xs text-gray-400 mt-1">${time}</div>
+                        <div class="text-xs text-gray-400 mt-0.5">${time}</div>
                     </div>
                 </div>
             `;
         }).join('');
         
         // Scroll to bottom
-        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+        requestAnimationFrame(() => {
+            if (this.messagesContainer) {
+                this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+            }
+        });
     }
     
     async sendMessage() {
@@ -189,4 +193,3 @@ export class AIPanel {
         this.addWelcomeMessage();
     }
 }
-

@@ -1,7 +1,7 @@
 "use strict";
 
 import { fetchDashboardSnapshot } from "./cbp_api.js";
-import { dashboardState } from "./cbp_state.js";
+import { dashboardState, setMode } from "./cbp_state.js";
 import { initDashboardRealtime } from "./cbp_realtime.js";
 import { initChart, updateChart } from "./cbp_charts.js";
 import { TradeTicker } from "./cbp_ticker.js";
@@ -11,6 +11,11 @@ import { AIPanel } from "./cbp_ai_panel.js";
 let ticker = null;
 let paramsPanel = null;
 let aiPanel = null;
+let bootstrapStarted = false;
+
+if (typeof window !== "undefined") {
+  window.__cbp_main_module_present = true;
+}
 
 function bindStaticUI() {
   const els = {
@@ -62,9 +67,22 @@ function bindStaticUI() {
 
   renderSnapshot();
   window.addEventListener("cbp:dashboard_update", renderSnapshot);
+  
+  // Listen to mode changes
+  window.addEventListener("cbp:mode_changed", (event) => {
+    const mode = event.detail?.mode;
+    if (mode) {
+      dashboardState.setMode(mode);
+    }
+  });
 }
 
 async function bootstrap() {
+  if (bootstrapStarted) {
+    console.warn("[CBP] bootstrap already started");
+    return;
+  }
+  bootstrapStarted = true;
   console.log("[CBP] Initializing dashboard...");
   
   try {
@@ -72,29 +90,44 @@ async function bootstrap() {
     bindStaticUI();
     
     // Initialize ticker
-    ticker = new TradeTicker('trade-ticker');
+    ticker =
+      (typeof window !== "undefined" && window.__cbp_fallback_ticker) ||
+      new TradeTicker("trade-ticker");
     
     // Initialize params panel
-    paramsPanel = new ParamsPanel('params-panel');
-    paramsPanel.onChange((key, value, allValues) => {
-      console.log(`[CBP] Param changed: ${key} = ${value}`);
-      // Update chart when params change
-      const symbol = allValues.symbol || 'BTCUSDT';
-      const timeframe = allValues.timeframe || '15m';
-      const exchange = allValues.exchange || 'bybit';
-      
-      updateChart({
-        symbol,
-        timeframe,
-        exchange
+    paramsPanel =
+      (typeof window !== "undefined" && window.__cbp_fallback_params_panel) ||
+      new ParamsPanel("params-panel");
+    if (!paramsPanel.__cbp_dashboard_main_bound) {
+      paramsPanel.__cbp_dashboard_main_bound = true;
+      paramsPanel.onChange((key, value, allValues) => {
+        console.log(`[CBP] Param changed: ${key} = ${value}`);
+        // Update chart when params change
+        const symbol = allValues.symbol || "BTCUSDT";
+        const timeframe = allValues.timeframe || "15m";
+        const exchange = allValues.exchange || "bybit";
+
+        // Update dashboardState
+        dashboardState.symbol = symbol;
+        dashboardState.timeframe = timeframe;
+        dashboardState.exchange = exchange;
+
+        updateChart({
+          symbol,
+          timeframe,
+          exchange,
+        });
+
+        // Reload dashboard data
+        loadDashboardData(symbol, timeframe);
       });
-      
-      // Reload dashboard data
-      loadDashboardData(symbol, timeframe);
-    });
+    }
     
     // Initialize AI panel
-    aiPanel = new AIPanel('ai-panel');
+    aiPanel =
+      (typeof window !== "undefined" && window.__cbp_fallback_ai_panel) ||
+      new AIPanel("ai-panel");
+    publishGlobals();
     
     // Load initial data
     const symbol = paramsPanel.getValue('symbol') || 'BTCUSDT';
@@ -123,6 +156,8 @@ async function bootstrap() {
     }, 5000);
     
     console.log("[CBP] Dashboard initialized successfully");
+    window.__cbp_main_bootstrapped = true;
+    notifyReady();
   } catch (error) {
     console.error("[CBP] Failed to initialize dashboard:", error);
   }
@@ -145,11 +180,34 @@ async function loadDashboardData(symbol, timeframe) {
 }
 
 // Export for global access
-window.cbpDashboard = {
-  ticker,
-  paramsPanel,
-  aiPanel,
-  loadDashboardData
-};
+function publishGlobals() {
+  window.cbpDashboard = {
+    get ticker() {
+      return ticker;
+    },
+    get paramsPanel() {
+      return paramsPanel;
+    },
+    get aiPanel() {
+      return aiPanel;
+    },
+    loadDashboardData,
+    initChart,
+    updateChart,
+  };
+}
+publishGlobals();
+
+function notifyReady() {
+  try {
+    window.dispatchEvent(
+      new CustomEvent("cbp:dashboard_ready", {
+        detail: { ticker, paramsPanel, aiPanel },
+      })
+    );
+  } catch (err) {
+    console.error("[CBP] Failed to dispatch ready event", err);
+  }
+}
 
 document.addEventListener("DOMContentLoaded", bootstrap);

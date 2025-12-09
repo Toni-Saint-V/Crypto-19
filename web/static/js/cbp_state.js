@@ -1,10 +1,10 @@
 const listeners = new Set();
 
 export const dashboardState = {
-  mode: "live",
+  mode: "real", // "real" | "test" | "backtest"
   exchange: "bybit",
   symbol: "BTCUSDT",
-  timeframe: "1m",
+  timeframe: "15m",
   riskProfile: "normal",
   wsStatus: {
     trades: "disconnected",
@@ -53,6 +53,30 @@ export const dashboardState = {
     this.candles = snapshot.candles || [];
     this.aiSignals = snapshot.ai_signals || [];
     notify();
+    if (typeof window !== "undefined") {
+      try {
+        window.dispatchEvent(
+          new CustomEvent("cbp:dashboard_update", { detail: { snapshot } })
+        );
+      } catch (err) {
+        console.error("State event dispatch error", err);
+      }
+    }
+  },
+  setMode(newMode) {
+    if (["real", "test", "backtest"].includes(newMode)) {
+      this.mode = newMode;
+      notify();
+      if (typeof window !== "undefined") {
+        try {
+          window.dispatchEvent(
+            new CustomEvent("cbp:mode_changed", { detail: { mode: newMode } })
+          );
+        } catch (err) {
+          console.error("Mode change event dispatch error", err);
+        }
+      }
+    }
   }
 };
 
@@ -73,6 +97,10 @@ export function subscribeToState(listener) {
 }
 
 export function updateDashboardState(patch) {
+  if (patch.mode !== undefined) {
+    dashboardState.setMode(patch.mode);
+    delete patch.mode;
+  }
   Object.assign(dashboardState, patch);
   notify();
 }
@@ -93,6 +121,10 @@ export function setRiskProfile(profile) {
   dashboardState.riskProfile = profile;
   console.log("[CBP State] riskProfile ->", profile);
   notify();
+}
+
+export function setMode(mode) {
+  dashboardState.setMode(mode);
 }
 
 export function updateMetrics(patch) {
