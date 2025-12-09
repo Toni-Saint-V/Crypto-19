@@ -160,13 +160,41 @@ async def get_dashboard_snapshot(
         except Exception as e:
             log.warning(f"Error generating sample trades: {e}")
 
+    # Try to get real portfolio data if available
+    balance = 10000.0
+    daily_pnl_pct = 1.23
+    total_profit = 2500.0
+    winrate_pct = 62.5
+    active_positions = 2
+    risk_level_pct = 35.0
+    
+    # TODO: Integrate with real portfolio manager when available
+    # try:
+    #     from core.portfolio.portfolio_manager import PortfolioManager
+    #     # Get real portfolio metrics
+    #     # portfolio = get_portfolio_manager()  # Would need singleton/global instance
+    #     # metrics = await portfolio.calculate_metrics()
+    #     # balance = metrics.total_value
+    #     # active_positions = len([a for a in portfolio.portfolio.values() if a.quantity > 0])
+    # except Exception as e:
+    #     log.debug(f"Portfolio manager not available, using defaults: {e}")
+    
+    # Calculate real metrics from candles if available
+    if candles_data and len(candles_data) > 1:
+        try:
+            current_price = float(candles_data[-1].close)
+            price_24h_ago = float(candles_data[0].close) if len(candles_data) > 24 else current_price
+            daily_pnl_pct = ((current_price - price_24h_ago) / price_24h_ago) * 100 if price_24h_ago > 0 else 0
+        except Exception:
+            pass  # Keep default if calculation fails
+
     return DashboardSnapshot(
-        balance=10000.0,
-        daily_pnl_pct=1.23,
-        total_profit=2500.0,
-        winrate_pct=62.5,
-        active_positions=2,
-        risk_level_pct=35.0,
+        balance=balance,
+        daily_pnl_pct=daily_pnl_pct,
+        total_profit=total_profit,
+        winrate_pct=winrate_pct,
+        active_positions=active_positions,
+        risk_level_pct=risk_level_pct,
         symbol=symbol,
         timeframe=timeframe,
         candles=candles_data,

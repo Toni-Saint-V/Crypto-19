@@ -30,21 +30,20 @@ export class AIPanel {
         if (!this.container) return;
         
         this.container.innerHTML = `
-            <div class="ai-panel-header mb-3">
-                <h3 class="text-lg font-semibold">🤖 AI Ассистент</h3>
+            <div class="ai-panel-header mb-2">
+                <h3 class="text-sm font-semibold">🤖 AI Ассистент</h3>
             </div>
-            <div class="ai-chat-messages flex-1 overflow-y-auto mb-3" id="ai-chat-messages"></div>
+            <div class="ai-chat-messages flex-1 overflow-y-auto mb-2" id="ai-chat-messages"></div>
             <div class="ai-chat-input flex gap-2">
                 <input 
                     type="text" 
                     id="ai-chat-input" 
                     placeholder="Спросите AI..."
-                    class="flex-1 param-input text-sm"
-                    @keyup.enter="sendMessage()"
+                    class="flex-1 param-input text-xs"
                 >
                 <button 
                     id="ai-chat-send" 
-                    class="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg hover:opacity-90 transition"
+                    class="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg hover:opacity-90 transition text-sm"
                 >
                     ➤
                 </button>

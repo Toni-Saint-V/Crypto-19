@@ -18,6 +18,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 import math
 import time
+import numpy as np
 
 log = logging.getLogger(__name__)
 from core.backtest.engine import BacktestEngine
@@ -81,7 +82,8 @@ class ConnectionManager:
         for connection in self.ai_connections:
             try:
                 await connection.send_json(message)
-            except:
+            except (WebSocketDisconnect, ConnectionError, RuntimeError) as e:
+                log.debug(f"Connection error during AI broadcast: {e}")
                 disconnected.append(connection)
         for conn in disconnected:
             await self.disconnect_ai(conn)
@@ -92,7 +94,8 @@ class ConnectionManager:
         for connection in self.trade_connections:
             try:
                 await connection.send_json(message)
-            except:
+            except (WebSocketDisconnect, ConnectionError, RuntimeError) as e:
+                log.debug(f"Connection error during trade broadcast: {e}")
                 disconnected.append(connection)
         for conn in disconnected:
             await self.disconnect_trade(conn)
@@ -350,11 +353,106 @@ async def api_selfcheck():
         "candles_sample_len": len(candles),
     }
 
+@app.get("/api/ai/predict")
+async def api_ai_predict(
+    symbol: str = Query("BTCUSDT", description="Trading pair symbol"),
+    timeframe: str = Query("15m", description="Timeframe for prediction"),
+):
+    """AI market prediction endpoint - provides price predictions and market analysis"""
+    try:
+        from core.market_data.service import MarketDataService
+        
+        # Get recent market data
+        market_service = MarketDataService()
+        ohlcv_data = await market_service.get_candles(
+            exchange="bybit",
+            symbol=symbol,
+            timeframe=timeframe,
+            limit=100,
+            mode="live"
+        )
+        
+        if not ohlcv_data or len(ohlcv_data) < 10:
+            return JSONResponse({
+                "price_target": None,
+                "price_change": None,
+                "signal_strength": 0,
+                "sentiment": "Недостаточно данных",
+                "support": None,
+                "resistance": None
+            })
+        
+        # Calculate predictions based on recent price action
+        recent_prices = [float(c.close) for c in ohlcv_data[-20:]]
+        current_price = recent_prices[-1]
+        
+        # Simple momentum-based prediction
+        price_change_24h = ((current_price - recent_prices[0]) / recent_prices[0]) * 100 if recent_prices[0] > 0 else 0
+        
+        # Calculate support and resistance
+        highs = [float(c.high) for c in ohlcv_data[-50:]]
+        lows = [float(c.low) for c in ohlcv_data[-50:]]
+        support = min(lows) if lows else current_price * 0.98
+        resistance = max(highs) if highs else current_price * 1.02
+        
+        # Predict next price (momentum extrapolation)
+        if len(recent_prices) >= 5:
+            momentum = (recent_prices[-1] - recent_prices[-5]) / recent_prices[-5]
+        else:
+            momentum = 0
+        
+        predicted_change = momentum * 2  # Extrapolate momentum
+        price_target = current_price * (1 + predicted_change / 100)
+        
+        # Signal strength based on volatility and momentum
+        if len(recent_prices) > 1:
+            volatility = np.std(recent_prices) / current_price * 100
+        else:
+            volatility = 0
+        signal_strength = min(100, max(0, abs(momentum) * 100 - volatility * 10))
+        
+        # Sentiment
+        if momentum > 0.01:
+            sentiment = "Сильное бычье"
+        elif momentum > 0:
+            sentiment = "Бычье"
+        elif momentum < -0.01:
+            sentiment = "Сильное медвежье"
+        else:
+            sentiment = "Медвежье"
+        
+        return JSONResponse({
+            "price_target": round(price_target, 2),
+            "price_change": round(predicted_change, 2),
+            "signal_strength": round(signal_strength, 1),
+            "sentiment": sentiment,
+            "support": round(support, 2),
+            "resistance": round(resistance, 2)
+        })
+    except Exception as e:
+        log.error(f"AI prediction error: {e}", exc_info=True)
+        return JSONResponse({
+            "price_target": None,
+            "price_change": None,
+            "signal_strength": 0,
+            "sentiment": "Ошибка анализа",
+            "support": None,
+            "resistance": None
+        }, status_code=500)
+
 @app.post("/api/ai/chat")
 async def api_ai_chat(request: Request):
     """AI chat endpoint for conversational interface"""
     try:
-        body = await request.json()
+        try:
+            body = await request.json()
+        except (ValueError, json.JSONDecodeError) as e:
+            log.warning(f"Invalid JSON in AI chat request: {e}")
+            return JSONResponse({
+                "response": "Неверный формат запроса. Ожидается JSON.",
+                "error": "Invalid JSON"
+            }, status_code=400)
+        
         user_message = body.get("message", "")
         context = body.get("context", {})
         
@@ -379,7 +477,7 @@ async def api_ai_chat(request: Request):
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
     except Exception as e:
-        log.error(f"AI chat error: {e}")
+        log.error(f"AI chat error: {e}", exc_info=True)
         return JSONResponse({
             "response": "Извините, произошла ошибка. Попробуйте позже.",
             "error": str(e)
