@@ -1,267 +1,170 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=1440, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <title>CryptoBot Pro</title>
     <link rel="stylesheet" href="/static/css/dashboard.css" />
   </head>
   <body>
-    <div class="dashboard-container">
-      <!-- Header -->
-      <header class="dashboard-header">
-        <div class="header-left">
-          <div class="status-dot" id="ws-status-dot"></div>
-          <h1 class="header-title">CryptoBot Pro</h1>
+    <div class="dashboard-viewport">
+      <!-- TOP BAR: 96px height -->
+      <header class="top-bar">
+        <div class="top-bar-left">
+          <h1 class="logo">CryptoBot Pro</h1>
+          <div class="top-bar-info" id="header-info">Bybit • Futures • Balance: $10,000 • Risk: Moderate</div>
         </div>
-        <div class="header-center" id="header-status">
-          Ожидание сделок…
-        </div>
-        <div class="header-right">
-          <div class="header-metrics">
-            <span class="metric-item">
-              <span class="metric-label">Balance:</span>
-              <span class="metric-value" id="header-balance">--</span>
-            </span>
-            <span class="metric-item">
-              <span class="metric-label">24h PnL:</span>
-              <span class="metric-value" id="header-pnl">--</span>
-            </span>
+        <div class="top-bar-center">
+          <div class="kpi-cards">
+            <div class="kpi-card">
+              <div class="kpi-label">Total PnL</div>
+              <div class="kpi-value" id="kpi-total-pnl">--</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Winrate</div>
+              <div class="kpi-value" id="kpi-winrate">--</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Active Positions</div>
+              <div class="kpi-value" id="kpi-positions">--</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Risk Level</div>
+              <div class="kpi-value" id="kpi-risk">--</div>
+            </div>
           </div>
-            <div class="mode-controls">
-            <div class="segmented-control" id="mode-toggle">
-              <button class="segmented-btn active" data-mode="live">Live</button>
-              <button class="segmented-btn" data-mode="backtest">BackTest</button>
-            </div>
-            <div class="pill-toggle" id="live-env-toggle" style="display: none;">
-              <button class="pill-btn" data-env="real">Real</button>
-              <button class="pill-btn active" data-env="test">Test</button>
-            </div>
+        </div>
+        <div class="top-bar-right">
+          <div class="mode-selector">
+            <button class="mode-btn" data-mode="live" id="mode-live">LIVE</button>
+            <button class="mode-btn" data-mode="test" id="mode-test">TEST</button>
+            <button class="mode-btn" data-mode="backtest" id="mode-backtest">BACKTEST</button>
+          </div>
+          <div class="status-indicator">
+            <span class="status-dot" id="status-dot"></span>
+            <span class="status-text" id="status-text">Connected</span>
           </div>
         </div>
       </header>
 
-      <!-- Live Mode Content -->
-      <div class="dashboard-content" id="live-content">
-        <!-- Metrics Row -->
-        <div class="metrics-row">
-          <div class="metric-card">
-            <div class="metric-card-label">Общая прибыль</div>
-            <div class="metric-card-value" id="metric-total-profit">--</div>
+      <!-- TICKER: 40px height -->
+      <div class="ticker-bar" id="ticker-bar">
+        <div class="ticker-label">Recent trades</div>
+        <div class="ticker-content" id="ticker-content">No trades yet</div>
+      </div>
+
+      <!-- MAIN AREA: Chart (70%) + Sidebar (30%) -->
+      <div class="main-area">
+        <!-- LEFT: Chart Panel (70% width) -->
+        <div class="chart-panel">
+          <div class="chart-header">
+            <div class="chart-title-group">
+              <span class="chart-pair" id="chart-pair">ETHUSDT</span>
+              <span class="chart-exchange">• Bybit</span>
+            </div>
+            <div class="chart-controls">
+              <div class="timeframe-selector">
+                <button class="tf-btn" data-tf="1m">1m</button>
+                <button class="tf-btn" data-tf="5m">5m</button>
+                <button class="tf-btn active" data-tf="15m">15m</button>
+                <button class="tf-btn" data-tf="1h">1h</button>
+                <button class="tf-btn" data-tf="4h">4h</button>
+                <button class="tf-btn" data-tf="1d">1d</button>
+              </div>
+              <div class="strategy-label" id="strategy-label">Strategy: Trend Following</div>
+              <div class="indicator-toggles">
+                <label class="indicator-toggle">
+                  <input type="checkbox" id="toggle-ema50" />
+                  <span>EMA50</span>
+                </label>
+                <label class="indicator-toggle">
+                  <input type="checkbox" id="toggle-ema200" />
+                  <span>EMA200</span>
+                </label>
+                <label class="indicator-toggle">
+                  <input type="checkbox" id="toggle-equity" />
+                  <span>Equity</span>
+                </label>
+                <label class="indicator-toggle">
+                  <input type="checkbox" id="toggle-rsi" />
+                  <span>RSI</span>
+                </label>
+              </div>
+            </div>
           </div>
-          <div class="metric-card">
-            <div class="metric-card-label">Винрейт</div>
-            <div class="metric-card-value" id="metric-winrate">--</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-card-label">Активных позиций</div>
-            <div class="metric-card-value" id="metric-positions">--</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-card-label">Уровень риска</div>
-            <div class="metric-card-value" id="metric-risk">--</div>
-          </div>
+          <div class="chart-container" id="price-chart-container"></div>
         </div>
 
-        <!-- Main Row: Parameters + Chart + AI Predictor -->
-        <div class="main-row">
-          <!-- Left: Parameters -->
-          <div class="params-panel">
-            <h2 class="panel-title">Параметры</h2>
-            <div class="params-form">
-              <div class="form-field">
-                <label>Пара</label>
-                <select id="param-symbol">
-                  <option value="BTCUSDT">BTCUSDT</option>
-                  <option value="ETHUSDT">ETHUSDT</option>
-                </select>
-              </div>
-              <div class="form-field">
-                <label>Биржа</label>
-                <select id="param-exchange">
-                  <option value="bybit">Bybit</option>
-                  <option value="binance">Binance</option>
-                </select>
-              </div>
-              <div class="form-field">
-                <label>Таймфрейм</label>
-                <select id="param-timeframe">
-                  <option value="1m">1m</option>
-                  <option value="5m">5m</option>
-                  <option value="15m" selected>15m</option>
-                  <option value="1h">1h</option>
-                  <option value="4h">4h</option>
-                  <option value="1d">1d</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <!-- Center: Chart -->
-          <div class="chart-panel">
-            <div class="chart-header">
-              <div class="chart-title">
-                <span id="chart-symbol">BTCUSDT</span>
-                <span class="chart-subtitle" id="chart-timeframe">15m</span>
-              </div>
-            </div>
-            <div class="chart-container" id="price-chart-container"></div>
-          </div>
-
-          <!-- Right: AI Predictor -->
-          <div class="ai-predictor-panel">
-            <h2 class="panel-title">AI Предсказатель</h2>
+        <!-- RIGHT: Sidebar (30% width) -->
+        <div class="sidebar">
+          <!-- AI Predictor Block (~220px) -->
+          <div class="ai-predictor-block">
+            <h2 class="sidebar-title">AI Predictor</h2>
             <div class="ai-predictor-content">
-              <div class="ai-forecast">
-                <div class="ai-forecast-label">Прогноз цены (24h)</div>
-                <div class="ai-forecast-value" id="ai-forecast-price">--</div>
+              <div class="ai-forecast-item">
+                <div class="ai-label">Price Forecast (24h)</div>
+                <div class="ai-value" id="ai-forecast-price">--</div>
               </div>
-              <div class="ai-signal">
-                <div class="ai-signal-label">Сила сигнала</div>
+              <div class="ai-signal-item">
+                <div class="ai-label">Signal Strength</div>
                 <div class="ai-signal-bar">
                   <div class="ai-signal-fill" id="ai-signal-fill"></div>
                 </div>
                 <div class="ai-signal-value" id="ai-signal-value">--</div>
               </div>
-              <div class="ai-sentiment">
-                <div class="ai-sentiment-label">Настроение рынка</div>
-                <div class="ai-sentiment-line" id="ai-sentiment-line"></div>
+              <div class="ai-sentiment-item">
+                <div class="ai-label">Market Sentiment</div>
+                <div class="ai-sentiment-line">
+                  <div class="ai-sentiment-fill" id="ai-sentiment-fill"></div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <!-- Bottom Row: AI Assistant + Ticker -->
-        <div class="bottom-row">
-          <div class="ai-assistant-panel">
-            <h2 class="panel-title">AI Ассистент</h2>
+          <!-- AI Chat Block (remaining height, scrollable) -->
+          <div class="ai-chat-block">
+            <h2 class="sidebar-title">AI Chat</h2>
             <div class="ai-chat-messages" id="ai-chat-messages">
-              <div class="chat-message system">Добро пожаловать в CryptoBot Pro AI Ассистент</div>
+              <div class="chat-message system">Welcome to CryptoBot Pro AI Assistant</div>
             </div>
             <div class="ai-chat-input-container">
-              <input type="text" class="ai-chat-input" id="ai-chat-input" placeholder="Введите сообщение..." />
-              <button class="ai-chat-send" id="ai-chat-send">Отправить</button>
-            </div>
-          </div>
-          <div class="ticker-panel">
-            <h2 class="panel-title">Live Trades</h2>
-            <div class="ticker-container" id="live-ticker-container">
-              <div class="ticker-content" id="live-ticker-content">Ожидание сделок...</div>
+              <input type="text" class="ai-chat-input" id="ai-chat-input" placeholder="Type a message..." />
+              <button class="ai-chat-send" id="ai-chat-send">Send</button>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- BackTest Mode Content -->
-      <div class="dashboard-content" id="backtest-content" style="display: none;">
-        <!-- BackTest Layout -->
-        <div class="backtest-main-row">
-          <!-- Left: BackTest Parameters -->
-          <div class="backtest-params-panel">
-            <h2 class="panel-title">Параметры бектеста</h2>
-            <div class="params-form">
-              <div class="form-field">
-                <label>Пара</label>
-                <select id="backtest-symbol">
-                  <option value="BTCUSDT">BTCUSDT</option>
-                  <option value="ETHUSDT">ETHUSDT</option>
-                </select>
-              </div>
-              <div class="form-field">
-                <label>Таймфрейм</label>
-                <select id="backtest-timeframe">
-                  <option value="15m" selected>15m</option>
-                  <option value="1h">1h</option>
-                  <option value="4h">4h</option>
-                  <option value="1d">1d</option>
-                </select>
-              </div>
-              <div class="form-field">
-                <label>От</label>
-                <input type="date" id="backtest-date-from" />
-              </div>
-              <div class="form-field">
-                <label>До</label>
-                <input type="date" id="backtest-date-to" />
-              </div>
-              <div class="form-field">
-                <label>Начальный баланс</label>
-                <input type="number" id="backtest-initial-balance" value="10000" />
-              </div>
-              <div class="form-field">
-                <label>
-                  <input type="checkbox" id="backtest-fee" checked />
-                  Учитывать комиссию
-                </label>
-              </div>
-              <div class="form-field">
-                <label>
-                  <input type="checkbox" id="backtest-slippage" />
-                  Учитывать проскальзывание
-                </label>
-              </div>
-              <button class="btn-primary" id="backtest-run-btn">Запустить бектест</button>
-            </div>
+      <!-- BOTTOM BAR: 80px height -->
+      <div class="bottom-bar">
+        <div class="bottom-controls">
+          <select class="control-select" id="bottom-symbol">
+            <option value="BTCUSDT">BTCUSDT</option>
+            <option value="ETHUSDT" selected>ETHUSDT</option>
+            <option value="BNBUSDT">BNBUSDT</option>
+          </select>
+          <select class="control-select" id="bottom-exchange">
+            <option value="bybit" selected>Bybit</option>
+            <option value="binance">Binance</option>
+          </select>
+          <div class="timeframe-segmented">
+            <button class="seg-btn" data-tf="1m">1m</button>
+            <button class="seg-btn" data-tf="5m">5m</button>
+            <button class="seg-btn active" data-tf="15m">15m</button>
+            <button class="seg-btn" data-tf="1h">1h</button>
+            <button class="seg-btn" data-tf="4h">4h</button>
+            <button class="seg-btn" data-tf="1d">1d</button>
           </div>
-
-          <!-- Center: Equity Chart -->
-          <div class="backtest-chart-panel">
-            <div class="chart-header">
-              <div class="chart-title">Equity Curve</div>
-            </div>
-            <div class="chart-container" id="equity-chart-container"></div>
+          <select class="control-select" id="bottom-strategy">
+            <option value="trend">Trend Following</option>
+            <option value="mean">Mean Reversion</option>
+            <option value="momentum">Momentum</option>
+          </select>
+          <div class="risk-input-group">
+            <label>Risk $</label>
+            <input type="number" class="control-input" id="bottom-risk" value="100" />
           </div>
-
-          <!-- Right: BackTest Results -->
-          <div class="backtest-results-panel">
-            <h2 class="panel-title">Результаты</h2>
-            <div class="backtest-results-content">
-              <div class="result-metric">
-                <div class="result-label">Final PnL</div>
-                <div class="result-value" id="backtest-final-pnl">--</div>
-              </div>
-              <div class="result-metric">
-                <div class="result-label">Winrate</div>
-                <div class="result-value" id="backtest-winrate">--</div>
-              </div>
-              <div class="result-metric">
-                <div class="result-label">Max Drawdown</div>
-                <div class="result-value" id="backtest-max-dd">--</div>
-              </div>
-              <div class="result-metric">
-                <div class="result-label">Trades Count</div>
-                <div class="result-value" id="backtest-trades-count">--</div>
-              </div>
-              <div class="result-metric">
-                <div class="result-label">Avg R:R</div>
-                <div class="result-value" id="backtest-avg-rr">--</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Bottom: BackTest Trades Table -->
-        <div class="backtest-trades-panel">
-          <h2 class="panel-title">Сделки</h2>
-          <div class="trades-table-container">
-            <table class="trades-table">
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>Side</th>
-                  <th>Qty</th>
-                  <th>Price</th>
-                  <th>PnL</th>
-                  <th>Cum. PnL</th>
-                </tr>
-              </thead>
-              <tbody id="backtest-trades-tbody">
-                <tr>
-                  <td colspan="6" class="no-data">Нет данных</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <div class="balance-display" id="bottom-balance">Balance: $10,000</div>
         </div>
       </div>
     </div>
