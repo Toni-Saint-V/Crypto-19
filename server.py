@@ -494,6 +494,11 @@ async def api_backtest_run(request: Request):
         # Try to get parameters from JSON body first
         try:
             body = await request.json()
+    # BACKTEST_RUN_PARAMS
+    start_ts = data.get("start_ts")
+    end_ts = data.get("end_ts")
+    start_iso = data.get("start_iso")
+    end_iso = data.get("end_iso")
             symbol = body.get("symbol", "BTCUSDT")
             interval = body.get("interval", "60")
             strategy = body.get("strategy", "pattern3_extreme")
@@ -520,8 +525,15 @@ async def api_backtest_run(request: Request):
         )
         
         if "error" in result:
-            return JSONResponse(result, status_code=400)
-        
+    # BACKTEST_STORE_CONTEXT
+    _ctx = result, status_code=400
+    try:
+        if isinstance(_ctx, dict):
+            globals()["last_backtest_context"] = _ctx
+    except Exception:
+        pass
+    return JSONResponse(_ctx)
+
         # Calculate equity curve from trades
         initial_capital = 10000.0
         equity_curve = [initial_capital]
