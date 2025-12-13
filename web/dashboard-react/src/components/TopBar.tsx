@@ -1,5 +1,33 @@
 import { Mode, KPIData, BacktestKPIData } from '../types';
 import MetricCard from './MetricCard';
+import { useEffect, useState } from "react";
+
+type BacktestKpi = {
+  totalTrades: number;
+  profitFactor: number;
+  maxDrawdown: number;
+};
+
+function num(v: any, d: number): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : d;
+}
+
+async function fetchBacktestKpi(apiBase: string): Promise<BacktestKpi> {
+  try {
+    const r = await fetch(`${apiBase}/api/backtest`);
+    const data = await r.json().catch(() => ({}));
+    const src = (data && (data.kpi || data.summary || data)) || {};
+    return {
+      totalTrades: num(src.totalTrades ?? src.trades ?? src.total_trades, 0),
+      profitFactor: num(src.profitFactor ?? src.pf ?? src.profit_factor, 0),
+      maxDrawdown: num(src.maxDrawdown ?? src.dd ?? src.max_drawdown, 0),
+    };
+  } catch {
+    return { totalTrades: 0, profitFactor: 0, maxDrawdown: 0 };
+  }
+}
+
 
 interface TopBarProps {
   mode: Mode;
@@ -16,13 +44,7 @@ const liveKPI: KPIData = {
   riskLevel: 'Moderate',
 };
 
-const backtestKPI: BacktestKPIData = {
-  totalPnl: 34210.0,
-  winrate: 61.2,
-  totalTrades: 486,
-  profitFactor: 1.9,
-  maxDrawdown: 14.3,
-};
+const backtestKPI: BacktestKpi = { totalTrades: 0, profitFactor: 0, maxDrawdown: 0 };
 
 function ModeButton(props: {
   label: string;
@@ -51,9 +73,16 @@ export default function TopBar({
   exchange,
   balance,
 }: TopBarProps) {
+  const apiBase = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
+  const [backtestKpiLive, setBacktestKpiLive] = useState<BacktestKpi>({ totalTrades: 0, profitFactor: 0, maxDrawdown: 0 });
+
+  useEffect(() => {
+    fetchBacktestKpi(apiBase).then(setBacktestKpiLive);
+  }, [apiBase]);
+
   const isBacktest = mode === 'backtest';
   const isTest = mode === 'test';
-  const kpi = isBacktest ? backtestKPI : liveKPI;
+  const kpi = isBacktest ? backtestKpiLive : liveKPI;
 
   return (
     <div className="h-[80px] min-h-[80px] flex items-center justify-between px-6 border-b border-[#1A1C22] bg-[#05070A] flex-shrink-0">
