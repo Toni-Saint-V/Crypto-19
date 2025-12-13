@@ -20,7 +20,7 @@ export default function AIPredictorStrip({ predictor = mockPredictor }: AIPredic
         : 'text-gray-400';
 
   return (
-    <div className="h-12 px-6 border-b border-[#1A1C22] bg-[#05070A] flex items-center gap-6 text-xs">
+    <div className="h-12 min-h-[48px] px-6 border-b border-[#1A1C22] bg-[#05070A] flex items-center gap-6 text-xs flex-shrink-0">
       <div className="flex items-center gap-2 min-w-[120px]">
         <span className="text-gray-500">AI Predictor:</span>
         <span className={`font-medium ${biasColor}`}>{predictor.bias}</span>

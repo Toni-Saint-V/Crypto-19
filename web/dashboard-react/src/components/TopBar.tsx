@@ -56,7 +56,7 @@ export default function TopBar({
   const kpi = isBacktest ? backtestKPI : liveKPI;
 
   return (
-    <div className="h-[80px] flex items-center justify-between px-6 border-b border-[#1A1C22] bg-[#05070A]">
+    <div className="h-[80px] min-h-[80px] flex items-center justify-between px-6 border-b border-[#1A1C22] bg-[#05070A] flex-shrink-0">
       <div className="flex items-center gap-4">
         <div className="text-lg font-semibold">
           <span className="text-white">Crypto</span>
@@ -80,14 +80,24 @@ export default function TopBar({
         />
         <MetricCard label="Winrate" value={`${kpi.winrate.toFixed(1)}%`} />
         {isBacktest ? (
-          <MetricCard label="Total Trades" value={backtestKPI.totalTrades} />
+          <>
+            <MetricCard label="Total Trades" value={backtestKPI.totalTrades} />
+            <MetricCard
+              label="Profit Factor"
+              value={backtestKPI.profitFactor.toFixed(2)}
+            />
+            <MetricCard
+              label="Max Drawdown"
+              value={`-${backtestKPI.maxDrawdown.toFixed(1)}%`}
+              valueColor="negative"
+            />
+          </>
         ) : (
-          <MetricCard label="Active Positions" value={liveKPI.activePositions} />
+          <>
+            <MetricCard label="Active Positions" value={liveKPI.activePositions} />
+            <MetricCard label="Risk Level" value={liveKPI.riskLevel} />
+          </>
         )}
-        <MetricCard
-          label={isBacktest ? 'Profit Factor' : 'Risk Level'}
-          value={isBacktest ? backtestKPI.profitFactor.toFixed(2) : liveKPI.riskLevel}
-        />
       </div>
 
       <div className="flex items-center gap-3">

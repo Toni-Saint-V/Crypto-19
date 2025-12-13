@@ -30,7 +30,7 @@ export default function ChartArea({
   };
 
   return (
-    <div className="flex-1 flex flex-col border-t border-[#1A1C22] bg-[#05070A]">
+    <div className="flex-1 flex flex-col border-t border-[#1A1C22] bg-[#05070A] min-h-0 overflow-hidden">
       {mode === 'backtest' && <BacktestConfigPanel />}
       <ChartParametersRow
         symbol={symbol}
@@ -41,7 +41,7 @@ export default function ChartArea({
         onTimeframeChange={handleTimeframeChange}
         onRiskFilterChange={setRiskFilter}
       />
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 overflow-hidden">
         <TradingChart />
       </div>
     </div>

@@ -36,7 +36,7 @@ export default function ChartParametersRow({
   };
 
   return (
-    <div className="h-12 flex items-center justify-between px-6 border-b border-[#1A1C22] bg-[#05070A]">
+    <div className="h-12 min-h-[48px] flex items-center justify-between px-6 border-b border-[#1A1C22] bg-[#05070A] flex-shrink-0">
       <div className="flex items-center gap-4 text-xs">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-white">{symbol}</span>

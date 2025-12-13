@@ -226,11 +226,16 @@ class NotificationManager:
             )
         
         # Send message
-        # send_message removed(
-            user_id,
-            text,
-            reply_markup=keyboard
-        )
+        # Send message
+        if getattr(self, 'bot', None) and hasattr(self.bot, 'send_message'):
+            await self.bot.send_message(
+                user_id,
+                text,
+                reply_markup=keyboard,
+            )
+        else:
+            # Bot not configured; skip notification send
+            pass
     
     async def send_signal_alert(self, signal_data: Any):
         """Send trading signal alert"""

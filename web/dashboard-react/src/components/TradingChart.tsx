@@ -115,8 +115,8 @@ export default function TradingChart({ data, height }: TradingChartProps) {
   }, [data]);
 
   return (
-    <div className="w-full h-full bg-[#05070A]">
-      <div ref={chartContainerRef} className="w-full h-full" />
+    <div className="w-full h-full bg-[#05070A] min-h-0">
+      <div ref={chartContainerRef} className="w-full h-full min-h-0" />
     </div>
   );
 }
