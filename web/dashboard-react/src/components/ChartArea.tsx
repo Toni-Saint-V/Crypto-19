@@ -3,6 +3,7 @@ import { Mode } from '../types';
 import TradingChart from './TradingChart';
 import ChartParametersRow from './ChartParametersRow';
 import BacktestConfigPanel from './BacktestConfigPanel';
+import BacktestResultsPanel from "./BacktestResultsPanel";
 
 interface ChartAreaProps {
   mode: Mode;
@@ -31,7 +32,7 @@ export default function ChartArea({
 
   return (
     <div className="flex-1 flex flex-col border-t border-[#1A1C22] bg-[#05070A] min-h-0 overflow-hidden">
-      {mode === 'backtest' && <BacktestConfigPanel />}
+      {mode === 'backtest' && (<><BacktestConfigPanel /><BacktestResultsPanel /></>)}
       <ChartParametersRow
         symbol={symbol}
         exchange={exchange}
