@@ -543,6 +543,7 @@ async def api_backtest_run(request: Request):
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
+
 @app.get("/api/backtest")
 async def api_backtest_legacy():
     """
@@ -889,14 +890,14 @@ async def ws_dashboard(websocket: WebSocket):
     """
     await websocket.accept()
     try:
-        # При подключении: отправляем первый снапшот
+        # Send initial snapshot on connect
         snapshot = await get_dashboard_snapshot()
         await websocket.send_json({
             "type": "dashboard_update",
             "payload": snapshot.dict(),
         })
 
-        # Простой таймер: периодически отправляем обновлённый снапшот
+        # Periodically push updated snapshot
         while True:
             await asyncio.sleep(5.0)
             snapshot = await get_dashboard_snapshot()
@@ -905,7 +906,7 @@ async def ws_dashboard(websocket: WebSocket):
                 "payload": snapshot.dict(),
             })
     except WebSocketDisconnect:
-        # тихо выходим без ошибок
+        # Client disconnected: exit silently
         pass
     except Exception as exc:
         print(f"[WS /ws/dashboard] error: {exc}")
