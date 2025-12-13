@@ -53,6 +53,8 @@ if ! command -v npm >/dev/null 2>&1; then
   exit 1
 fi
 
+: >"$VITE_LOG" || true
+
 if [ ! -d "node_modules" ]; then
   echo "INFO: node_modules not found, running npm install (first run)"
   npm install >>"$VITE_LOG" 2>&1
