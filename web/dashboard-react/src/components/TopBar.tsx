@@ -95,6 +95,34 @@ export default function TopBar({
     window.addEventListener("backtest:updated", handler as any);
     return () => window.removeEventListener("backtest:updated", handler as any);
   }, []);
+  /* BACKTEST_POLL */
+  useEffect(() => {
+    if (mode !== 'backtest') return;
+
+    let cancelled = false;
+
+    const tick = async () => {
+      const data = await fetchBacktestKpi(apiBase).catch(() => ({
+        totalTrades: 0,
+        profitFactor: 0,
+        maxDrawdown: 0,
+      }));
+
+      if (cancelled) return;
+
+      setBacktestKpiLive(data);
+      window.dispatchEvent(new CustomEvent("backtest:updated", { detail: data }));
+    };
+
+    tick();
+    const id = window.setInterval(tick, 2000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [mode, apiBase]);
+
 const isBacktest = mode === 'backtest';
   const isTest = mode === 'test';
   const kpi = isBacktest ? backtestKpiLive : liveKPI;
@@ -125,14 +153,14 @@ const isBacktest = mode === 'backtest';
         <MetricCard label="Winrate" value={`${kpi.winrate.toFixed(1)}%`} />
         {isBacktest ? (
           <>
-            <MetricCard label="Total Trades" value={backtestKPI.totalTrades} />
+            <MetricCard label="Total Trades" value={kpi.totalTrades} />
             <MetricCard
               label="Profit Factor"
-              value={backtestKPI.profitFactor.toFixed(2)}
+              value={kpi.profitFactor.toFixed(2)}
             />
             <MetricCard
               label="Max Drawdown"
-              value={`-${backtestKPI.maxDrawdown.toFixed(1)}%`}
+              value={`-${kpi.maxDrawdown.toFixed(1)}%`}
               valueColor="negative"
             />
           </>
