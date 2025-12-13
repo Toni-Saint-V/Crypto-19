@@ -544,7 +544,78 @@ async def api_backtest_run(request: Request):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+
+# BACKTEST_CURRENT_ENDPOINT
 @app.get("/api/backtest")
+async def api_backtest_current():
+    """
+    Returns the latest REAL backtest result if available (from last_backtest_context),
+    otherwise falls back to legacy mock endpoint.
+    """
+    global last_backtest_context
+
+    try:
+        ctx = last_backtest_context or {}
+
+        equity_curve = ctx.get("equity_curve") or []
+        trades = ctx.get("trades") or []
+        prices = ctx.get("prices") or []
+
+        # Build statistics compatible with frontend expectations
+        stats = dict(ctx.get("statistics") or {})
+
+        # total_trades
+        if "total_trades" not in stats:
+            stats["total_trades"] = len(trades)
+
+        # total_return
+        if "total_return" not in stats:
+            if len(equity_curve) >= 2 and equity_curve[0]:
+                stats["total_return"] = round(((equity_curve[-1] - equity_curve[0]) / equity_curve[0]) * 100, 2)
+            else:
+                stats["total_return"] = 0.0
+
+        # max_drawdown (percent)
+        if "max_drawdown" not in stats:
+            peak = None
+            max_dd = 0.0
+            for v in equity_curve:
+                try:
+                    x = float(v)
+                except Exception:
+                    continue
+                if peak is None or x > peak:
+                    peak = x
+                if peak and peak > 0:
+                    dd = (peak - x) / peak * 100.0
+                    if dd > max_dd:
+                        max_dd = dd
+            stats["max_drawdown"] = round(max_dd, 2)
+
+        # profit_factor (optional; keep 0 if unknown)
+        if "profit_factor" not in stats:
+            stats["profit_factor"] = float(ctx.get("profit_factor") or 0.0)
+
+        # Ensure arrays exist (frontend usually can handle empty)
+        if not prices and equity_curve:
+            prices = [0 for _ in range(len(equity_curve))]
+
+        payload = {
+            "equity_curve": equity_curve,
+            "prices": prices,
+            "trades": trades,
+            "statistics": stats,
+        }
+
+        # If no real result yet, fallback to legacy mock
+        if not equity_curve and not trades:
+            return await api_backtest_legacy()
+
+        return JSONResponse(payload)
+    except Exception:
+        return await api_backtest_legacy()
+
+@app.get("/api/backtest/legacy")
 async def api_backtest_legacy():
     """
     Legacy endpoint for backward compatibility.
