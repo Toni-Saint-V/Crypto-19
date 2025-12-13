@@ -546,7 +546,39 @@ async def api_backtest_run(request: Request):
 
 
 # BACKTEST_CURRENT_ENDPOINT
+
+# BACKTEST_CURRENT_ENDPOINT
 @app.get("/api/backtest")
+async def api_backtest_current():
+    """
+    Returns the latest backtest result from last_backtest_context (if present),
+    otherwise falls back to the mock endpoint.
+    """
+    try:
+        ctx = globals().get("last_backtest_context") or {}
+        if isinstance(ctx, dict):
+            equity_curve = ctx.get("equity_curve") or []
+            trades = ctx.get("trades") or []
+            prices = ctx.get("prices") or []
+            stats = ctx.get("statistics") or {}
+
+            # If we have something real, return it
+            if equity_curve or trades:
+                # Keep response shape stable for frontend
+                if not isinstance(stats, dict):
+                    stats = {}
+                return JSONResponse({
+                    "equity_curve": equity_curve,
+                    "prices": prices if prices else ([0 for _ in range(len(equity_curve))] if equity_curve else []),
+                    "trades": trades,
+                    "statistics": stats,
+                })
+    except Exception:
+        pass
+
+    return await api_backtest_current()
+
+@app.get("/api/backtest/mock")
 async def api_backtest_current():
     """
     Returns the latest REAL backtest result if available (from last_backtest_context),
