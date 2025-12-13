@@ -4,31 +4,41 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-mkdir -p logs
-BACKEND_LOG="logs/backend_dev.log"
-VITE_LOG="logs/vite_dev.log"
+mkdir -p "$PROJECT_ROOT/logs"
+BACKEND_LOG="$PROJECT_ROOT/logs/backend_dev.log"
+VITE_LOG="$PROJECT_ROOT/logs/vite_dev.log"
 
-if [ -d "venv" ]; then
+if [ -d "$PROJECT_ROOT/venv" ]; then
   echo "INFO: activating venv"
-  . venv/bin/activate
+  . "$PROJECT_ROOT/venv/bin/activate"
 else
   echo "WARN: venv not found, using system python3"
 fi
 
-if ! pgrep -f "python(3)? .*server\.py" >/dev/null 2>&1; then
-  echo "INFO: starting backend server.py on :8000"
-  python3 -u server.py >>"$BACKEND_LOG" 2>&1 &
-  BACKEND_PID=$!
+if pgrep -f "python(3)? .*server\.py" >/dev/null 2>&1; then
+  if [ "${FORCE_RESTART_BACKEND:-0}" = "1" ]; then
+    echo "INFO: restarting backend (FORCE_RESTART_BACKEND=1)"
+    pkill -f "python(3)? .*server\.py" || true
+    sleep 1
+    : >"$BACKEND_LOG" || true
+    python3 -u "$PROJECT_ROOT/server.py" >>"$BACKEND_LOG" 2>&1 &
+    BACKEND_PID=$!
+  else
+    echo "INFO: backend server.py already running (set FORCE_RESTART_BACKEND=1 to restart and capture logs)"
+    BACKEND_PID=""
+  fi
 else
-  echo "INFO: backend server.py already running"
-  BACKEND_PID=""
+  echo "INFO: starting backend server.py on :8000"
+  : >"$BACKEND_LOG" || true
+  python3 -u "$PROJECT_ROOT/server.py" >>"$BACKEND_LOG" 2>&1 &
+  BACKEND_PID=$!
 fi
 
 PIDS_5173="$(lsof -ti tcp:5173 2>/dev/null || true)"
 if [ -n "${PIDS_5173}" ]; then
   echo "INFO: killing old dev server on port 5173: ${PIDS_5173}"
   kill ${PIDS_5173} 2>/dev/null || true
-  sleep 2
+  sleep 1
   STILL_5173="$(lsof -ti tcp:5173 2>/dev/null || true)"
   if [ -n "${STILL_5173}" ]; then
     echo "INFO: forcing kill on port 5173: ${STILL_5173}"
@@ -36,7 +46,7 @@ if [ -n "${PIDS_5173}" ]; then
   fi
 fi
 
-cd web/dashboard-react || { echo "ERROR: web/dashboard-react not found"; exit 1; }
+cd "$PROJECT_ROOT/web/dashboard-react" || { echo "ERROR: web/dashboard-react not found"; exit 1; }
 
 if ! command -v npm >/dev/null 2>&1; then
   echo "ERROR: npm not found. Install Node.js and rerun."
