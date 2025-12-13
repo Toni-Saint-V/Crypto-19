@@ -84,7 +84,40 @@ export default function BacktestConfigPanel(): JSX.Element {
     }
   };
 
-  return (
+  
+  /* BACKTEST_DATE_RANGE */
+  const toDatetimeLocal = (d: Date) => {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const __now = new Date();
+  const __defaultEnd = toDatetimeLocal(__now);
+  const __defaultStart = toDatetimeLocal(new Date(__now.getTime() - 30 * 24 * 3600 * 1000));
+
+  const [startIso, setStartIso] = useState<string>(__defaultStart);
+  const [endIso, setEndIso] = useState<string>(__defaultEnd);
+
+return (
+    {/* BACKTEST_DATE_RANGE_UI */}
+    <div style={ display: "flex", gap: 12, alignItems: "end", marginBottom: 12, flexWrap: "wrap" }>
+      <label style={ display: "flex", flexDirection: "column", gap: 4 }>
+        <span style={ fontSize: 12, opacity: 0.8 }>Start</span>
+        <input
+          type="datetime-local"
+          value={startIso}
+          onChange={(e) => setStartIso(e.target.value)}
+        />
+      </label>
+      <label style={ display: "flex", flexDirection: "column", gap: 4 }>
+        <span style={ fontSize: 12, opacity: 0.8 }>End</span>
+        <input
+          type="datetime-local"
+          value={endIso}
+          onChange={(e) => setEndIso(e.target.value)}
+        />
+      </label>
+    </div>
     <div style={{ padding: 12, border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10 }}>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
         <div style={{ minWidth: 180 }}>
