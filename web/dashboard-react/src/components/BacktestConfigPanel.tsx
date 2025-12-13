@@ -100,7 +100,7 @@ export default function BacktestConfigPanel(): JSX.Element {
 
 return (
     {/* BACKTEST_DATE_RANGE_UI */}
-    <div style={ display: "flex", gap: 12, alignItems: "end", marginBottom: 12, flexWrap: "wrap" }>
+    <div style={{ display: "flex", gap: 12, alignItems: "end", marginBottom: 12, flexWrap: "wrap" }}>
       <label style={ display: "flex", flexDirection: "column", gap: 4 }>
         <span style={ fontSize: 12, opacity: 0.8 }>Start</span>
         <input
