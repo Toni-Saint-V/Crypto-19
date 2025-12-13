@@ -80,7 +80,22 @@ export default function TopBar({
     fetchBacktestKpi(apiBase).then(setBacktestKpiLive);
   }, [apiBase]);
 
-  const isBacktest = mode === 'backtest';
+  
+  useEffect(() => {
+    const handler = (e: any) => {
+      const data = e?.detail || {};
+      const src = (data && (data.kpi || data.summary || data)) || {};
+      setBacktestKpiLive({
+        totalTrades: num(src.totalTrades ?? src.trades ?? src.total_trades, 0),
+        profitFactor: num(src.profitFactor ?? src.pf ?? src.profit_factor, 0),
+        maxDrawdown: num(src.maxDrawdown ?? src.dd ?? src.max_drawdown, 0),
+      });
+    };
+
+    window.addEventListener("backtest:updated", handler as any);
+    return () => window.removeEventListener("backtest:updated", handler as any);
+  }, []);
+const isBacktest = mode === 'backtest';
   const isTest = mode === 'test';
   const kpi = isBacktest ? backtestKpiLive : liveKPI;
 
