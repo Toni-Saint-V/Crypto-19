@@ -1,10 +1,43 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import TopBar from './components/TopBar';
-import AIPredictorStrip from './components/AIPredictorStrip';
+import StatsTicker from './components/StatsTicker';
 import LiveTradesTicker from './components/LiveTradesTicker';
 import ChartArea from './components/ChartArea';
 import Sidebar from './components/Sidebar';
-import { Mode } from './types';
+import { Mode, KPIData, BacktestKPIData } from './types';
+
+type BacktestKpi = {
+  totalTrades: number;
+  profitFactor: number;
+  maxDrawdown: number;
+};
+
+function num(v: any, d: number): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : d;
+}
+
+async function fetchBacktestKpi(apiBase: string): Promise<BacktestKpi> {
+  try {
+    const r = await fetch(`${apiBase}/api/backtest`);
+    const data = await r.json().catch(() => ({}));
+    const src = (data && (data.kpi || data.summary || data)) || {};
+    return {
+      totalTrades: num(src.totalTrades ?? src.trades ?? src.total_trades, 0),
+      profitFactor: num(src.profitFactor ?? src.pf ?? src.profit_factor, 0),
+      maxDrawdown: num(src.maxDrawdown ?? src.dd ?? src.max_drawdown, 0),
+    };
+  } catch {
+    return { totalTrades: 0, profitFactor: 0, maxDrawdown: 0 };
+  }
+}
+
+const liveKPI: KPIData = {
+  totalPnl: 1247.5,
+  winrate: 68.5,
+  activePositions: 3,
+  riskLevel: 'Moderate',
+};
 
 function App() {
   const [mode, setMode] = useState<Mode>('live');
@@ -13,6 +46,66 @@ function App() {
   const [timeframe, setTimeframe] = useState('15m');
   const [strategy] = useState('Mean Reversion v2');
   const [balance] = useState(10000);
+  const [backtestKpi, setBacktestKpi] = useState<BacktestKpi>({ totalTrades: 0, profitFactor: 0, maxDrawdown: 0 });
+
+  const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://127.0.0.1:8000';
+
+  useEffect(() => {
+    fetchBacktestKpi(apiBase).then(setBacktestKpi);
+  }, [apiBase]);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      const data = e?.detail || {};
+      const src = (data && (data.kpi || data.summary || data)) || {};
+      setBacktestKpi({
+        totalTrades: num(src.totalTrades ?? src.trades ?? src.total_trades, 0),
+        profitFactor: num(src.profitFactor ?? src.pf ?? src.profit_factor, 0),
+        maxDrawdown: num(src.maxDrawdown ?? src.dd ?? src.max_drawdown, 0),
+      });
+    };
+
+    window.addEventListener('backtest:updated', handler as any);
+    return () => window.removeEventListener('backtest:updated', handler as any);
+  }, []);
+
+  useEffect(() => {
+    if (mode !== 'backtest') return;
+
+    let cancelled = false;
+
+    const tick = async () => {
+      const data = await fetchBacktestKpi(apiBase).catch(() => ({
+        totalTrades: 0,
+        profitFactor: 0,
+        maxDrawdown: 0,
+      }));
+
+      if (cancelled) return;
+
+      setBacktestKpi(data);
+      window.dispatchEvent(new CustomEvent('backtest:updated', { detail: data }));
+    };
+
+    tick();
+    const id = window.setInterval(tick, 2000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [mode, apiBase]);
+
+  const isBacktest = mode === 'backtest';
+  const kpi: KPIData | BacktestKPIData | null = isBacktest
+    ? {
+        totalPnl: 0, // Will be calculated from backtest results if available
+        winrate: 0,
+        totalTrades: backtestKpi.totalTrades,
+        profitFactor: backtestKpi.profitFactor,
+        maxDrawdown: backtestKpi.maxDrawdown,
+      }
+    : liveKPI;
 
   return (
     <div className="h-screen w-screen bg-[#05070A] text-gray-100 flex justify-center items-center overflow-hidden p-2">
@@ -25,7 +118,7 @@ function App() {
           balance={balance}
         />
 
-        <AIPredictorStrip />
+        <StatsTicker mode={mode} kpi={kpi} backtestKpi={isBacktest ? backtestKpi : undefined} />
 
         <LiveTradesTicker mode={mode} />
 

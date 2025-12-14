@@ -1,33 +1,5 @@
-import { Mode, KPIData, BacktestKPIData } from '../types';
-import MetricCard from './MetricCard';
-import { useEffect, useState } from "react";
-
-type BacktestKpi = {
-  totalTrades: number;
-  profitFactor: number;
-  maxDrawdown: number;
-};
-
-function num(v: any, d: number): number {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : d;
-}
-
-async function fetchBacktestKpi(apiBase: string): Promise<BacktestKpi> {
-  try {
-    const r = await fetch(`${apiBase}/api/backtest`);
-    const data = await r.json().catch(() => ({}));
-    const src = (data && (data.kpi || data.summary || data)) || {};
-    return {
-      totalTrades: num(src.totalTrades ?? src.trades ?? src.total_trades, 0),
-      profitFactor: num(src.profitFactor ?? src.pf ?? src.profit_factor, 0),
-      maxDrawdown: num(src.maxDrawdown ?? src.dd ?? src.max_drawdown, 0),
-    };
-  } catch {
-    return { totalTrades: 0, profitFactor: 0, maxDrawdown: 0 };
-  }
-}
-
+import { Mode, AIPredictor } from '../types';
+import { useState } from 'react';
 
 interface TopBarProps {
   mode: Mode;
@@ -37,14 +9,11 @@ interface TopBarProps {
   balance: number;
 }
 
-const liveKPI: KPIData = {
-  totalPnl: 1247.5,
-  winrate: 68.5,
-  activePositions: 3,
-  riskLevel: 'Moderate',
+const mockPredictor: AIPredictor = {
+  bias: 'Bullish',
+  strength: 78,
+  explanation: 'Strong upward momentum with increasing volume. Key resistance levels broken.',
 };
-
-const backtestKPI: BacktestKpi = { totalTrades: 0, profitFactor: 0, maxDrawdown: 0 };
 
 function ModeButton(props: {
   label: string;
@@ -56,7 +25,7 @@ function ModeButton(props: {
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-1.5 text-xs font-medium rounded-full transition-colors ${
+      className={`px-3 py-1 text-[10px] font-medium rounded-full transition-colors ${
         active
           ? 'bg-[#21D4B4] text-black'
           : 'text-gray-400 hover:text-gray-200'
@@ -73,108 +42,70 @@ export default function TopBar({
   exchange,
   balance,
 }: TopBarProps) {
-  const apiBase = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
-  const [backtestKpiLive, setBacktestKpiLive] = useState<BacktestKpi>({ totalTrades: 0, profitFactor: 0, maxDrawdown: 0 });
-
-  useEffect(() => {
-    fetchBacktestKpi(apiBase).then(setBacktestKpiLive);
-  }, [apiBase]);
-
-  
-  useEffect(() => {
-    const handler = (e: any) => {
-      const data = e?.detail || {};
-      const src = (data && (data.kpi || data.summary || data)) || {};
-      setBacktestKpiLive({
-        totalTrades: num(src.totalTrades ?? src.trades ?? src.total_trades, 0),
-        profitFactor: num(src.profitFactor ?? src.pf ?? src.profit_factor, 0),
-        maxDrawdown: num(src.maxDrawdown ?? src.dd ?? src.max_drawdown, 0),
-      });
-    };
-
-    window.addEventListener("backtest:updated", handler as any);
-    return () => window.removeEventListener("backtest:updated", handler as any);
-  }, []);
-  /* BACKTEST_POLL */
-  useEffect(() => {
-    if (mode !== 'backtest') return;
-
-    let cancelled = false;
-
-    const tick = async () => {
-      const data = await fetchBacktestKpi(apiBase).catch(() => ({
-        totalTrades: 0,
-        profitFactor: 0,
-        maxDrawdown: 0,
-      }));
-
-      if (cancelled) return;
-
-      setBacktestKpiLive(data);
-      window.dispatchEvent(new CustomEvent("backtest:updated", { detail: data }));
-    };
-
-    tick();
-    const id = window.setInterval(tick, 2000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
-  }, [mode, apiBase]);
-
-const isBacktest = mode === 'backtest';
+  const [predictor] = useState<AIPredictor>(mockPredictor);
   const isTest = mode === 'test';
-  const kpi = isBacktest ? backtestKpiLive : liveKPI;
+
+  const biasColor =
+    predictor.bias === 'Bullish'
+      ? 'text-emerald-400'
+      : predictor.bias === 'Bearish'
+        ? 'text-red-400'
+        : 'text-gray-400';
 
   return (
-    <div className="h-[80px] min-h-[80px] flex items-center justify-between px-6 border-b border-[#1A1C22] bg-[#05070A] flex-shrink-0">
-      <div className="flex items-center gap-4">
-        <div className="text-lg font-semibold">
+    <div className="h-12 min-h-[48px] flex items-center justify-between px-6 border-b border-[#1A1C22] bg-[#05070A] flex-shrink-0">
+      {/* Left: Brand + Exchange + Balance */}
+      <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="text-base font-semibold">
           <span className="text-white">Crypto</span>
           <span className="text-[#21D4B4]">Bot Pro</span>
         </div>
         {isTest && (
-          <div className="px-2 py-0.5 text-[10px] font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded">
+          <div className="px-1.5 py-0.5 text-[9px] font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded">
             TESTNET
           </div>
         )}
-        <div className="text-xs text-gray-400">
-          {exchange} • Balance: <span className="text-white">${balance.toLocaleString()}</span>
+        <div className="text-[10px] text-gray-400">
+          {exchange} • <span className="text-gray-300">${balance.toLocaleString()}</span>
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <MetricCard
-          label="Total PnL"
-          value={`$${kpi.totalPnl.toFixed(2)}`}
-          valueColor={kpi.totalPnl >= 0 ? 'positive' : 'negative'}
-        />
-        <MetricCard label="Winrate" value={`${kpi.winrate.toFixed(1)}%`} />
-        {isBacktest ? (
-          <>
-            <MetricCard label="Total Trades" value={kpi.totalTrades} />
-            <MetricCard
-              label="Profit Factor"
-              value={kpi.profitFactor.toFixed(2)}
-            />
-            <MetricCard
-              label="Max Drawdown"
-              value={`-${kpi.maxDrawdown.toFixed(1)}%`}
-              valueColor="negative"
-            />
-          </>
-        ) : (
-          <>
-            <MetricCard label="Active Positions" value={liveKPI.activePositions} />
-            <MetricCard label="Risk Level" value={liveKPI.riskLevel} />
-          </>
-        )}
+      {/* Center: AI Predictor block */}
+      <div className="flex items-center gap-4 flex-1 px-6 min-w-0">
+        <div className="flex items-center gap-2 min-w-[100px] flex-shrink-0">
+          <span className="text-[10px] text-gray-500">AI:</span>
+          <span className={`text-[11px] font-medium ${biasColor}`}>{predictor.bias}</span>
+        </div>
+
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div className="flex-1 min-w-0 max-w-[200px]">
+            <div className="h-1 bg-[#0D0F12] rounded-full overflow-hidden">
+              <div
+                className={`h-full transition-all ${
+                  predictor.bias === 'Bullish'
+                    ? 'bg-emerald-400'
+                    : predictor.bias === 'Bearish'
+                      ? 'bg-red-400'
+                      : 'bg-gray-400'
+                }`}
+                style={{ width: `${predictor.strength}%` }}
+              />
+            </div>
+          </div>
+          <div className="text-[10px] text-gray-400 min-w-[50px] flex-shrink-0">
+            {predictor.strength}%
+          </div>
+        </div>
+
+        <div className="text-[10px] text-gray-400 max-w-[250px] truncate flex-shrink-0">
+          {predictor.explanation}
+        </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 text-xs text-gray-400">
-          <span className="inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+      {/* Right: Connection + Mode + Settings */}
+      <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="flex items-center gap-1.5 text-[10px] text-gray-400">
+          <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
           <span>Connected</span>
         </div>
         <div className="flex items-center gap-1 bg-[#090B10] border border-[#1A1C22] rounded-full px-1 py-0.5">
@@ -194,6 +125,23 @@ const isBacktest = mode === 'backtest';
             onClick={() => onModeChange('backtest')}
           />
         </div>
+        <button className="p-1.5 text-gray-400 hover:text-gray-200 transition-colors">
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+            />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </button>
       </div>
     </div>
   );
