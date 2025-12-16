@@ -28,10 +28,30 @@ const initialMessages: ChatMessage[] = [
 ];
 
 export default function AIChatPanel({ mode }: AIChatPanelProps) {
+
+  async function requestAssistant(userText: string): Promise<string> {
+    try {
+      const payload = {
+        messages: [{ role: "user", content: userText }],
+        context: ({ mode: mode } as any),
+      };
+      const r = await fetch("/api/assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const j = await r.json().catch(() => ({} as any));
+      const answer = (j && j.answer) ? String(j.answer) : `HTTP ${r.status}`;
+      return answer;
+    } catch {
+      return "Assistant error";
+    }
+  }
+
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState('');
 
-  const handleSend = (event: FormEvent) => {
+  const handleSend = async (event: FormEvent) => {
     event.preventDefault();
     const trimmed = input.trim();
     if (!trimmed) {
@@ -44,12 +64,12 @@ export default function AIChatPanel({ mode }: AIChatPanelProps) {
       content: trimmed,
       timestamp: Date.now(),
     };
+    const assistantAnswer = await requestAssistant(trimmed);
 
     const echo: ChatMessage = {
       id: String(Date.now() + 1),
       role: 'ai',
-      content:
-        'This is a local mock response. In production this panel will be connected to the real AI assistant and trading context.',
+      content: assistantAnswer,
       timestamp: Date.now() + 1,
     };
 

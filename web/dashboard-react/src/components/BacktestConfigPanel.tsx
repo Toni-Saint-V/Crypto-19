@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 type RunResponse = {
   equity_curve?: number[];
@@ -99,18 +99,19 @@ export default function BacktestConfigPanel(): JSX.Element {
   const [endIso, setEndIso] = useState<string>(__defaultEnd);
 
 return (
+  <>
     {/* BACKTEST_DATE_RANGE_UI */}
     <div style={{ display: "flex", gap: 12, alignItems: "end", marginBottom: 12, flexWrap: "wrap" }}>
-      <label style={ display: "flex", flexDirection: "column", gap: 4 }>
-        <span style={ fontSize: 12, opacity: 0.8 }>Start</span>
+      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <span style={{ fontSize: 12, opacity: 0.8 }}>Start</span>
         <input
           type="datetime-local"
           value={startIso}
           onChange={(e) => setStartIso(e.target.value)}
         />
       </label>
-      <label style={ display: "flex", flexDirection: "column", gap: 4 }>
-        <span style={ fontSize: 12, opacity: 0.8 }>End</span>
+      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <span style={{ fontSize: 12, opacity: 0.8 }}>End</span>
         <input
           type="datetime-local"
           value={endIso}
@@ -161,5 +162,6 @@ return (
 
       <div style={{ marginTop: 10, fontSize: 12, opacity: 0.9, whiteSpace: "pre-wrap" }}>{status}</div>
     </div>
+  </>
   );
 }

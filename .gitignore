@@ -54,3 +54,27 @@ config.yaml
 web/dashboard-react/node_modules/
 web/dashboard-react/dist/
 web/dashboard-react/.env*
+
+# === AUTO: ARTIFACTS ===
+.DS_Store
+__pycache__/
+*.pyc
+venv/
+.venv/
+node_modules/
+web/**/node_modules/
+reports/
+logs/
+*.log
+data/
+datasets/
+*.db
+*.sqlite
+*.parquet
+*.csv
+*.jsonl
+# === /AUTO: ARTIFACTS ===
+
+.run/
+.quarantine_*/
+PROJECT_LOG.md

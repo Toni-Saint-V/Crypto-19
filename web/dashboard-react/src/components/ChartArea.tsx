@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Mode } from '../types';
 import TradingChart from './TradingChart';
 import ChartParametersRow from './ChartParametersRow';
-import BacktestConfigPanel from './BacktestConfigPanel';
+import ChartHUD from "./ChartHUD";
+import { MLScoreWidget } from "./MLScoreWidget";
 import BacktestResultsPanel from "./BacktestResultsPanel";
 
 interface ChartAreaProps {
@@ -30,9 +31,11 @@ export default function ChartArea({
     }
   };
 
-  return (
+    const mlContext = ({ mode: mode, symbol: symbol, timeframe: timeframe } as any);
+return (
     <div className="flex-1 flex flex-col border-t border-[#1A1C22] bg-[#05070A] min-h-0 overflow-hidden">
-      {mode === 'backtest' && (<><BacktestConfigPanel /><BacktestResultsPanel /></>)}
+      <ChartHUD />
+      <MLScoreWidget context={mlContext} />
       <ChartParametersRow
         symbol={symbol}
         exchange={exchange}
@@ -42,8 +45,17 @@ export default function ChartArea({
         onTimeframeChange={handleTimeframeChange}
         onRiskFilterChange={setRiskFilter}
       />
-      <div className="flex-1 min-h-0 overflow-hidden">
-        <TradingChart />
+
+      {/* Main chart + optional backtest bottom drawer share the remaining vertical space */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <TradingChart />
+        </div>
+
+        {mode === 'backtest' && (
+          // Backtest drawer lives at the bottom of the left column and manages its own internal scroll
+          <BacktestResultsPanel />
+        )}
       </div>
     </div>
   );

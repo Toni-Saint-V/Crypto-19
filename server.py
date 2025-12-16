@@ -33,6 +33,13 @@ import yaml
 # === FASTAPI INITIALIZATION ===
 app = FastAPI(title="CryptoBot Pro — Neural Dashboard")
 
+# === BACKTEST ROUTER (AUTO) ===
+from core.backtest.api import router as backtest_router
+app.include_router(backtest_router)
+# === /BACKTEST ROUTER (AUTO) ===
+
+
+
 # === CORS MIDDLEWARE ===
 app.add_middleware(
     CORSMiddleware,
@@ -483,84 +490,96 @@ async def api_ai_chat(request: Request):
             "error": str(e)
         }, status_code=500)
 
-@app.post("/api/backtest/run")
-async def api_backtest_run(request: Request):
+@app.post("/api/backtest_legacy/run")
+async def api_backtest_run(request: "Request"):
     """
     Run backtest with specified parameters.
     Accepts JSON body or query parameters.
     Returns trades, equity curve, and performance metrics.
     """
+    global last_backtest_context
     try:
-        # Try to get parameters from JSON body first
+        body = {}
         try:
             body = await request.json()
-    # BACKTEST_RUN_PARAMS
-    start_ts = data.get("start_ts")
-    end_ts = data.get("end_ts")
-    start_iso = data.get("start_iso")
-    end_iso = data.get("end_iso")
-            symbol = body.get("symbol", "BTCUSDT")
-            interval = body.get("interval", "60")
-            strategy = body.get("strategy", "pattern3_extreme")
-            risk_per_trade = float(body.get("risk_per_trade", 100.0))
-            rr_ratio = float(body.get("rr_ratio", 4.0))
-            limit = int(body.get("limit", 500))
-        except (ValueError, KeyError, TypeError) as json_error:
-            # Fallback to query parameters if JSON parsing fails
-            log.debug(f"JSON body parsing failed, using query params: {json_error}")
-            symbol = request.query_params.get("symbol", "BTCUSDT")
-            interval = request.query_params.get("interval", "60")
-            strategy = request.query_params.get("strategy", "pattern3_extreme")
-            risk_per_trade = float(request.query_params.get("risk_per_trade", 100.0))
-            rr_ratio = float(request.query_params.get("rr_ratio", 4.0))
-            limit = int(request.query_params.get("limit", 500))
-        
+            if not isinstance(body, dict):
+                body = {}
+        except Exception:
+            body = {}
+
+        def q(name, default=None):
+            v = request.query_params.get(name)
+            return v if v is not None else default
+
+        start_ts = body.get("start_ts", q("start_ts"))
+        end_ts = body.get("end_ts", q("end_ts"))
+        start_iso = body.get("start_iso", q("start_iso"))
+        end_iso = body.get("end_iso", q("end_iso"))
+
+        symbol = body.get("symbol", q("symbol", "BTCUSDT"))
+        interval = body.get("interval", q("interval", "60"))
+        strategy = body.get("strategy", q("strategy", "pattern3_extreme"))
+        risk_per_trade = float(body.get("risk_per_trade", q("risk_per_trade", 100.0)))
+        rr_ratio = float(body.get("rr_ratio", q("rr_ratio", 4.0)))
+        limit = int(body.get("limit", q("limit", 500)))
+
         result = backtest_engine.run(
             symbol=symbol,
             interval=interval,
             strategy=strategy,
             risk_per_trade=risk_per_trade,
             rr_ratio=rr_ratio,
-            limit=limit
+            limit=limit,
         )
-        
-        if "error" in result:
-    # BACKTEST_STORE_CONTEXT
-    _ctx = result, status_code=400
-    try:
-        if isinstance(_ctx, dict):
-            globals()["last_backtest_context"] = _ctx
-    except Exception:
-        pass
-    return JSONResponse(_ctx)
 
-        # Calculate equity curve from trades
-        initial_capital = 10000.0
-        equity_curve = [initial_capital]
-        current_equity = initial_capital
-        
-        for trade in result.get("trades", []):
-            pnl = trade.get("result_R", 0) * risk_per_trade
-            current_equity += pnl
-            equity_curve.append(max(1000, current_equity))  # Floor at 10%
-        
-        result["equity_curve"] = equity_curve
-        result["initial_capital"] = initial_capital
-        
-        # Store context for Toni AI
-        global last_backtest_context
+        if not isinstance(result, dict):
+            return JSONResponse({"error": "backtest returned non-dict"}, status_code=400)
+
+        if "error" in result:
+            return JSONResponse(result, status_code=400)
+
+        # Ensure equity curve exists
+        if "equity_curve" not in result:
+            initial_capital = float(result.get("initial_capital", 10000.0))
+            current_equity = initial_capital
+            equity_curve = [initial_capital]
+            trades = result.get("trades") or []
+            floor_value = max(1.0, initial_capital * 0.1)
+            for trade in trades:
+                try:
+                    pnl_r = float((trade or {}).get("result_R", 0))
+                except Exception:
+                    pnl_r = 0.0
+                current_equity += pnl_r * risk_per_trade
+                equity_curve.append(max(floor_value, current_equity))
+            result["equity_curve"] = equity_curve
+            result["initial_capital"] = initial_capital
+
+        # Attach params for frontend/debug
+        params = dict(result.get("parameters") or {})
+        params.update({
+            "start_ts": start_ts,
+            "end_ts": end_ts,
+            "start_iso": start_iso,
+            "end_iso": end_iso,
+            "symbol": symbol,
+            "interval": interval,
+            "strategy": strategy,
+            "risk_per_trade": risk_per_trade,
+            "rr_ratio": rr_ratio,
+            "limit": limit,
+        })
+        result["parameters"] = params
+
         last_backtest_context = result
-        
         return JSONResponse(result)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
-
-
-
-# BACKTEST_CURRENT_ENDPOINT
-
-# BACKTEST_CURRENT_ENDPOINT
-@app.get("/api/backtest")
+        try:
+            log.exception("api_backtest_run error: %s", e)
+        except Exception:
+            pass
+        return JSONResponse({"error": str(e)}, status_code=400)
+@app.get("/api/backtest_legacy")
 async def api_backtest_current():
     """
     Returns the latest backtest result from last_backtest_context (if present),
@@ -590,7 +609,7 @@ async def api_backtest_current():
 
     return await api_backtest_current()
 
-@app.get("/api/backtest/mock")
+@app.get("/api/backtest_legacy/mock")
 async def api_backtest_current():
     """
     Returns the latest REAL backtest result if available (from last_backtest_context),
@@ -659,7 +678,7 @@ async def api_backtest_current():
     except Exception:
         return await api_backtest_legacy()
 
-@app.get("/api/backtest/legacy")
+@app.get("/api/backtest_legacy/legacy")
 async def api_backtest_legacy():
     """
     Legacy endpoint for backward compatibility.
@@ -1112,3 +1131,74 @@ if __name__ == "__main__":
     print("🚀 Launching CryptoBot Pro Dashboard")
     print("🌐 Dashboard: http://127.0.0.1:8000/dashboard")
     uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
+
+
+
+
+
+
+# === CORS (AUTO) ===
+try:
+    from fastapi.middleware.cors import CORSMiddleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://127.0.0.1:5173",
+            "http://localhost:5173",
+            "http://127.0.0.1:4173",
+            "http://localhost:4173",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+except Exception as e:
+    print("WARN: CORS middleware not applied:", e)
+# === /CORS (AUTO) ===
+
+
+
+
+
+# --- ML Score API (Skeleton) autogenerated 2025-12-16 02:54:11 ---
+try:
+    from fastapi import Body
+    from core.ml.contract import MLScoreRequest, MLScoreResponse
+    from core.ml.service import ml_score
+
+    @app.post("/api/ml/score", response_model=MLScoreResponse)
+    async def api_ml_score(req: MLScoreRequest = Body(...)):
+        return ml_score(req)
+except Exception as _ml_api_err:
+    print("ML API init skipped:", _ml_api_err)
+
+
+# --- Assistant API (MVP) autogenerated 2025-12-16 03:10:52 ---
+try:
+    from fastapi import Body
+    from core.assistant.contract import AssistantRequest, AssistantResponse
+    from core.assistant.service import assistant_reply
+
+    @app.post("/api/assistant", response_model=AssistantResponse)
+    async def api_assistant(req: AssistantRequest = Body(...)):
+        return assistant_reply(req)
+except Exception as _assistant_api_err:
+    print("Assistant API init skipped:", _assistant_api_err)
+
+
+# --- Backtest Info API (smoke) autogenerated 2025-12-16 03:41:25 ---
+try:
+    @app.get("/api/backtest")
+    async def api_backtest_info():
+        return {"ok": True, "ts": "2025-12-16 03:41:25"}
+except Exception as _bt_info_err:
+    print("Backtest info API init skipped:", _bt_info_err)
+
+
+# --- Health API (smoke) autogenerated 2025-12-16 03:42:30 ---
+try:
+    @app.get("/health")
+    async def api_health():
+        return {"ok": True}
+except Exception as _health_err:
+    print("Health API init skipped:", _health_err)
