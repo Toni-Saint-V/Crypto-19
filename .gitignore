@@ -77,4 +77,6 @@ datasets/
 
 .run/
 .quarantine_*/
-PROJECT_LOG.md
+*.pkg
+*.zip
+archive/dashboard_snapshot_*
