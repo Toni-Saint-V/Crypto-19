@@ -87,6 +87,37 @@ export default function BacktestConfigPanel(): JSX.Element {
   
   /* BACKTEST_DATE_RANGE */
   const toDatetimeLocal = (d: Date) => {
+
+  const [btUiStatus, setBtUiStatus] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [btUiError, setBtUiError] = useState<string>("");
+  const [btUiResult, setBtUiResult] = useState<any>(null);
+
+  async function runBacktestUI() {
+    setBtUiStatus("running");
+    setBtUiError("");
+    try {
+      const r = await fetch("/api/backtest/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const j = await r.json().catch(() => ({} as any));
+      if (!r.ok) {
+        setBtUiStatus("error");
+        setBtUiError("Ошибка запуска бэктеста");
+        setBtUiResult(j);
+        return;
+      }
+      setBtUiResult(j);
+      setBtUiStatus("done");
+    } catch {
+      setBtUiStatus("error");
+      setBtUiError("Нет связи с сервером");
+      setBtUiResult(null);
+    }
+  }
+
+
     const pad = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };
@@ -99,7 +130,26 @@ export default function BacktestConfigPanel(): JSX.Element {
   const [endIso, setEndIso] = useState<string>(__defaultEnd);
 
 return (
-  <>
+  
+
+      <div className="bt-runbar">
+        <button className="bt-runbtn" onClick={runBacktestUI} disabled={btUiStatus === "running"}>
+          {btUiStatus === "running" ? "Запуск..." : "Запустить бэктест"}
+        </button>
+        <div className="bt-runstatus">
+          {btUiStatus === "idle" ? "Готов к запуску" : null}
+          {btUiStatus === "running" ? "В процессе" : null}
+          {btUiStatus === "done" ? "Готово" : null}
+          {btUiStatus === "error" ? (btUiError ? btUiError : "Ошибка") : null}
+        </div>
+      </div>
+      {(btUiStatus === "done" || btUiStatus === "error") && btUiResult ? (
+        <div className="bt-result-mini">
+          <div className="bt-result-title">Результат</div>
+          <pre className="bt-result-pre">{JSON.stringify(btUiResult, null, 2)}</pre>
+        </div>
+      ) : null}
+<>
     {/* BACKTEST_DATE_RANGE_UI */}
     <div style={{ display: "flex", gap: 12, alignItems: "end", marginBottom: 12, flexWrap: "wrap" }}>
       <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
