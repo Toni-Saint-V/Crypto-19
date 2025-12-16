@@ -73,3 +73,33 @@
 }
 #root [data-page="backtest"] .bt-empty-title{ font-weight:900; margin-bottom:6px; }
 #root [data-page="backtest"] .bt-empty-sub{ opacity:0.75; line-height:1.35; }
+
+
+.chart-topbar {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.chart-topbar-left {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.chart-topbar-right {
+  flex: 0 0 auto;
+  width: 260px;
+  min-width: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.chart-hud-chips {
+  scrollbar-width: none;
+}
+
+.chart-hud-chips::-webkit-scrollbar {
+  display: none;
+}

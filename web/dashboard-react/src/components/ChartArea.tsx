@@ -34,8 +34,14 @@ export default function ChartArea({
     const mlContext = ({ mode: mode, symbol: symbol, timeframe: timeframe } as any);
 return (
     <div className="flex-1 flex flex-col border-t border-[#1A1C22] bg-[#05070A] min-h-0 overflow-hidden">
-      <ChartHUD />
-      <MLScoreWidget context={mlContext} />
+      <div className="chart-topbar">
+
+        <div className="chart-topbar-left"><ChartHUD /></div>
+
+        <div className="chart-topbar-right"><MLScoreWidget context={mlContext} /></div>
+
+      </div>
+
       <ChartParametersRow
         symbol={symbol}
         exchange={exchange}

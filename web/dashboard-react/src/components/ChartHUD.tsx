@@ -90,7 +90,7 @@ export default function ChartHUD(props: Props) {
   }
 
   const rowStyle: React.CSSProperties = {
-    height: 36,
+    height: 28,
     display: "flex",
     alignItems: "center",
     gap: 10,
@@ -124,17 +124,6 @@ export default function ChartHUD(props: Props) {
     textOverflow: "ellipsis"
   };
 
-  const panelStyle: React.CSSProperties = {
-    maxHeight: 88,
-    overflow: "auto",
-    marginTop: 6,
-    padding: 8,
-    borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.10)",
-    background: "rgba(0,0,0,0.25)",
-    fontSize: 12
-  };
-
   return (
     <div style={{ overflow: "hidden" }}>
       <div style={rowStyle} title={decisionLine}>
@@ -142,8 +131,8 @@ export default function ChartHUD(props: Props) {
         <div style={{ ...textStyle, opacity: 0.7 }}>Last: {lastPing ? lastPing.slice(11, 19) : "—"}</div>
       </div>
 
-      <div style={{ ...rowStyle, height: 32 }}>
-        <div style={chipsStyle}>
+      <div style={{ ...rowStyle, height: 30 }}>
+        <div style={chipsStyle} className="chart-hud-chips">
           <button style={chipBtnStyle} disabled={busy} onClick={() => callAssistant("Explain last signal in 5 bullets.")}>
             Explain signal
           </button>
@@ -159,10 +148,11 @@ export default function ChartHUD(props: Props) {
         </div>
         <div style={{ ...textStyle, opacity: 0.7 }}>{busy ? "Assistant: running…" : (assistantMeta ? `Assistant: ${assistantMeta}` : "")}</div>
       </div>
-
-      {assistantText ? (
-        <div style={panelStyle}>
-          {assistantText}
+      {(busy || assistantMeta || assistantText) ? (
+        <div style={{ ...rowStyle, height: 26 }} title={assistantText || ""}>
+          <div style={{ ...textStyle, flex: 1, minWidth: 0, opacity: assistantText ? 0.95 : 0.65 }}>
+            {assistantText ? assistantText : (busy ? "Assistant: running…" : "Assistant: —")}
+          </div>
         </div>
       ) : null}
     </div>
