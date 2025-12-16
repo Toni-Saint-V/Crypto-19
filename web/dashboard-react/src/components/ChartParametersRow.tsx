@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import StrategyIcon from "./StrategyIcon";
 
 interface ChartParametersRowProps {
   symbol: string;
@@ -85,7 +86,8 @@ export default function ChartParametersRow({
                   className="w-16 bg-[#0C0F15] border border-[#1A1C22] rounded px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-[#21D4B4]"
                   min="1"
                 />
-                <select
+                <div className="strategy-badge" data-testid="strategy"><StrategyIcon strategy={String(strategy)} /><span className="strategy-name">{String(strategy)}</span></div>
+<select
                   value={customUnit}
                   onChange={(e) => setCustomUnit(e.target.value as 'm' | 'h' | 'd')}
                   className="bg-[#0C0F15] border border-[#1A1C22] rounded px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-[#21D4B4]"

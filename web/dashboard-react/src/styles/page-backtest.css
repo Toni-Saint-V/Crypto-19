@@ -123,3 +123,87 @@ input[name*="risk" i],
 input[id*="risk" i] {
   max-width: 140px;
 }
+
+.strategy-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.strategy-icon {
+  flex: 0 0 auto;
+  opacity: 0.9;
+}
+
+.strategy-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 190px;
+}
+
+.ml-widget {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 260px;
+  justify-content: flex-end;
+}
+
+.ml-traffic {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.ml-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  opacity: 0.25;
+  background: currentColor;
+}
+
+.ml-dot.is-green { opacity: 1; }
+.ml-dot.is-yellow { opacity: 1; }
+.ml-dot.is-red { opacity: 1; }
+
+.ml-text {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  max-width: 220px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.ml-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+
+.ml-metric {
+  opacity: 0.85;
+}
+
+.ml-muted {
+  opacity: 0.65;
+}
+
+.shimmer-line {
+  display: inline-block;
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.14) 50%, rgba(255,255,255,0.06) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
