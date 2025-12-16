@@ -207,3 +207,8 @@ input[id*="risk" i] {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* Hide noisy topbar above chart (HUD + ML) */
+.chart-topbar {
+  display: none !important;
+}
