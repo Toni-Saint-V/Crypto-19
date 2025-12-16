@@ -153,7 +153,7 @@ return (
     {/* BACKTEST_DATE_RANGE_UI */}
     <div style={{ display: "flex", gap: 12, alignItems: "end", marginBottom: 12, flexWrap: "wrap" }}>
       <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <span style={{ fontSize: 12, opacity: 0.8 }}>Start</span>
+        <span style={{ fontSize: 12, opacity: 0.8 }}>Начало</span>
         <input
           type="datetime-local"
           value={startIso}
@@ -161,7 +161,7 @@ return (
         />
       </label>
       <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <span style={{ fontSize: 12, opacity: 0.8 }}>End</span>
+        <span style={{ fontSize: 12, opacity: 0.8 }}>Конец</span>
         <input
           type="datetime-local"
           value={endIso}
@@ -172,46 +172,18 @@ return (
     <div style={{ padding: 12, border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10 }}>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
         <div style={{ minWidth: 180 }}>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>Strategy</div>
+          <div style={{ fontSize: 12, opacity: 0.8 }}>Стратегия</div>
           <input value={strategy} onChange={(e) => setStrategy(e.target.value)} style={{ width: "100%" }} />
         </div>
 
         <div style={{ minWidth: 140 }}>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>Symbol</div>
+          <div style={{ fontSize: 12, opacity: 0.8 }}>Символ</div>
           <input value={symbol} onChange={(e) => setSymbol(e.target.value)} style={{ width: "100%" }} />
         </div>
 
         <div style={{ minWidth: 100 }}>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>Interval</div>
+          <div style={{ fontSize: 12, opacity: 0.8 }}>Таймфрейм</div>
           <input value={interval} onChange={(e) => setInterval(e.target.value)} style={{ width: "100%" }} />
         </div>
 
         <div style={{ minWidth: 140 }}>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>Start (YYYY-MM-DD)</div>
-          <input value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ width: "100%" }} />
-        </div>
-
-        <div style={{ minWidth: 140 }}>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>End (YYYY-MM-DD)</div>
-          <input value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ width: "100%" }} />
-        </div>
-
-        <div style={{ minWidth: 140 }}>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>Initial Balance</div>
-          <input value={initialBalance} onChange={(e) => setInitialBalance(e.target.value)} style={{ width: "100%" }} />
-        </div>
-
-        <button
-          onClick={runBacktest}
-          disabled={isRunning}
-          style={{ padding: "8px 12px", cursor: isRunning ? "not-allowed" : "pointer" }}
-        >
-          {isRunning ? "Running..." : "Run backtest"}
-        </button>
-      </div>
-
-      <div style={{ marginTop: 10, fontSize: 12, opacity: 0.9, whiteSpace: "pre-wrap" }}>{status}</div>
-    </div>
-  </>
-  );
-}
