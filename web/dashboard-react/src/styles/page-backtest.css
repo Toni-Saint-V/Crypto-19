@@ -103,3 +103,23 @@
 .chart-hud-chips::-webkit-scrollbar {
   display: none;
 }
+
+/* UI polish: strategy text must not overflow */
+.strategy-label,
+.strategy-chip,
+.strategy-pill,
+.strategy-select,
+[data-role="strategy"],
+[data-testid="strategy"] {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Risk input: keep compact */
+.risk-input,
+input[name*="risk" i],
+input[id*="risk" i] {
+  max-width: 140px;
+}

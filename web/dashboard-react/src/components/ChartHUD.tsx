@@ -37,7 +37,7 @@ export default function ChartHUD(props: Props) {
   const decisionLine = useMemo(() => {
     const ok = healthCode === 200 ? "OK" : (healthCode === 404 ? "404" : (healthCode == null ? "…" : String(healthCode)));
     const l = latencyMs == null ? "—" : String(latencyMs);
-    return `Mode: ${mode} | ${symbol} ${timeframe} | Backend: ${ok} | Latency: ${l}ms`;
+    return `Режим: ${mode} | ${symbol} ${timeframe} | Бэкенд: ${ok} | Задержка: ${l}ms`;
   }, [mode, symbol, timeframe, healthCode, latencyMs]);
 
   async function ping() {
@@ -83,7 +83,7 @@ export default function ChartHUD(props: Props) {
       const answer = (j && j.answer) ? String(j.answer) : `No answer (HTTP ${r.status})`;
       setAssistantText(answer);
     } catch (e) {
-      setAssistantText("Assistant error");
+      setAssistantText("Ошибка ассистента");
     } finally {
       setBusy(false);
     }
@@ -128,30 +128,30 @@ export default function ChartHUD(props: Props) {
     <div style={{ overflow: "hidden" }}>
       <div style={rowStyle} title={decisionLine}>
         <div style={{ ...textStyle, flex: 1, minWidth: 0 }}>{decisionLine}</div>
-        <div style={{ ...textStyle, opacity: 0.7 }}>Last: {lastPing ? lastPing.slice(11, 19) : "—"}</div>
+        <div style={{ ...textStyle, opacity: 0.7 }}>Последнее: {lastPing ? lastPing.slice(11, 19) : "—"}</div>
       </div>
 
       <div style={{ ...rowStyle, height: 30 }}>
         <div style={chipsStyle} className="chart-hud-chips">
           <button style={chipBtnStyle} disabled={busy} onClick={() => callAssistant("Explain last signal in 5 bullets.")}>
-            Explain signal
+            Объяснить сигнал
           </button>
-          <button style={chipBtnStyle} disabled={busy} onClick={() => callAssistant("Explain drawdown and main drivers.")}>
-            Explain drawdown
+          <button style={chipBtnStyle} disabled={busy} onClick={() => callAssistant("Объяснить просадку and main drivers.")}>
+            Объяснить просадку
           </button>
           <button style={chipBtnStyle} disabled={busy} onClick={() => callAssistant("Give risk warnings for current context.")}>
-            Risk warnings
+            Риск-предупреждения
           </button>
           <button style={chipBtnStyle} disabled={busy} onClick={() => callAssistant("Suggest safe parameter tweaks (no auto apply).")}>
-            Suggest tweaks
+            Подсказать настройки
           </button>
         </div>
-        <div style={{ ...textStyle, opacity: 0.7 }}>{busy ? "Assistant: running…" : (assistantMeta ? `Assistant: ${assistantMeta}` : "")}</div>
+        <div style={{ ...textStyle, opacity: 0.7 }}>{busy ? "Ассистент: думаю…" : (assistantMeta ? `Assistant: ${assistantMeta}` : "")}</div>
       </div>
       {(busy || assistantMeta || assistantText) ? (
         <div style={{ ...rowStyle, height: 26 }} title={assistantText || ""}>
           <div style={{ ...textStyle, flex: 1, minWidth: 0, opacity: assistantText ? 0.95 : 0.65 }}>
-            {assistantText ? assistantText : (busy ? "Assistant: running…" : "Assistant: —")}
+            {assistantText ? assistantText : (busy ? "Ассистент: думаю…" : "Assistant: —")}
           </div>
         </div>
       ) : null}

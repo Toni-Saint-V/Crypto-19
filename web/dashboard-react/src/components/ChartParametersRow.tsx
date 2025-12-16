@@ -117,7 +117,7 @@ export default function ChartParametersRow({
         <div className="h-6 w-px bg-[#1A1C22]" />
 
         <div className="flex items-center gap-1.5">
-          <span className="text-[11px] text-gray-500 mr-1">Risk:</span>
+          <span className="text-[11px] text-gray-500 mr-1">Риск:</span>
           {RISK_FILTERS.map((risk) => (
             <button
               key={risk}
