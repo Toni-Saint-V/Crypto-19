@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { ChatMessage, Mode } from '../types';
 
 interface AIChatPanelProps {
+  context?: any;
   mode: Mode;
 }
 
@@ -27,13 +28,13 @@ const initialMessages: ChatMessage[] = [
   },
 ];
 
-export default function AIChatPanel({ mode }: AIChatPanelProps) {
+export default function AIChatPanel({mode, context}: AIChatPanelProps) {
 
   async function requestAssistant(userText: string): Promise<string> {
     try {
       const payload = {
         messages: [{ role: "user", content: userText }],
-        context: ({ mode: mode } as any),
+        context: (context ?? ({ mode: mode } as any)),
       };
       const r = await fetch("/api/assistant", {
         method: "POST",
