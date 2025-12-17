@@ -172,14 +172,7 @@ const isBacktest = mode === 'backtest';
 
         <div className="flex flex-1 overflow-hidden min-h-0">
           <div className="flex flex-col flex-1 overflow-hidden min-w-0">
-            <ChartArea
-              mode={mode}
-              symbol={symbol}
-              exchange={exchange}
-              timeframe={timeframe}
-              strategy={strategy}
-              onTimeframeChange={setTimeframe}
-            / backtestResult={backtestResult}>
+            <ChartArea mode={mode} symbol={symbol} exchange={exchange} timeframe={timeframe} strategy={strategy} onTimeframeChange={setTimeframe} backtestResult={backtestResult} />
           </div>
 
           <Sidebar mode={mode} />

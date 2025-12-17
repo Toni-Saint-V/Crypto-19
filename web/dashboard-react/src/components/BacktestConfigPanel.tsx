@@ -1,189 +1,82 @@
-import { useMemo, useState } from "react";
+import React from 'react';
 
-type RunResponse = {
-  equity_curve?: number[];
-  prices?: number[];
-  trades?: Array<Record<string, unknown>>;
-  statistics?: Record<string, unknown>;
+type Props = {
+  value?: any;
+  onChange?: (next: any) => void;
+  onRun?: () => void;
+  disabled?: boolean;
 };
 
-type BacktestKpiLike = {
-  totalTrades: number;
-  profitFactor: number;
-  maxDrawdown: number;
-};
+export default function BacktestConfigPanel(props: Props) {
+  const { value, onChange, onRun, disabled } = props;
 
-function toNumber(v: unknown, fallback: number): number {
-  if (typeof v === "number" && Number.isFinite(v)) return v;
-  if (typeof v === "string") {
-    const x = Number(v);
-    if (Number.isFinite(x)) return x;
-  }
-  return fallback;
-}
-
-function mapStatisticsToKpi(stat: Record<string, unknown> | undefined): BacktestKpiLike {
-  const s = stat || {};
-  const totalTrades = toNumber(s.total_trades ?? s.totalTrades, 0);
-  const maxDrawdown = toNumber(s.max_drawdown ?? s.maxDrawdown, 0);
-  const profitFactor = toNumber(s.profit_factor ?? s.profitFactor, 0);
-  return { totalTrades, profitFactor, maxDrawdown };
-}
-
-export default function BacktestConfigPanel(): JSX.Element {
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
-
-  const [strategy, setStrategy] = useState("pattern3_extreme");
-  const [symbol, setSymbol] = useState("BTCUSDT");
-  const [interval, setInterval] = useState("60");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState(today);
-  const [initialBalance, setInitialBalance] = useState("10000");
-
-  const [isRunning, setIsRunning] = useState(false);
-  const [status, setStatus] = useState<string>("");
-
-  const runBacktest = async () => {
-    if (isRunning) return;
-
-    setIsRunning(true);
-    setStatus("Running backtest...");
-
-    const payload: Record<string, unknown> = {
-      strategy,
-      symbol,
-      interval,
-      initial_balance: toNumber(initialBalance, 10000),
-    };
-
-    if (startDate) payload.start_date = startDate;
-    if (endDate) payload.end_date = endDate;
-
+  const v = value || {};
+  const set = (patch: any) => {
     try {
-      const res = await fetch("/api/backtest/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        throw new Error(`HTTP ${res.status} ${res.statusText} ${txt}`.trim());
-      }
-
-      const data = (await res.json().catch(() => ({}))) as RunResponse;
-      const kpi = mapStatisticsToKpi(data.statistics);
-
-      window.dispatchEvent(new CustomEvent("backtest:updated", { detail: kpi }));
-      setStatus("Backtest done. UI should update now.");
+      onChange && onChange({ ...v, ...patch });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setStatus(`Backtest failed: ${msg}`);
-    } finally {
-      setIsRunning(false);
     }
   };
 
-  
-  /* BACKTEST_DATE_RANGE */
-  const toDatetimeLocal = (d: Date) => {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span>From</span>
+          <input
+            type="date"
+            value={v?.dateRange?.from || ''}
+            onChange={(e) => set({ dateRange: { ...(v.dateRange || {}), from: e.target.value } })}
+            disabled={disabled}
+          />
+        </label>
 
-  const [btUiStatus, setBtUiStatus] = useState<"idle" | "running" | "done" | "error">("idle");
-  const [btUiError, setBtUiError] = useState<string>("");
-  const [btUiResult, setBtUiResult] = useState<any>(null);
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span>To</span>
+          <input
+            type="date"
+            value={v?.dateRange?.to || ''}
+            onChange={(e) => set({ dateRange: { ...(v.dateRange || {}), to: e.target.value } })}
+            disabled={disabled}
+          />
+        </label>
 
-  async function runBacktestUI() {
-    setBtUiStatus("running");
-    setBtUiError("");
-    try {
-      const r = await fetch("/api/backtest/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const j = await r.json().catch(() => ({} as any));
-      if (!r.ok) {
-        setBtUiStatus("error");
-        setBtUiError("Ошибка запуска бэктеста");
-        setBtUiResult(j);
-        return;
-      }
-      setBtUiResult(j);
-      setBtUiStatus("done");
-    } catch {
-      setBtUiStatus("error");
-      setBtUiError("Нет связи с сервером");
-      setBtUiResult(null);
-    }
-  }
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span>Initial</span>
+          <input
+            type="number"
+            value={v?.initialBalance ?? 1000}
+            onChange={(e) => set({ initialBalance: Number(e.target.value) })}
+            disabled={disabled}
+          />
+        </label>
 
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span>Fees (bps)</span>
+          <input
+            type="number"
+            value={v?.feesBps ?? 6}
+            onChange={(e) => set({ feesBps: Number(e.target.value) })}
+            disabled={disabled}
+          />
+        </label>
 
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  };
-
-  const __now = new Date();
-  const __defaultEnd = toDatetimeLocal(__now);
-  const __defaultStart = toDatetimeLocal(new Date(__now.getTime() - 30 * 24 * 3600 * 1000));
-
-  const [startIso, setStartIso] = useState<string>(__defaultStart);
-  const [endIso, setEndIso] = useState<string>(__defaultEnd);
-
-return (
-  
-
-      <div className="bt-runbar">
-        <button className="bt-runbtn" onClick={runBacktestUI} disabled={btUiStatus === "running"}>
-          {btUiStatus === "running" ? "Запуск..." : "Запустить бэктест"}
-        </button>
-        <div className="bt-runstatus">
-          {btUiStatus === "idle" ? "Готов к запуску" : null}
-          {btUiStatus === "running" ? "В процессе" : null}
-          {btUiStatus === "done" ? "Готово" : null}
-          {btUiStatus === "error" ? (btUiError ? btUiError : "Ошибка") : null}
-        </div>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span>Slippage (bps)</span>
+          <input
+            type="number"
+            value={v?.slippageBps ?? 2}
+            onChange={(e) => set({ slippageBps: Number(e.target.value) })}
+            disabled={disabled}
+          />
+        </label>
       </div>
-      {(btUiStatus === "done" || btUiStatus === "error") && btUiResult ? (
-        <div className="bt-result-mini">
-          <div className="bt-result-title">Результат</div>
-          <pre className="bt-result-pre">{JSON.stringify(btUiResult, null, 2)}</pre>
-        </div>
-      ) : null}
-<>
-    {/* BACKTEST_DATE_RANGE_UI */}
-    <div style={{ display: "flex", gap: 12, alignItems: "end", marginBottom: 12, flexWrap: "wrap" }}>
-      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <span style={{ fontSize: 12, opacity: 0.8 }}>Начало</span>
-        <input
-          type="datetime-local"
-          value={startIso}
-          onChange={(e) => setStartIso(e.target.value)}
-        />
-      </label>
-      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <span style={{ fontSize: 12, opacity: 0.8 }}>Конец</span>
-        <input
-          type="datetime-local"
-          value={endIso}
-          onChange={(e) => setEndIso(e.target.value)}
-        />
-      </label>
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button type="button" onClick={onRun} disabled={disabled || !onRun}>
+          Run backtest
+        </button>
+      </div>
     </div>
-    <div style={{ padding: 12, border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10 }}>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
-        <div style={{ minWidth: 180 }}>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>Стратегия</div>
-          <input value={strategy} onChange={(e) => setStrategy(e.target.value)} style={{ width: "100%" }} />
-        </div>
-
-        <div style={{ minWidth: 140 }}>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>Символ</div>
-          <input value={symbol} onChange={(e) => setSymbol(e.target.value)} style={{ width: "100%" }} />
-        </div>
-
-        <div style={{ minWidth: 100 }}>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>Таймфрейм</div>
-          <input value={interval} onChange={(e) => setInterval(e.target.value)} style={{ width: "100%" }} />
-        </div>
-
-        <div style={{ minWidth: 140 }}>
+  );
+}
