@@ -52,4 +52,10 @@ Next: pick конкретные папки/файлы для выноса + до
 
 - Audit report: (not found in workspace notes)
 - Cursor prompt archived: /Users/user/crypto_19_workspace/prompts/cursor/CURSOR_UI_PROMPT_WIRING_LATEST.md
+## 2025-12-17 06:03 Prune dashboards: keep web/dashboard-react, move others to workspace
+
+- Kept: web/dashboard-react
+- Moved dashboards to: /Users/user/crypto_19_workspace/migrations/20251217_060301/dashboards_prune
+- Moved count: 1
+  - web/dashboard
 
