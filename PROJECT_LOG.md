@@ -31,4 +31,9 @@ Next: pick конкретные папки/файлы для выноса + до
 
 - Generated: MAP.md, UX_ISSUES.md, CURSOR_UI_PROMPT.md
 - Next: paste CURSOR_UI_PROMPT.md into Cursor and implement Bottom Drawer strategy for BACKTEST.
+## 2025-12-17 05:24 UI handoff to Cursor
+
+- Cursor prompt copied to clipboard (from CURSOR_UI_PROMPT.md)
+- External archive:
+  - ~/crypto_19_workspace/prompts/cursor/CURSOR_UI_PROMPT_LATEST.md
 
