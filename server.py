@@ -1202,3 +1202,25 @@ try:
         return {"ok": True}
 except Exception as _health_err:
     print("Health API init skipped:", _health_err)
+
+# API_COMPAT_SHIMS_START
+# Compatibility routes for the React dashboard dev client.
+
+@app.post('/api/backtest/run')
+async def api_backtest_run_v2(request: 'Request'):
+    return await api_backtest_run(request)
+
+@app.get('/api/backtest')
+async def api_backtest_latest_v2():
+    global last_backtest_context
+    return last_backtest_context or {}
+
+@app.post('/api/assistant')
+async def api_assistant_stub_v2(payload: dict):
+    return {'answer': 'assistant stub (not wired)', 'actions': [], 'debug': {'stub': True}}
+
+@app.post('/api/ml/score')
+async def api_ml_score_stub_v2(payload: dict):
+    return {'quality': 0.5, 'risk': 0.5, 'explain': ['stub']}
+
+# API_COMPAT_SHIMS_END

@@ -36,4 +36,12 @@ Next: pick конкретные папки/файлы для выноса + до
 - Cursor prompt copied to clipboard (from CURSOR_UI_PROMPT.md)
 - External archive:
   - ~/crypto_19_workspace/prompts/cursor/CURSOR_UI_PROMPT_LATEST.md
+## 2025-12-17 05:54 Fix: Vite proxy /api and API compat routes for backtest/assistant/ml
+
+- Added Vite proxy for /api to backend (dev)
+- Added server.py routes:
+  - POST /api/backtest/run (compat)
+  - GET  /api/backtest (latest result)
+  - POST /api/assistant (stub)
+  - POST /api/ml/score (stub)
 
