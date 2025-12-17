@@ -35,7 +35,7 @@ function generateMockData(count: number = 200): CandlestickData<Time>[] {
   return data;
 }
 
-export default function TradingChart({ data, height }: TradingChartProps) {
+export default function TradingChart({ data, trades, height }: TradingChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
