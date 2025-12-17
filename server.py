@@ -1234,6 +1234,7 @@ async def api_ml_score_stub_v2(payload: dict):
 
 # BACKTEST_RUN_SYNC_MVP_START
 # Dashboard MVP: provide a synchronous backtest endpoint that returns trades/equity/summary.
+import asyncio as _asyncio
 # Registered via add_api_route to avoid decorator/name issues.
 
 from datetime import datetime as _dt
@@ -1366,7 +1367,7 @@ def _bt_fetch_candles_http(port: int, exchange: str, symbol: str, timeframe: str
         "mode": mode,
     })
     url = f"http://127.0.0.1:{port}/api/candles?{q}"
-    with _ur.urlopen(url, timeout=10) as resp:
+    with _ur.urlopen(url, timeout=30) as resp:
         raw = resp.read().decode("utf-8", "replace")
     j = _json.loads(raw) if raw else {}
     arr = j.get("candles")
@@ -1391,8 +1392,7 @@ async def _api_backtest_run_sync(payload: dict):  # type: ignore
     fee_bps = float(payload.get("feesBps", 6.0) or 6.0)
     sl_bps = float(payload.get("slippageBps", 2.0) or 2.0)
     port = int(payload.get("_port", 8000))
-
-    candles = _bt_fetch_candles_http(port, exchange, symbol, timeframe, limit, mode)
+    candles = await _asyncio.to_thread(_bt_fetch_candles_http, port, exchange, symbol, timeframe, limit, mode)
     result = _bt_simulate_simple(candles, fee_bps=fee_bps, slippage_bps=sl_bps)
     result["request"] = {"exchange": exchange, "symbol": symbol, "timeframe": timeframe, "mode": mode, "limit": limit}
     _last_backtest_sync_result = result
