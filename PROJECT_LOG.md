@@ -27,4 +27,8 @@ Next: pick конкретные папки/файлы для выноса + до
 
 - Enforced: clean EOF heredocs, no extra lines after EOF, no emojis, no dangerous line breaks
 - Documented in: /Users/user/cryptobot_19_clean/SAFE_COMMANDS.md
+## 2025-12-17 05:23 AUDIT+MAP: UI and BACKTEST layout scan generated
+
+- Generated: MAP.md, UX_ISSUES.md, CURSOR_UI_PROMPT.md
+- Next: paste CURSOR_UI_PROMPT.md into Cursor and implement Bottom Drawer strategy for BACKTEST.
 
