@@ -48,7 +48,9 @@ function App() {
   const [balance] = useState(10000);
   const [backtestKpi, setBacktestKpi] = useState<BacktestKpi>({ totalTrades: 0, profitFactor: 0, maxDrawdown: 0 });
 
-  const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://127.0.0.1:8000';
+  
+  const [backtestResult, setBacktestResult] = useState<any | null>(null);
+const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://127.0.0.1:8000';
 
   useEffect(() => {
     fetchBacktestKpi(apiBase).then(setBacktestKpi);
@@ -96,7 +98,53 @@ function App() {
     };
   }, [mode, apiBase]);
 
-  const isBacktest = mode === 'backtest';
+  
+
+  // BACKTEST_SYNC_WIRING
+  useEffect(() => {
+    if (mode !== 'backtest') return;
+    const controller = new AbortController();
+    const run = async () => {
+      try {
+        const base = (apiBase || '').replace(/\/$/, '');
+        const url = `${base}/api/backtest/run_sync`;
+        const payload: any = {
+          mode: 'test',
+          exchange: 'bybit',
+          symbol: 'BTCUSDT',
+          timeframe: timeframe,
+          limit: 600,
+          feesBps: 6,
+          slippageBps: 2,
+          _port: 8000,
+        };
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+        const j = await r.json().catch(() => ({}));
+        setBacktestResult(j);
+        const summary = (j && j.summary) ? j.summary : {};
+        const kpi = {
+          totalTrades: Number(summary.totalTrades || 0),
+          profitFactor: Number(summary.profitFactor || 0),
+          maxDrawdown: Number(summary.maxDrawdown || 0),
+        };
+        try {
+          setBacktestKpi(kpi as any);
+          window.dispatchEvent(new CustomEvent('backtest:updated', { detail: kpi }));
+        } catch (e) {
+        }
+      } catch (e) {
+        if ((e as any)?.name === 'AbortError') return;
+      }
+    };
+    run();
+    return () => controller.abort();
+  }, [mode, apiBase, 'bybit', 'BTCUSDT', timeframe]);
+const isBacktest = mode === 'backtest';
   const kpi: KPIData | BacktestKPIData | null = isBacktest
     ? {
         totalPnl: 0, // Will be calculated from backtest results if available
@@ -131,7 +179,7 @@ function App() {
               timeframe={timeframe}
               strategy={strategy}
               onTimeframeChange={setTimeframe}
-            />
+            / backtestResult={backtestResult}>
           </div>
 
           <Sidebar mode={mode} />
