@@ -1230,3 +1230,190 @@ async def api_ml_score_stub_v2(payload: dict):
     return {'quality': 0.5, 'risk': 0.5, 'explain': ['stub']}
 
 # API_COMPAT_SHIMS_END
+
+
+# BACKTEST_RUN_SYNC_MVP_START
+# Dashboard MVP: provide a synchronous backtest endpoint that returns trades/equity/summary.
+# Registered via add_api_route to avoid decorator/name issues.
+
+from datetime import datetime as _dt
+from typing import Any as _Any, Dict as _Dict, List as _List
+
+try:
+    from fastapi import Body as _Body
+except Exception:  # pragma: no cover
+    _Body = None  # type: ignore
+
+_last_backtest_sync_result: _Dict[str, _Any] = {}
+
+def _bt_make_trade(entry_ts: int, entry: float, exit_ts: int, exit_p: float, side: str = "long") -> _Dict[str, _Any]:
+    pnl = (exit_p - entry) if side == "long" else (entry - exit_p)
+    return {
+        "side": side,
+        "entryTime": int(entry_ts),
+        "entryPrice": float(entry),
+        "exitTime": int(exit_ts),
+        "exitPrice": float(exit_p),
+        "pnl": float(pnl),
+    }
+
+def _bt_simulate_simple(candles: _List[_Dict[str, _Any]], fee_bps: float = 6.0, slippage_bps: float = 2.0) -> _Dict[str, _Any]:
+    logs: _List[str] = []
+    trades: _List[_Dict[str, _Any]] = []
+    equity_curve: _List[_Dict[str, _Any]] = []
+
+    if not candles:
+        return {
+            "ok": True,
+            "ts": _dt.utcnow().isoformat(timespec="seconds"),
+            "summary": {"pnl": 0.0, "maxDrawdown": 0.0, "winRate": 0.0, "totalTrades": 0, "profitFactor": 0.0},
+            "equity_curve": [],
+            "trades": [],
+            "logs": ["no candles"],
+        }
+
+    closes = [float(c.get("close", 0.0)) for c in candles]
+    times = [int(c.get("time", 0)) for c in candles]
+
+    def entry_px(px: float) -> float:
+        return float(px) * (1.0 + (slippage_bps / 10000.0))
+
+    def exit_px(px: float) -> float:
+        return float(px) * (1.0 - (slippage_bps / 10000.0))
+
+    in_pos = False
+    entry_i = 0
+    entry_p = 0.0
+    equity = 0.0
+    peak = 0.0
+    max_dd = 0.0
+
+    for i in range(3, len(candles)):
+        c = closes[i]
+        tts = times[i]
+
+        if not in_pos:
+            if closes[i] > closes[i-1] > closes[i-2] > closes[i-3]:
+                in_pos = True
+                entry_i = i
+                entry_p = entry_px(c)
+                logs.append(f"enter long i={i} t={tts} p={entry_p:.4f}")
+        else:
+            if closes[i] < closes[i-1] < closes[i-2]:
+                xp = exit_px(c)
+                tr = _bt_make_trade(times[entry_i], entry_p, tts, xp, "long")
+                fee = (entry_p + xp) * (fee_bps / 10000.0)
+                tr["fee"] = float(fee)
+                tr["pnlNet"] = float(tr["pnl"] - fee)
+                trades.append(tr)
+
+                equity += float(tr["pnlNet"])
+                peak = max(peak, equity)
+                max_dd = max(max_dd, peak - equity)
+
+                logs.append(f"exit long i={i} t={tts} p={xp:.4f} pnlNet={tr['pnlNet']:.4f} eq={equity:.4f}")
+                in_pos = False
+
+        equity_curve.append({"time": tts, "equity": float(equity)})
+
+    if in_pos and len(candles) > entry_i:
+        xp = exit_px(closes[-1])
+        tts = times[-1]
+        tr = _bt_make_trade(times[entry_i], entry_p, tts, xp, "long")
+        fee = (entry_p + xp) * (fee_bps / 10000.0)
+        tr["fee"] = float(fee)
+        tr["pnlNet"] = float(tr["pnl"] - fee)
+        trades.append(tr)
+
+        equity += float(tr["pnlNet"])
+        peak = max(peak, equity)
+        max_dd = max(max_dd, peak - equity)
+
+        logs.append(f"force-exit long t={tts} pnlNet={tr['pnlNet']:.4f} eq={equity:.4f}")
+        equity_curve.append({"time": tts, "equity": float(equity)})
+
+    wins = sum(1 for tr in trades if float(tr.get("pnlNet", 0.0)) > 0)
+    total = len(trades)
+    win_rate = (wins / total) if total else 0.0
+
+    gross_win = sum(float(tr.get("pnlNet", 0.0)) for tr in trades if float(tr.get("pnlNet", 0.0)) > 0)
+    gross_loss = -sum(float(tr.get("pnlNet", 0.0)) for tr in trades if float(tr.get("pnlNet", 0.0)) < 0)
+    profit_factor = (gross_win / gross_loss) if gross_loss > 0 else (gross_win if gross_win > 0 else 0.0)
+
+    summary = {
+        "pnl": float(equity),
+        "maxDrawdown": float(max_dd),
+        "winRate": float(win_rate),
+        "totalTrades": int(total),
+        "profitFactor": float(profit_factor),
+    }
+
+    return {
+        "ok": True,
+        "ts": _dt.utcnow().isoformat(timespec="seconds"),
+        "summary": summary,
+        "equity_curve": equity_curve,
+        "trades": trades,
+        "logs": logs,
+    }
+
+def _bt_fetch_candles_http(port: int, exchange: str, symbol: str, timeframe: str, limit: int, mode: str) -> _List[_Dict[str, _Any]]:
+    import json as _json
+    import urllib.request as _ur
+    import urllib.parse as _up
+
+    q = _up.urlencode({
+        "exchange": exchange,
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "limit": str(limit),
+        "mode": mode,
+    })
+    url = f"http://127.0.0.1:{port}/api/candles?{q}"
+    with _ur.urlopen(url, timeout=10) as resp:
+        raw = resp.read().decode("utf-8", "replace")
+    j = _json.loads(raw) if raw else {}
+    arr = j.get("candles")
+    return arr if isinstance(arr, list) else []
+
+def _bt_find_app():
+    g = globals()
+    if "app" in g and hasattr(g["app"], "add_api_route"):
+        return g["app"]
+    for v in g.values():
+        if hasattr(v, "add_api_route") and hasattr(v, "routes"):
+            return v
+    return None
+
+def _api_backtest_run_sync(payload: dict = _Body(...)):  # type: ignore
+    global _last_backtest_sync_result
+    exchange = str(payload.get("exchange", "bybit")).lower()
+    symbol = str(payload.get("symbol", "BTCUSDT"))
+    timeframe = str(payload.get("timeframe", "1m"))
+    mode = str(payload.get("mode", "test"))
+    limit = int(payload.get("limit", 400))
+    fee_bps = float(payload.get("feesBps", 6.0) or 6.0)
+    sl_bps = float(payload.get("slippageBps", 2.0) or 2.0)
+    port = int(payload.get("_port", 8000))
+
+    candles = _bt_fetch_candles_http(port, exchange, symbol, timeframe, limit, mode)
+    result = _bt_simulate_simple(candles, fee_bps=fee_bps, slippage_bps=sl_bps)
+    result["request"] = {"exchange": exchange, "symbol": symbol, "timeframe": timeframe, "mode": mode, "limit": limit}
+    _last_backtest_sync_result = result
+    return result
+
+def _api_backtest_latest_sync():
+    global _last_backtest_sync_result
+    if _last_backtest_sync_result:
+        return _last_backtest_sync_result
+    return {"ok": True, "ts": _dt.utcnow().isoformat(timespec="seconds"), "empty": True}
+
+_bt_app = _bt_find_app()
+if _bt_app is not None:
+    try:
+        _bt_app.add_api_route("/api/backtest/run_sync", _api_backtest_run_sync, methods=["POST"])
+        _bt_app.add_api_route("/api/backtest/latest_sync", _api_backtest_latest_sync, methods=["GET"])
+    except Exception:
+        pass
+# BACKTEST_RUN_SYNC_MVP_END
+

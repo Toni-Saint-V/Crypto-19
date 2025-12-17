@@ -59,7 +59,11 @@ function App() {
     limit: 600,
   });
   const [backtestLoading, setBacktestLoading] = useState(false);
-  const [backtestError, setBacktestError] = useState<string | null>(null);
+  
+  void backtestLoading;
+const [backtestError, setBacktestError] = useState<string | null>(null);
+
+  void backtestError;
 const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://127.0.0.1:8000';
 
   useEffect(() => {

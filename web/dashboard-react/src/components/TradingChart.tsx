@@ -96,6 +96,51 @@ export default function TradingChart({ data, trades, height }: TradingChartProps
     };
 
     window.addEventListener('resize', handleResize);
+  // BACKTEST_MARKERS_EFFECT
+  useEffect(() => {
+    const s: any = seriesRef.current;
+    if (!s || typeof s.setMarkers !== 'function') return;
+
+    if (!trades || !Array.isArray(trades) || trades.length === 0) {
+      s.setMarkers([]);
+      return;
+    }
+
+    const normTime = (t: any) => {
+      const n = Number(t);
+      if (!Number.isFinite(n)) return undefined;
+      return n > 1000000000000 ? Math.floor(n / 1000) : n;
+    };
+
+    const markers: any[] = [];
+    for (const tr of trades) {
+      const side = String(tr?.side || 'long').toLowerCase();
+      const entryTime = normTime(tr?.entryTime ?? tr?.entry_ts ?? tr?.entry_time);
+      const exitTime = normTime(tr?.exitTime ?? tr?.exit_ts ?? tr?.exit_time);
+
+      if (entryTime !== undefined) {
+        markers.push({
+          time: entryTime,
+          position: side === 'short' ? 'aboveBar' : 'belowBar',
+          color: side === 'short' ? '#ef4444' : '#22c55e',
+          shape: side === 'short' ? 'arrowDown' : 'arrowUp',
+          text: 'IN',
+        });
+      }
+      if (exitTime !== undefined) {
+        markers.push({
+          time: exitTime,
+          position: side === 'short' ? 'belowBar' : 'aboveBar',
+          color: side === 'short' ? '#22c55e' : '#ef4444',
+          shape: side === 'short' ? 'arrowUp' : 'arrowDown',
+          text: 'OUT',
+        });
+      }
+    }
+
+    s.setMarkers(markers);
+  }, [trades]);
+
 
     return () => {
       window.removeEventListener('resize', handleResize);

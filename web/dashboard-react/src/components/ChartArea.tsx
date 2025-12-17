@@ -7,6 +7,7 @@ import { MLScoreWidget } from "./MLScoreWidget";
 import BacktestResultsPanel from "./BacktestResultsPanel";
 
 interface ChartAreaProps {
+  backtestResult?: any;
   mode: Mode;
   symbol: string;
   exchange: string;
