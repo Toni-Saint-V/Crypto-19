@@ -52,13 +52,13 @@ function App() {
   const [backtestResult, setBacktestResult] = useState<any | null>(null);
 
   const [backtestParams, setBacktestParams] = useState<any>({
-  void setBacktestParams;
     dateRange: { from: '', to: '' },
     initialBalance: 1000,
     feesBps: 6,
     slippageBps: 2,
     limit: 600,
   });
+  void setBacktestParams;
   const [backtestLoading, setBacktestLoading] = useState(false);
   
   void backtestLoading;
