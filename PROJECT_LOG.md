@@ -44,4 +44,12 @@ Next: pick конкретные папки/файлы для выноса + до
   - GET  /api/backtest (latest result)
   - POST /api/assistant (stub)
   - POST /api/ml/score (stub)
+## 2025-12-17 05:59 UI wiring audit: chart not reacting + backtest params missing
+
+- Generated an audit report in workspace: ~/crypto_19_workspace/notes/ui_wiring_audit_*.md
+- Next: implement single UI state contract + wire chart updates + add Backtest param form and run pipeline.
+## 2025-12-17 06:00 UI wiring: Cursor prompt archived
+
+- Audit report: (not found in workspace notes)
+- Cursor prompt archived: /Users/user/crypto_19_workspace/prompts/cursor/CURSOR_UI_PROMPT_WIRING_LATEST.md
 
