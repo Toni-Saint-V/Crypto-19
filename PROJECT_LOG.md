@@ -58,4 +58,8 @@ Next: pick конкретные папки/файлы для выноса + до
 - Moved dashboards to: /Users/user/crypto_19_workspace/migrations/20251217_060301/dashboards_prune
 - Moved count: 1
   - web/dashboard
+## 2025-12-17 06:05 Docs cleanup: remove legacy dashboard references
+
+- Regenerated MAP.md to exclude node_modules and removed web/dashboard references
+- Rewrote CURSOR_UI_PROMPT.md to reference only web/dashboard-react
 
