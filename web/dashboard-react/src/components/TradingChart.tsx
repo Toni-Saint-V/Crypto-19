@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react';
 import { createChart, IChartApi, ISeriesApi, CandlestickData, Time, CandlestickSeries } from 'lightweight-charts';
 
 interface TradingChartProps {
+  trades?: any[];
+
   data?: CandlestickData<Time>[];
   height?: number;
 }

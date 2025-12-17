@@ -1239,10 +1239,6 @@ async def api_ml_score_stub_v2(payload: dict):
 from datetime import datetime as _dt
 from typing import Any as _Any, Dict as _Dict, List as _List
 
-try:
-    from fastapi import Body as _Body
-except Exception:  # pragma: no cover
-    _Body = None  # type: ignore
 
 _last_backtest_sync_result: _Dict[str, _Any] = {}
 
@@ -1385,7 +1381,7 @@ def _bt_find_app():
             return v
     return None
 
-def _api_backtest_run_sync(payload: dict = _Body(...)):  # type: ignore
+async def _api_backtest_run_sync(payload: dict):  # type: ignore
     global _last_backtest_sync_result
     exchange = str(payload.get("exchange", "bybit")).lower()
     symbol = str(payload.get("symbol", "BTCUSDT"))
