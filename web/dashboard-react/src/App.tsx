@@ -108,7 +108,7 @@ function App() {
     : liveKPI;
 
   return (
-    <div className="h-screen w-screen bg-[#05070A] text-gray-100 flex justify-center items-center overflow-hidden p-2">
+    <div className="h-[100dvh] h-screen w-screen bg-[#05070A] text-gray-100 flex justify-center items-center overflow-hidden p-2">
       <div className="w-full h-full max-w-[1440px] max-h-[900px] bg-gradient-to-br from-[#05070A] to-[#0D1015] border border-[#1A1C22] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
         <TopBar
           mode={mode}

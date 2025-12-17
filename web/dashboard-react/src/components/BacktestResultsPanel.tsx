@@ -16,12 +16,25 @@ function pickKpi(data: AnyObj) {
   };
 }
 
+type RunStatus = "idle" | "running" | "done" | "error";
+
+function toNumber(v: unknown, fallback: number): number {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const x = Number(v);
+    if (Number.isFinite(x)) return x;
+  }
+  return fallback;
+}
+
 export default function BacktestResultsPanel() {
   const [data, setData] = useState<AnyObj | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [drawerHeight, setDrawerHeight] = useState<number>(220);
   const [activeTab, setActiveTab] = useState<"results" | "trades" | "logs" | "raw">("results");
   const [isResizing, setIsResizing] = useState(false);
+  const [runStatus, setRunStatus] = useState<RunStatus>("idle");
+  const [runError, setRunError] = useState<string>("");
 
   const startYRef = useRef(0);
   const startHeightRef = useRef(220);
@@ -78,6 +91,54 @@ export default function BacktestResultsPanel() {
     setIsExpanded((prev) => !prev);
   };
 
+  const handleRunBacktest = async () => {
+    if (runStatus === "running") return;
+
+    setRunStatus("running");
+    setRunError("");
+
+    try {
+      const payload: Record<string, unknown> = {
+        strategy: "pattern3_extreme",
+        symbol: "BTCUSDT",
+        interval: "60",
+        initial_balance: 10000,
+      };
+
+      const res = await fetch("/api/backtest/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`HTTP ${res.status} ${res.statusText} ${txt}`.trim());
+      }
+
+      const result = (await res.json().catch(() => ({}))) as AnyObj;
+      
+      // Extract KPI from result
+      const stat = result.statistics || result.summary || result;
+      const kpi = {
+        totalTrades: toNumber(stat.total_trades ?? stat.totalTrades, 0),
+        profitFactor: toNumber(stat.profit_factor ?? stat.profitFactor, 0),
+        maxDrawdown: toNumber(stat.max_drawdown ?? stat.maxDrawdown, 0),
+      };
+
+      // Dispatch event for other components
+      window.dispatchEvent(new CustomEvent("backtest:updated", { detail: { ...kpi, ...result } }));
+      
+      // Update local state
+      setData({ ...kpi, ...result });
+      setRunStatus("done");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setRunError(msg);
+      setRunStatus("error");
+    }
+  };
+
   return (
     <div
       className="bt-drawer-wrapper border-t border-white/10 bg-white/5"
@@ -125,7 +186,56 @@ export default function BacktestResultsPanel() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRunBacktest();
+            }}
+            disabled={runStatus === "running"}
+            className={`inline-flex h-7 items-center rounded-full px-4 text-[11px] font-semibold border transition-all ${
+              runStatus === "running"
+                ? "bg-emerald-400/20 text-emerald-300 border-emerald-400/40 cursor-wait opacity-75"
+                : runStatus === "done"
+                ? "bg-emerald-400/20 text-emerald-300 border-emerald-400/40 hover:bg-emerald-400/30"
+                : runStatus === "error"
+                ? "bg-rose-400/20 text-rose-300 border-rose-400/40 hover:bg-rose-400/30"
+                : "bg-emerald-400 text-black border-emerald-400 hover:bg-emerald-300"
+            }`}
+          >
+            {runStatus === "running" ? (
+              <>
+                <svg
+                  className="animate-spin -ml-1 mr-2 h-3 w-3"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+                Running...
+              </>
+            ) : runStatus === "done" ? (
+              "✓ Done"
+            ) : runStatus === "error" ? (
+              "✗ Error"
+            ) : (
+              "▶ Run Backtest"
+            )}
+          </button>
           <span className="hidden md:inline text-[11px] text-white/50">
             Backtest sheet
           </span>
@@ -175,13 +285,19 @@ export default function BacktestResultsPanel() {
             </div>
 
             <div className="flex-1 min-h-0 overflow-y-auto chat-scrollbar text-xs space-y-3">
+              {runStatus === "error" && runError && (
+                <div className="rounded-lg border border-rose-400/40 bg-rose-400/10 p-3 text-[11px] text-rose-300">
+                  <div className="font-semibold mb-1">Backtest Error</div>
+                  <div className="text-rose-200/80">{runError}</div>
+                </div>
+              )}
               {activeTab === "results" && (
                 <div className="space-y-2">
                   {!hasData ? (
                     <div className="bt-empty">
                       <div className="bt-empty-title">No backtest results yet</div>
                       <div className="bt-empty-sub">
-                        Run a backtest from the controls to populate metrics and details.
+                        Click "Run Backtest" above to start a backtest and see metrics and details here.
                       </div>
                     </div>
                   ) : (
