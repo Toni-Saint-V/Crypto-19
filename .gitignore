@@ -75,3 +75,4 @@ datasets/
 archive/dashboard_snapshot_*
 **/__pycache__/
 *.bak.*
+web/static/dashboard-build/
