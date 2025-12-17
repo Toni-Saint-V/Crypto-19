@@ -10,14 +10,12 @@ dist/
 build/
 *.sqlite3
 *.db
-
 # ---- Virtual envs ----
 venv/
 .venv/
 env/
 .env/
 .env.*.local
-
 # ---- JS / Frontend ----
 node_modules/
 npm-debug.log*
@@ -28,19 +26,16 @@ pnpm-lock.yaml
 .cache/
 .parcel-cache/
 coverage/
-
 # ---- Logs ----
 *.log
 logs/
 *.tmp
-
 # ---- IDE / Tools ----
 .vscode/
 .idea/
 *.swp
 *.swo
 *.orig
-
 # ---- OS / Misc ----
 .DS_Store
 Thumbs.db
@@ -54,7 +49,6 @@ config.yaml
 web/dashboard-react/node_modules/
 web/dashboard-react/dist/
 web/dashboard-react/.env*
-
 # === AUTO: ARTIFACTS ===
 .DS_Store
 __pycache__/
@@ -74,9 +68,10 @@ datasets/
 *.csv
 *.jsonl
 # === /AUTO: ARTIFACTS ===
-
 .run/
 .quarantine_*/
 *.pkg
 *.zip
 archive/dashboard_snapshot_*
+**/__pycache__/
+*.bak.*

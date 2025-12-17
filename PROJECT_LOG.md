@@ -17,4 +17,14 @@ Next: pick конкретные папки/файлы для выноса + до
 - Added archive/README_MOVED.md explaining snapshot relocation
 - Ensured .gitignore ignores venv/node_modules/reports/pkg/zip/snapshots
 - Next: commit cleanup separately from UI changes (e.g., ChartArea.tsx)
+## 2025-12-17 05:20 Repo hygiene: moved backups/caches/logs out of repo
+
+- Moved junk into workspace: /Users/user/crypto_19_workspace/migrations/20251217_052005/repo_junk
+- Manifest: /Users/user/crypto_19_workspace/migrations/20251217_052005/repo_junk/moved_manifest.txt
+- Count moved: 113
+- Updated .gitignore: __pycache__, *.pyc, *.log, *.bak*
+## 2025-12-17 05:21 Safe terminal command rules locked
+
+- Enforced: clean EOF heredocs, no extra lines after EOF, no emojis, no dangerous line breaks
+- Documented in: /Users/user/cryptobot_19_clean/SAFE_COMMANDS.md
 
