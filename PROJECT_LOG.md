@@ -134,3 +134,13 @@ Next: pick конкретные папки/файлы для выноса + до
 2025-12-18 19:18:53
 - Updated: docs/CURSOR_FRONTEND_PROMPT.md
 - Clipboard: docs/CURSOR_FRONTEND_PROMPT.md
+
+## %s - New chat handoff prepared
+2025-12-18 19:22:16
+- Wrote: docs/NEW_CHAT_HANDOFF.md
+- Clipboard: docs/NEW_CHAT_HANDOFF.md
+
+## 2025-12-18 20:04:09 - Next step
+- Clipboard: docs/chat_prompts/PM.md
+- Action: create chat inside Project named 'PM/Architect' and paste clipboard
+- Then reply in this chat with //
