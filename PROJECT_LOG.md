@@ -104,3 +104,11 @@ Next: pick конкретные папки/файлы для выноса + до
 ## 2025-12-18 18:36:55 - Cleanup old markdown files
 - Archived to: docs/_archive_cleanup_20251218_183655
 - Kept: PROJECT_LOG.md and core docs (operator/instructions/tasks/contracts/testplan/map/ux/cursor prompt/research snapshot + chat_prompts)
+
+## 2025-12-18 18:37:39 - Repo cleanup checkpoint
+- Updated: .gitignore (archive + temp hits ignored)
+- Commit: created if there were staged changes
+
+## 2025-12-18 18:38:53 - Clipboard
+- Copied: docs/PROJECT_INSTRUCTIONS.md
+- Action: paste into Project Instructions
