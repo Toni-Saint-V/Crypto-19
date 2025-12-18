@@ -63,3 +63,44 @@ Next: pick конкретные папки/файлы для выноса + до
 - Regenerated MAP.md to exclude node_modules and removed web/dashboard references
 - Rewrote CURSOR_UI_PROMPT.md to reference only web/dashboard-react
 
+
+## 2025-12-18 06:29:46 - PROJECT_INSTRUCTIONS
+- File: docs/PROJECT_INSTRUCTIONS.md
+- Copied to clipboard: yes (pbcopy)
+
+## 2025-12-18 17:27:57 - Terminal rules locked
+- File: docs/TERMINAL_RULES.md
+- Copied to clipboard: yes
+
+## 2025-12-18 17:31:40 - Remove confusing root prompt files
+- Removed: PROJECT_ORCHESTRATOR.md
+- Removed: PROJECT_RULES.md
+- Removed: CRYPTOBOT_PRO_VSCODE_AI_PROMPT.md
+- Removed: CURSOR_UI_PROMPT.md
+
+## 2025-12-18 18:26:46 - Lead brief
+- Wrote: docs/LEAD_BRIEF.md
+- Copied to clipboard: yes
+
+## 2025-12-18 18:28:57 - AUDIT + MAP + CURSOR PROMPT
+- Frontend: web/dashboard-react
+- Backend: .
+- Wrote: docs/MAP.md
+- Wrote: docs/UX_ISSUES.md
+- Wrote: docs/CURSOR_UI_PROMPT.md
+- Copied to clipboard: docs/CURSOR_UI_PROMPT.md
+
+## 2025-12-18 18:30:15 - Chat prompts created
+- docs/chat_prompts/PM.md (copied to clipboard)
+- docs/chat_prompts/FRONTEND.md
+- docs/chat_prompts/BACKEND.md
+- docs/chat_prompts/QA.md
+- TASKS: P0-1 set to IN_PROGRESS
+
+## 2025-12-18 18:33:39 - Operator rules locked
+- Wrote: docs/OPERATOR_RULES.md
+- Clipboard: docs/OPERATOR_RULES.md
+
+## 2025-12-18 18:36:55 - Cleanup old markdown files
+- Archived to: docs/_archive_cleanup_20251218_183655
+- Kept: PROJECT_LOG.md and core docs (operator/instructions/tasks/contracts/testplan/map/ux/cursor prompt/research snapshot + chat_prompts)

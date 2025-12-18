@@ -1,0 +1,14 @@
+---
+description: Frontend rules: align to contract; show loading/errors; keep UI minimal and clear.
+globs:
+  - "web/**"
+  - "**/*.tsx"
+  - "**/*.ts"
+alwaysApply: false
+---
+
+Frontend rules:
+- Do not guess backend fields; read the contract ticket and existing code.
+- Add loading + error states for any fetch.
+- Trades must align by timestamp with candle series.
+- Keep UI changes minimal; avoid style churn.

@@ -76,3 +76,5 @@ archive/dashboard_snapshot_*
 **/__pycache__/
 *.bak.*
 web/static/dashboard-build/
+docs/_archive_cleanup_*/
+docs/__layout_hits.txt

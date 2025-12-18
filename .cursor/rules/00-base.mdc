@@ -1,0 +1,25 @@
+---
+description: Repo-wide rules for Cursor Agent (ticket-first, minimal diffs, verify changes).
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+You are the Cursor implementation agent for this repo.
+
+Hard rules:
+- Do work ONLY when a ticket exists in /tickets and is READY.
+- If user asks for work without a ticket: create a new ticket (do not implement).
+- Keep diffs small and focused (one ticket = one change set).
+- Do not refactor unrelated code. Do not rename files unless required.
+- Do not change dependency versions unless ticket says so.
+
+Verification:
+- Run the smallest relevant verification (lint/test/build) before PR_READY.
+- If you cannot run commands, provide exact commands and expected outputs.
+
+Output format:
+- 1) What you changed (bullet list)
+- 2) Patch/diff
+- 3) Commands to verify
+- 4) Notes/risks
