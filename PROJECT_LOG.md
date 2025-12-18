@@ -118,3 +118,14 @@ Next: pick конкретные папки/файлы для выноса + до
 - Wrote: docs/DESIGN_TARGET.md
 - Wrote: docs/CURSOR_DESIGN_PROMPT.md
 - Clipboard: docs/CURSOR_DESIGN_PROMPT.md
+
+## 2025-12-18 19:11:02 - Cursor prompt
+- Wrote: docs/CURSOR_FRONTEND_PROMPT.md
+- Copied to clipboard: docs/CURSOR_FRONTEND_PROMPT.md
+
+## %s - Reference design locked + cursor prompt rebuilt
+2025-12-18 19:14:36
+- Wrote: docs/REFERENCE_STYLE.md
+- Wrote: docs/FEATURES_SCOPE.md
+- Wrote: docs/CURSOR_FRONTEND_PROMPT.md
+- Clipboard: docs/CURSOR_FRONTEND_PROMPT.md
