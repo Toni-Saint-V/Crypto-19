@@ -27,7 +27,7 @@ function ModeButton(props: {
       onClick={onClick}
       className={`px-3 py-1 text-[10px] font-medium rounded-full transition-colors ${
         active
-          ? 'bg-[#21D4B4] text-black'
+          ? 'bg-[#21D4B4] text-black shadow-[0_0_8px_rgba(33,212,180,0.4)]'
           : 'text-gray-400 hover:text-gray-200'
       }`}
     >
@@ -53,7 +53,7 @@ export default function TopBar({
         : 'text-gray-400';
 
   return (
-    <div className="h-12 min-h-[48px] flex items-center justify-between px-6 border-b border-[#1A1C22] bg-[#05070A] flex-shrink-0">
+    <div className="h-12 min-h-[48px] flex items-center justify-between px-6 border-b border-[#1A1C22]/50 bg-[#05070A]/80 backdrop-blur-sm flex-shrink-0">
       {/* Left: Brand + Exchange + Balance */}
       <div className="flex items-center gap-3 flex-shrink-0">
         <div className="text-base font-semibold">
@@ -108,7 +108,7 @@ export default function TopBar({
           <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
           <span>Connected</span>
         </div>
-        <div className="flex items-center gap-1 bg-[#090B10] border border-[#1A1C22] rounded-full px-1 py-0.5">
+        <div className="flex items-center gap-1 bg-black/40 backdrop-blur-sm border border-[#1A1C22]/50 rounded-full px-1 py-0.5">
           <ModeButton
             label="LIVE"
             active={mode === 'live'}
@@ -125,6 +125,21 @@ export default function TopBar({
             onClick={() => onModeChange('backtest')}
           />
         </div>
+        {mode === 'backtest' && (
+          <div className="px-2 py-0.5 text-[9px] font-medium bg-[#21D4B4]/20 text-[#21D4B4] border border-[#21D4B4]/40 rounded-full">
+            BACKTEST
+          </div>
+        )}
+        {mode === 'test' && (
+          <div className="px-2 py-0.5 text-[9px] font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full">
+            TEST
+          </div>
+        )}
+        {mode === 'live' && (
+          <div className="px-2 py-0.5 text-[9px] font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full">
+            LIVE
+          </div>
+        )}
         <button className="p-1.5 text-gray-400 hover:text-gray-200 transition-colors">
           <svg
             className="w-4 h-4"

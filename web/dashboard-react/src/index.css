@@ -13,14 +13,17 @@ body,
 #root {
   width: 100%;
   height: 100%;
-  height: 100dvh; /* Dynamic viewport height for mobile */
+  height: 100vh;
   background: #05070a;
+  overflow: hidden;
 }
 
 body {
   overflow: hidden;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
     -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .hide-scrollbar {

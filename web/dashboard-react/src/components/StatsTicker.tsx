@@ -11,7 +11,10 @@ interface StatsTickerProps {
 }
 
 function formatNumber(value: unknown, digits: number = 2): string {
-  return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(digits) : '—';
+  if (typeof value === 'number' && Number.isFinite(value) && value !== 0) {
+    return value.toFixed(digits);
+  }
+  return '—';
 }
 
 export default function StatsTicker({ mode, kpi, backtestKpi }: StatsTickerProps) {
@@ -35,14 +38,14 @@ export default function StatsTicker({ mode, kpi, backtestKpi }: StatsTickerProps
 
   if (!kpi) {
     return (
-      <div className="h-8 min-h-[32px] px-6 border-b border-[#1A1C22] bg-[#05070A] flex items-center gap-4 text-xs flex-shrink-0">
+      <div className="h-8 min-h-[32px] px-6 border-b border-[#1A1C22]/50 bg-[#05070A]/80 backdrop-blur-sm flex items-center gap-4 text-xs flex-shrink-0">
         <span className="text-gray-500">—</span>
       </div>
     );
   }
 
   return (
-    <div className="h-8 min-h-[32px] px-6 border-b border-[#1A1C22] bg-[#05070A] flex items-center gap-4 text-xs flex-shrink-0">
+    <div className="h-8 min-h-[32px] px-6 border-b border-[#1A1C22]/50 bg-[#05070A]/80 backdrop-blur-sm flex items-center gap-4 text-xs flex-shrink-0">
       {isBacktest ? (
         <>
           {renderMetric(

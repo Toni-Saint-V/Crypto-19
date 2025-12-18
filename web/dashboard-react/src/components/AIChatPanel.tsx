@@ -96,12 +96,47 @@ export default function AIChatPanel({mode, context}: AIChatPanelProps) {
             key={m.id}
             className={`max-w-[90%] text-xs px-3 py-2 rounded-lg ${
               m.role === 'user'
-                ? 'ml-auto bg-[#1F2933] text-gray-50'
-                : 'mr-auto bg-[#0C1117] text-gray-100 border border-[#1A1C22]'
+                ? 'ml-auto bg-[#1F2933]/80 backdrop-blur-sm text-gray-50'
+                : 'mr-auto bg-[#0C1117]/80 backdrop-blur-sm text-gray-100 border border-[#1A1C22]/50'
             }`}
           >
             {m.content}
           </div>
+        ))}
+      </div>
+
+      {/* Quick Actions */}
+      <div className="mb-3 flex flex-wrap gap-2 flex-shrink-0">
+        {[
+          { label: 'Explain drawdown', action: 'Explain the current drawdown and its causes' },
+          { label: 'Why entries?', action: 'Explain why these entry points were chosen' },
+          { label: 'Optimize params', action: 'Suggest parameter optimizations for this strategy' },
+          { label: 'Risk warnings', action: 'Analyze and highlight potential risk factors' },
+        ].map((action) => (
+          <button
+            key={action.label}
+            type="button"
+            onClick={() => {
+              const actionMessage: ChatMessage = {
+                id: String(Date.now()),
+                role: 'user',
+                content: action.action,
+                timestamp: Date.now(),
+              };
+              requestAssistant(action.action).then((answer) => {
+                const echo: ChatMessage = {
+                  id: String(Date.now() + 1),
+                  role: 'ai',
+                  content: answer,
+                  timestamp: Date.now() + 1,
+                };
+                setMessages((prev) => [...prev, actionMessage, echo]);
+              });
+            }}
+            className="px-2.5 py-1 text-[10px] font-medium rounded-full bg-black/40 border border-white/10 text-white/70 hover:border-[#21D4B4]/50 hover:text-[#21D4B4] transition-colors"
+          >
+            {action.label}
+          </button>
         ))}
       </div>
 
@@ -111,11 +146,11 @@ export default function AIChatPanel({mode, context}: AIChatPanelProps) {
           value={input}
           onChange={(event) => setInput(event.target.value)}
           placeholder="Ask AI about the market or your positions..."
-          className="flex-1 bg-[#0C0F15] border border-[#1A1C22] rounded-lg px-3 py-2 text-xs text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-[#21D4B4]"
+          className="flex-1 bg-[#0C0F15]/80 backdrop-blur-sm border border-[#1A1C22]/50 rounded-lg px-3 py-2 text-xs text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-[#21D4B4] focus:shadow-[0_0_8px_rgba(33,212,180,0.3)]"
         />
         <button
           type="submit"
-          className="px-3 py-2 text-xs font-medium rounded-lg bg-[#21D4B4] text-black hover:bg-[#1bb89a] transition-colors"
+          className="px-3 py-2 text-xs font-medium rounded-lg bg-[#21D4B4] text-black hover:bg-[#1bb89a] transition-colors shadow-[0_0_8px_rgba(33,212,180,0.3)]"
         >
           Send
         </button>

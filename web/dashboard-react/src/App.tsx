@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import TopBar from './components/TopBar';
 import StatsTicker from './components/StatsTicker';
-import LiveTradesTicker from './components/LiveTradesTicker';
 import ChartArea from './components/ChartArea';
 import Sidebar from './components/Sidebar';
 import { Mode, KPIData, BacktestKPIData } from './types';
@@ -172,8 +171,27 @@ const isBacktest = mode === 'backtest';
     : liveKPI;
 
   return (
-    <div className="h-[100dvh] h-screen w-screen bg-[#05070A] text-gray-100 flex justify-center items-center overflow-hidden p-2">
-      <div className="w-full h-full max-w-[1440px] max-h-[900px] bg-gradient-to-br from-[#05070A] to-[#0D1015] border border-[#1A1C22] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+    <div className="h-screen w-screen bg-[#05070A] text-gray-100 overflow-hidden relative">
+      {/* Background waves pattern */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-30">
+        <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="wave1" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#21D4B4" stopOpacity="0.1" />
+              <stop offset="100%" stopColor="#21D4B4" stopOpacity="0" />
+            </linearGradient>
+            <linearGradient id="wave2" x1="100%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#6366F1" stopOpacity="0.1" />
+              <stop offset="100%" stopColor="#6366F1" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path d="M0,200 Q400,100 800,200 T1600,200" stroke="url(#wave1)" strokeWidth="1" fill="none" />
+          <path d="M0,400 Q600,300 1200,400 T2400,400" stroke="url(#wave2)" strokeWidth="1" fill="none" />
+          <path d="M0,600 Q500,500 1000,600 T2000,600" stroke="url(#wave1)" strokeWidth="1" fill="none" />
+        </svg>
+      </div>
+
+      <div className="w-full h-full flex flex-col relative z-10">
         <TopBar
           mode={mode}
           onModeChange={setMode}
@@ -184,10 +202,8 @@ const isBacktest = mode === 'backtest';
 
         <StatsTicker mode={mode} kpi={kpi} backtestKpi={isBacktest ? backtestKpi : undefined} />
 
-        <LiveTradesTicker mode={mode} />
-
         <div className="flex flex-1 overflow-hidden min-h-0">
-          <div className="flex flex-col flex-1 overflow-hidden min-w-0">
+          <div className="flex flex-col flex-1 overflow-hidden min-w-0 min-h-0">
             <ChartArea mode={mode} symbol={symbol} exchange={exchange} timeframe={timeframe} strategy={strategy} onTimeframeChange={setTimeframe} backtestResult={backtestResult} />
           </div>
 

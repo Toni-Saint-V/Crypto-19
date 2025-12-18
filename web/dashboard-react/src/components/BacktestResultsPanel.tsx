@@ -31,7 +31,7 @@ export default function BacktestResultsPanel() {
   const [data, setData] = useState<AnyObj | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [drawerHeight, setDrawerHeight] = useState<number>(220);
-  const [activeTab, setActiveTab] = useState<"results" | "trades" | "logs" | "raw">("results");
+  const [activeTab, setActiveTab] = useState<"results" | "trades" | "logs" | "monte-carlo" | "raw">("results");
   const [isResizing, setIsResizing] = useState(false);
   const [runStatus, setRunStatus] = useState<RunStatus>("idle");
   const [runError, setRunError] = useState<string>("");
@@ -141,12 +141,13 @@ export default function BacktestResultsPanel() {
 
   return (
     <div
-      className="bt-drawer-wrapper border-t border-white/10 bg-white/5"
+      className="bt-drawer-wrapper border-t border-white/10 bg-black/40 backdrop-blur-sm"
       data-page="backtest"
       style={{
-        height: isExpanded ? drawerHeight : 70,
+        height: isExpanded ? Math.min(drawerHeight, Math.floor(window.innerHeight * 0.45)) : 70,
         transition: isResizing ? "none" : "height 160ms ease-out",
         minHeight: 56,
+        maxHeight: isExpanded ? `${Math.floor(window.innerHeight * 0.45)}px` : 'none',
       }}
     >
       <button
@@ -255,8 +256,8 @@ export default function BacktestResultsPanel() {
           </div>
 
           <div className="bt-drawer-body flex-1 min-h-0 flex flex-col px-4 pb-3 pt-1">
-            <div className="mb-2 flex items-center gap-2 text-[11px]">
-              {["results", "trades", "logs", "raw"].map((key) => {
+            <div className="mb-2 flex items-center gap-2 text-[11px] flex-wrap">
+              {["results", "trades", "logs", "monte-carlo", "raw"].map((key) => {
                 const id = key as typeof activeTab;
                 const isActive = activeTab === id;
                 const label =
@@ -266,6 +267,8 @@ export default function BacktestResultsPanel() {
                     ? "Trades"
                     : id === "logs"
                     ? "Logs"
+                    : id === "monte-carlo"
+                    ? "Monte Carlo"
                     : "Raw";
                 return (
                   <button
@@ -274,8 +277,8 @@ export default function BacktestResultsPanel() {
                     onClick={() => setActiveTab(id)}
                     className={`rounded-full px-3 py-1 border text-[11px] transition-colors ${
                       isActive
-                        ? "border-emerald-400 bg-emerald-400/15 text-emerald-200"
-                        : "border-white/10 bg-black/30 text-white/60 hover:border-white/30"
+                        ? "border-[#21D4B4] bg-[#21D4B4]/15 text-[#21D4B4] shadow-[0_0_8px_rgba(33,212,180,0.3)]"
+                        : "border-white/10 bg-black/30 backdrop-blur-sm text-white/60 hover:border-white/30"
                     }`}
                   >
                     {label}
@@ -399,6 +402,112 @@ export default function BacktestResultsPanel() {
                         </li>
                       ))}
                     </ul>
+                  )}
+                </div>
+              )}
+
+              {activeTab === "monte-carlo" && (
+                <div className="space-y-3">
+                  {!hasData ? (
+                    <div className="bt-empty">
+                      <div className="bt-empty-title">No backtest data available</div>
+                      <div className="bt-empty-sub">
+                        Запусти backtest чтобы построить Monte Carlo анализ.
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Controls */}
+                      <div className="rounded-lg border border-white/10 bg-black/20 p-3 space-y-3">
+                        <div className="text-[11px] font-semibold text-white/90 mb-2">Monte Carlo Parameters</div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[10px] text-white/60 mb-1 block">Iterations</label>
+                            <select className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-[11px] text-white focus:outline-none focus:border-[#21D4B4]">
+                              <option>500</option>
+                              <option>1000</option>
+                              <option>5000</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-white/60 mb-1 block">Method</label>
+                            <select className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-[11px] text-white focus:outline-none focus:border-[#21D4B4]">
+                              <option>Bootstrap Returns</option>
+                              <option>Trade Shuffle</option>
+                              <option>Block Bootstrap</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-white/60 mb-1 block">Horizon</label>
+                            <select className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-[11px] text-white focus:outline-none focus:border-[#21D4B4]">
+                              <option>30 days</option>
+                              <option>100 trades</option>
+                              <option>Custom</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-white/60 mb-1 block">Seed (optional)</label>
+                            <input
+                              type="number"
+                              placeholder="Auto"
+                              className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-[#21D4B4]"
+                            />
+                          </div>
+                        </div>
+                        <button className="w-full bg-[#21D4B4] text-black text-[11px] font-semibold py-2 rounded hover:bg-[#1bb89a] transition-colors shadow-[0_0_8px_rgba(33,212,180,0.3)]">
+                          Run Monte Carlo
+                        </button>
+                      </div>
+
+                      {/* Output Placeholders */}
+                      <div className="space-y-3">
+                        <div className="text-[11px] font-semibold text-white/90">Risk Analysis</div>
+                        
+                        {/* Histogram placeholder */}
+                        <div className="rounded-lg border border-white/10 bg-black/20 backdrop-blur-sm p-3">
+                          <div className="text-[10px] text-white/60 mb-2">Final Equity Distribution</div>
+                          <div className="h-32 bg-black/40 rounded flex items-center justify-center border border-white/5">
+                            <span className="text-[10px] text-white/40">Histogram placeholder (equity distribution)</span>
+                          </div>
+                        </div>
+
+                        {/* Fan chart placeholder */}
+                        <div className="rounded-lg border border-white/10 bg-black/20 backdrop-blur-sm p-3">
+                          <div className="text-[10px] text-white/60 mb-2">Equity Fan Chart (Percentiles: 5/25/50/75/95)</div>
+                          <div className="h-40 bg-black/40 rounded flex items-center justify-center border border-white/5">
+                            <span className="text-[10px] text-white/40">Fan chart placeholder (percentile bands over time)</span>
+                          </div>
+                        </div>
+
+                        {/* Risk KPIs */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="rounded-lg border border-white/10 bg-black/20 p-2">
+                            <div className="text-[10px] text-white/60">VaR (95%)</div>
+                            <div className="text-sm font-semibold text-rose-300">—</div>
+                          </div>
+                          <div className="rounded-lg border border-white/10 bg-black/20 p-2">
+                            <div className="text-[10px] text-white/60">CVaR (95%)</div>
+                            <div className="text-sm font-semibold text-rose-300">—</div>
+                          </div>
+                          <div className="rounded-lg border border-white/10 bg-black/20 p-2">
+                            <div className="text-[10px] text-white/60">Probability of Ruin</div>
+                            <div className="text-sm font-semibold text-rose-300">—</div>
+                          </div>
+                          <div className="rounded-lg border border-white/10 bg-black/20 p-2">
+                            <div className="text-[10px] text-white/60">Expected Drawdown</div>
+                            <div className="text-sm font-semibold text-rose-300">—</div>
+                          </div>
+                        </div>
+
+                        {/* Explanation */}
+                        <div className="rounded-lg border border-[#21D4B4]/30 bg-[#21D4B4]/5 p-3">
+                          <div className="text-[10px] font-semibold text-[#21D4B4] mb-1">Analysis Summary</div>
+                          <div className="text-[11px] text-white/70 leading-relaxed">
+                            Monte Carlo simulation will assess strategy robustness by generating multiple random scenarios based on historical trade patterns. Results will show probability distributions of outcomes, risk metrics, and potential worst-case scenarios.
+                          </div>
+                        </div>
+                      </div>
+                    </>
                   )}
                 </div>
               )}
