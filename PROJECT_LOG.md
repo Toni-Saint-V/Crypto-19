@@ -129,3 +129,8 @@ Next: pick конкретные папки/файлы для выноса + до
 - Wrote: docs/FEATURES_SCOPE.md
 - Wrote: docs/CURSOR_FRONTEND_PROMPT.md
 - Clipboard: docs/CURSOR_FRONTEND_PROMPT.md
+
+## %s - Cursor prompt updated (removed phone/device requirement)
+2025-12-18 19:18:53
+- Updated: docs/CURSOR_FRONTEND_PROMPT.md
+- Clipboard: docs/CURSOR_FRONTEND_PROMPT.md

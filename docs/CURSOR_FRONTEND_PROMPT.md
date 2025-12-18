@@ -1,4 +1,6 @@
-Ты Frontend (Cursor) по CryptoBot19Clean. Твоя задача: сделать UI максимально похожим на референс "Bot Analytics Dashboard" (dark neon, фоновые волны, премиальный glass) и реализовать ключевые элементы продукта: 100vh без page scroll, chart hero, chat справа, bottom drawer для backtest, вкладка Monte Carlo, и hero card с иллюстрацией телефона (как на референсе).
+Ты Frontend (Cursor) по CryptoBot19Clean. Твоя задача: сделать UI максимально похожим по стилю на референс "Bot Analytics Dashboard" (dark neon, glass, фоновые волны, премиальная типографика), и реализовать ключевые элементы продукта: 100vh без page scroll, chart hero, chat справа, bottom drawer для backtest, вкладка Monte Carlo.
+
+Важно: элементы "ноутбук/телефон" на референс-картинке используются только как визуальная отсылка к стилю, их НЕ нужно добавлять в UI как отдельные блоки.
 
 Источник правды:
 - docs/REFERENCE_STYLE.md
@@ -23,11 +25,9 @@ A) Layout 100vh (no page scroll)
 B) Min-height:0 (критично)
 - В flex/grid детях с overflow обязательно min-height:0.
 
-C) Верхняя зона как у референса (hero strip)
-- Добавь "hero strip" над chart:
-  - заголовок/контекст (коротко), режим (Backtest/Test/Live) + badge всегда видим, symbol/tf, статус.
-  - рядом (или справа в этом же ряду): device hero card с иллюстрацией телефона (placeholder SVG/PNG) + мягкий glow.
-- Под hero strip: KPI row (4-6 метрик). Empty state если нет данных.
+C) Верхняя зона над chart (как у референса по плотности и стилю)
+- Top bar: Mode selector Backtest/Test/Live + badge всегда видим, symbol/tf, Run/Stop по режиму, статус.
+- Под top bar: KPI row 4-6 метрик (Equity, PnL, DD, WinRate, Trades, Sharpe). Empty/Loading/Error state вместо "0.00".
 
 D) Chart hero
 - Chart занимает максимум высоты, не скрывается drawer.
@@ -37,7 +37,7 @@ E) Bottom drawer (Backtest analytics)
 - Drawer collapsed by default.
 - max-height ~35-45% экрана, overflow:auto внутри.
 - Tabs: Results, Trades, Logs, Monte Carlo, Raw.
-- Drawer не меняет высоту chart так, чтобы chart пропадал.
+- Drawer не должен убирать chart с экрана.
 
 F) Monte Carlo tab (UI обязателен, расчеты можно stub)
 - Controls: iterations (500/1000/5000), method (bootstrap returns / trade shuffle / block bootstrap), horizon (N days/N trades), seed optional.
@@ -62,7 +62,6 @@ Acceptance:
 - Chart всегда видим.
 - Drawer открывается и скроллится внутри, не выталкивая chart.
 - Chat фиксирован, input pinned.
-- Hero strip + phone card визуально похожи на референс.
 - Monte Carlo tab присутствует и выглядит как продукт.
 - Переключение режимов 10 раз без хвостов (по docs/TESTPLAN.md).
 
