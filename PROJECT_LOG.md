@@ -144,3 +144,8 @@ Next: pick конкретные папки/файлы для выноса + до
 - Clipboard: docs/chat_prompts/PM.md
 - Action: create chat inside Project named 'PM/Architect' and paste clipboard
 - Then reply in this chat with //
+
+## 2025-12-18 20:08:46 - Next step
+- Clipboard: docs/CURSOR_FRONTEND_PROMPT.md
+- Action: create chat inside Project named 'Frontend/Cursor' and paste clipboard
+- Then wait for Cursor response (changed files + check steps) and paste that response back here
