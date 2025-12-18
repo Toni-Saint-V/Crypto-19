@@ -112,3 +112,9 @@ Next: pick конкретные папки/файлы для выноса + до
 ## 2025-12-18 18:38:53 - Clipboard
 - Copied: docs/PROJECT_INSTRUCTIONS.md
 - Action: paste into Project Instructions
+
+## %s - Design target updated (ref + Monte Carlo)
+2025-12-18 19:04:51
+- Wrote: docs/DESIGN_TARGET.md
+- Wrote: docs/CURSOR_DESIGN_PROMPT.md
+- Clipboard: docs/CURSOR_DESIGN_PROMPT.md
