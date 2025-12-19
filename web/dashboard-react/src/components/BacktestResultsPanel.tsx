@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type AnyObj = Record<string, any>;
 
@@ -27,17 +27,34 @@ function toNumber(v: unknown, fallback: number): number {
   return fallback;
 }
 
-export default function BacktestResultsPanel() {
+interface BacktestResultsPanelProps {
+  apiBase?: string;
+  onRun?: () => void;
+  onCancel?: () => void;
+  runStatus?: RunStatus;
+  runError?: string;
+  onExpandedChange?: (expanded: boolean) => void;
+}
+
+export default function BacktestResultsPanel({ 
+  apiBase, 
+  onRun,
+  onCancel,
+  runStatus: externalRunStatus,
+  runError: externalRunError,
+  onExpandedChange,
+}: BacktestResultsPanelProps = {}) {
   const [data, setData] = useState<AnyObj | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [drawerHeight, setDrawerHeight] = useState<number>(220);
   const [activeTab, setActiveTab] = useState<"results" | "trades" | "logs" | "monte-carlo" | "raw">("results");
-  const [isResizing, setIsResizing] = useState(false);
-  const [runStatus, setRunStatus] = useState<RunStatus>("idle");
-  const [runError, setRunError] = useState<string>("");
-
-  const startYRef = useRef(0);
-  const startHeightRef = useRef(220);
+  const [focusedInputId, setFocusedInputId] = useState<string | null>(null);
+  const [isButtonHovered, setIsButtonHovered] = useState(false);
+  
+  // Use external status if provided, otherwise internal state
+  const [internalRunStatus, setInternalRunStatus] = useState<RunStatus>("idle");
+  const [internalRunError, setInternalRunError] = useState<string>("");
+  const runStatus = externalRunStatus ?? internalRunStatus;
+  const runError = externalRunError ?? internalRunError;
 
   useEffect(() => {
     const handler = (e: any) => setData(e?.detail || null);
@@ -46,6 +63,15 @@ export default function BacktestResultsPanel() {
   }, []);
 
   const kpi = useMemo(() => pickKpi(data || {}), [data]);
+  
+  // Extract PnL from data (try multiple possible fields)
+  const totalPnl = useMemo(() => {
+    if (!data) return null;
+    const src = data.kpi || data.summary || data.metrics || data;
+    const pnl = src.totalPnl ?? src.pnl ?? src.total_pnl ?? src.total_pnl_usd ?? src.profit;
+    if (typeof pnl === 'number' && Number.isFinite(pnl)) return pnl;
+    return null;
+  }, [data]);
 
   const pretty = useMemo(() => {
     try {
@@ -58,44 +84,26 @@ export default function BacktestResultsPanel() {
   const totalTrades = kpi.totalTrades ?? 0;
   const hasData = !!data && totalTrades > 0;
 
-  const handleResizeMove = useCallback((ev: MouseEvent) => {
-    const dy = startYRef.current - ev.clientY;
-    const next = Math.min(380, Math.max(96, startHeightRef.current + dy));
-    setDrawerHeight(next);
-  }, []);
-
-  const handleResizeUp = useCallback(() => {
-    setIsResizing(false);
-  }, []);
-
-  useEffect(() => {
-    if (!isResizing) return;
-
-    window.addEventListener("mousemove", handleResizeMove);
-    window.addEventListener("mouseup", handleResizeUp);
-
-    return () => {
-      window.removeEventListener("mousemove", handleResizeMove);
-      window.removeEventListener("mouseup", handleResizeUp);
-    };
-  }, [isResizing, handleResizeMove, handleResizeUp]);
-
-  const onResizeStart = (e: React.MouseEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    startYRef.current = e.clientY;
-    startHeightRef.current = drawerHeight;
-    setIsResizing(true);
-  };
-
   const handleToggle = () => {
-    setIsExpanded((prev) => !prev);
+    setIsExpanded((prev) => {
+      const newExpanded = !prev;
+      onExpandedChange?.(newExpanded);
+      return newExpanded;
+    });
   };
 
   const handleRunBacktest = async () => {
     if (runStatus === "running") return;
+    
+    // Use external handler if provided
+    if (onRun) {
+      onRun();
+      return;
+    }
 
-    setRunStatus("running");
-    setRunError("");
+    // Fallback to internal handler if no external handler
+    setInternalRunStatus("running");
+    setInternalRunError("");
 
     try {
       const payload: Record<string, unknown> = {
@@ -105,7 +113,9 @@ export default function BacktestResultsPanel() {
         initial_balance: 10000,
       };
 
-      const res = await fetch("/api/backtest/run", {
+      const base = String(apiBase || '').replace(/\/$/, '');
+      const url = `${base}/api/backtest/run`;
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -131,79 +141,103 @@ export default function BacktestResultsPanel() {
       
       // Update local state
       setData({ ...kpi, ...result });
-      setRunStatus("done");
+      setInternalRunStatus("done");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      setRunError(msg);
-      setRunStatus("error");
+      setInternalRunError(msg);
+      setInternalRunStatus("error");
     }
   };
 
   return (
-    <div
-      className="bt-drawer-wrapper border-t border-white/10 bg-black/40 backdrop-blur-sm"
-      data-page="backtest"
-      style={{
-        height: isExpanded ? Math.min(drawerHeight, Math.floor(window.innerHeight * 0.45)) : 70,
-        transition: isResizing ? "none" : "height 160ms ease-out",
-        minHeight: 56,
-        maxHeight: isExpanded ? `${Math.floor(window.innerHeight * 0.45)}px` : 'none',
-      }}
-    >
-      <button
-        type="button"
+    <div className="w-full h-full flex flex-col">
+      {/* Collapsed header / Summary strip */}
+      <div
+        className="w-full flex items-center justify-between gap-3 px-4 py-2 flex-shrink-0"
+        style={{ height: '48px', cursor: 'pointer' }}
         onClick={handleToggle}
-        className="bt-drawer-header w-full flex items-center justify-between gap-3 px-4 py-2 text-left"
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleToggle();
+          }
+        }}
+        aria-label="Toggle backtest results drawer"
       >
-        <div className="flex items-center gap-3 overflow-hidden">
-          <div className="text-xs font-semibold uppercase tracking-wide text-white/70">
-            Backtest
+        <div className="flex items-center gap-3 overflow-hidden min-w-0">
+          <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--accent-backtest)' }}>
+            Backtest Results
           </div>
-          <div className="flex items-center gap-2 text-[11px] text-white/70 overflow-hidden">
+          <div className="flex items-center gap-2 text-xs overflow-hidden min-w-0">
             {hasData ? (
               <>
-                <span className="inline-flex items-center gap-1 rounded-full bg-black/40 px-2 py-1 border border-white/10">
-                  <span className="text-white/50">Trades</span>
-                  <span className="font-semibold text-white">{kpi.totalTrades}</span>
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-black/40 px-2 py-1 border border-white/10">
-                  <span className="text-white/50">PF</span>
-                  <span className="font-semibold text-emerald-300">
-                    {kpi.profitFactor.toFixed(2)}
+                <span 
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5"
+                  style={{ background: 'var(--surface-2)', border: '1px solid var(--stroke)' }}
+                >
+                  <span style={{ color: 'var(--text-3)' }}>PnL</span>
+                  <span className="font-semibold tabular-nums" style={{ color: 'var(--text-1)' }}>
+                    {totalPnl !== null 
+                      ? `$${totalPnl.toFixed(2)}` 
+                      : '—'}
                   </span>
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-black/40 px-2 py-1 border border-white/10">
-                  <span className="text-white/50">Max DD</span>
-                  <span className="font-semibold text-rose-300">
-                    {kpi.maxDrawdown.toFixed(2)}
+                <span 
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5"
+                  style={{ background: 'var(--surface-2)', border: '1px solid var(--stroke)' }}
+                >
+                  <span style={{ color: 'var(--text-3)' }}>Trades</span>
+                  <span className="font-semibold tabular-nums" style={{ color: 'var(--text-1)' }}>
+                    {kpi.totalTrades}
+                  </span>
+                </span>
+                <span 
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5"
+                  style={{ background: 'var(--surface-2)', border: '1px solid var(--stroke)' }}
+                >
+                  <span style={{ color: 'var(--text-3)' }}>DD</span>
+                  <span className="font-semibold tabular-nums" style={{ color: 'var(--status-loss)' }}>
+                    {kpi.maxDrawdown.toFixed(1)}%
                   </span>
                 </span>
               </>
             ) : (
-              <span className="text-white/60 truncate">
-                No backtest results yet. Run a backtest to see metrics and details.
+              <span style={{ color: 'var(--text-3)' }} className="truncate">
+                No results yet
               </span>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+          {runStatus === "running" && onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="inline-flex h-7 items-center rounded-lg px-3 text-xs font-semibold transition-all"
+              style={{
+                background: 'var(--surface-2)',
+                border: '1px solid var(--stroke)',
+                color: 'var(--text-2)',
+              }}
+            >
+              Cancel
+            </button>
+          )}
           <button
             type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleRunBacktest();
-            }}
+            onClick={handleRunBacktest}
             disabled={runStatus === "running"}
-            className={`inline-flex h-7 items-center rounded-full px-4 text-[11px] font-semibold border transition-all ${
-              runStatus === "running"
-                ? "bg-emerald-400/20 text-emerald-300 border-emerald-400/40 cursor-wait opacity-75"
-                : runStatus === "done"
-                ? "bg-emerald-400/20 text-emerald-300 border-emerald-400/40 hover:bg-emerald-400/30"
-                : runStatus === "error"
-                ? "bg-rose-400/20 text-rose-300 border-rose-400/40 hover:bg-rose-400/30"
-                : "bg-emerald-400 text-black border-emerald-400 hover:bg-emerald-300"
-            }`}
+            className="inline-flex h-7 items-center rounded-lg px-3 text-xs font-semibold transition-all disabled:opacity-50"
+            style={{
+              background: runStatus === "error"
+                ? 'var(--status-loss-bg)'
+                : 'var(--accent-backtest-bg)',
+              color: runStatus === "error" ? 'var(--status-loss)' : 'var(--text-1)',
+              border: `1px solid ${runStatus === "error" ? 'var(--status-loss-border)' : 'var(--accent-backtest-border)'}`,
+            }}
           >
             {runStatus === "running" ? (
               <>
@@ -234,35 +268,34 @@ export default function BacktestResultsPanel() {
             ) : runStatus === "error" ? (
               "✗ Error"
             ) : (
-              "▶ Run Backtest"
+              "▶ Run"
             )}
           </button>
-          <span className="hidden md:inline text-[11px] text-white/50">
-            Backtest sheet
-          </span>
-          <span className="inline-flex h-7 items-center rounded-full bg-emerald-400/10 px-3 text-[11px] font-semibold text-emerald-300 border border-emerald-400/40">
-            {isExpanded ? "Collapse" : "Expand"}
+          <span 
+            className="inline-flex h-7 items-center rounded-lg px-3 text-xs font-medium"
+            style={{ 
+              background: 'var(--surface-2)', 
+              border: '1px solid var(--stroke)',
+              color: 'var(--text-2)',
+            }}
+          >
+            {isExpanded ? "▼" : "▲"}
           </span>
         </div>
-      </button>
+      </div>
 
       {isExpanded && (
-        <div className="flex flex-col h-[calc(100%-40px)] min-h-0">
-          <div
-            className="bt-drawer-handle flex items-center justify-center cursor-row-resize select-none"
-            onMouseDown={onResizeStart}
-          >
-            <div className="h-1.5 w-16 rounded-full bg-white/20" />
-          </div>
-
-          <div className="bt-drawer-body flex-1 min-h-0 flex flex-col px-4 pb-3 pt-1">
-            <div className="mb-2 flex items-center gap-2 text-[11px] flex-wrap">
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          {/* Tabs + Content */}
+          <div className="flex flex-col flex-1 min-h-0 overflow-hidden px-4 pb-3">
+            {/* Tabs */}
+            <div className="mb-2 flex items-center gap-2 text-xs flex-wrap flex-shrink-0">
               {["results", "trades", "logs", "monte-carlo", "raw"].map((key) => {
                 const id = key as typeof activeTab;
                 const isActive = activeTab === id;
                 const label =
                   id === "results"
-                    ? "Results"
+                    ? "Overview"
                     : id === "trades"
                     ? "Trades"
                     : id === "logs"
@@ -275,11 +308,13 @@ export default function BacktestResultsPanel() {
                     key={id}
                     type="button"
                     onClick={() => setActiveTab(id)}
-                    className={`rounded-full px-3 py-1 border text-[11px] transition-colors ${
-                      isActive
-                        ? "border-[#21D4B4] bg-[#21D4B4]/15 text-[#21D4B4] shadow-[0_0_8px_rgba(33,212,180,0.3)]"
-                        : "border-white/10 bg-black/30 backdrop-blur-sm text-white/60 hover:border-white/30"
-                    }`}
+                    className="rounded-lg px-3 py-1 text-xs font-medium transition-all"
+                    style={{
+                      background: isActive ? 'var(--accent-backtest-bg)' : 'var(--surface-2)',
+                      border: `1px solid ${isActive ? 'var(--accent-backtest-border)' : 'var(--stroke)'}`,
+                      color: isActive ? 'var(--accent-backtest)' : 'var(--text-2)',
+                      boxShadow: isActive ? `0 0 8px var(--accent-backtest-glow)` : 'none',
+                    }}
                   >
                     {label}
                   </button>
@@ -287,11 +322,24 @@ export default function BacktestResultsPanel() {
               })}
             </div>
 
+            {/* Scrollable content */}
             <div className="flex-1 min-h-0 overflow-y-auto chat-scrollbar text-xs space-y-3">
               {runStatus === "error" && runError && (
-                <div className="rounded-lg border border-rose-400/40 bg-rose-400/10 p-3 text-[11px] text-rose-300">
-                  <div className="font-semibold mb-1">Backtest Error</div>
-                  <div className="text-rose-200/80">{runError}</div>
+                <div 
+                  className="rounded-lg p-3 text-[11px]"
+                  style={{
+                    border: '1px solid var(--status-loss-border)',
+                    background: 'var(--status-loss-bg)',
+                    color: 'var(--text-1)',
+                  }}
+                >
+                  <div 
+                    className="font-semibold mb-1"
+                    style={{ color: 'var(--status-loss)' }}
+                  >
+                    Backtest Error
+                  </div>
+                  <div style={{ color: 'var(--text-2)' }}>{runError}</div>
                 </div>
               )}
               {activeTab === "results" && (
@@ -306,25 +354,43 @@ export default function BacktestResultsPanel() {
                   ) : (
                     <>
                       <div className="grid grid-cols-3 gap-2">
-                        <div className="rounded-lg border border-white/10 bg-black/20 p-2">
-                          <div className="text-[11px] text-white/60">Total Trades</div>
-                          <div className="text-sm font-semibold">{kpi.totalTrades}</div>
+                        <div 
+                          className="rounded-lg p-2"
+                          style={{
+                            border: '1px solid var(--stroke)',
+                            background: 'var(--surface-2)',
+                          }}
+                        >
+                          <div className="text-[11px]" style={{ color: 'var(--text-3)' }}>Total Trades</div>
+                          <div className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>{kpi.totalTrades}</div>
                         </div>
-                        <div className="rounded-lg border border-white/10 bg-black/20 p-2">
-                          <div className="text-[11px] text-white/60">Profit Factor</div>
-                          <div className="text-sm font-semibold">
+                        <div 
+                          className="rounded-lg p-2"
+                          style={{
+                            border: '1px solid var(--stroke)',
+                            background: 'var(--surface-2)',
+                          }}
+                        >
+                          <div className="text-[11px]" style={{ color: 'var(--text-3)' }}>Profit Factor</div>
+                          <div className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>
                             {kpi.profitFactor.toFixed(2)}
                           </div>
                         </div>
-                        <div className="rounded-lg border border-white/10 bg-black/20 p-2">
-                          <div className="text-[11px] text-white/60">Max Drawdown</div>
-                          <div className="text-sm font-semibold">
+                        <div 
+                          className="rounded-lg p-2"
+                          style={{
+                            border: '1px solid var(--stroke)',
+                            background: 'var(--surface-2)',
+                          }}
+                        >
+                          <div className="text-[11px]" style={{ color: 'var(--text-3)' }}>Max Drawdown</div>
+                          <div className="text-sm font-semibold" style={{ color: 'var(--status-loss)' }}>
                             {kpi.maxDrawdown.toFixed(2)}
                           </div>
                         </div>
                       </div>
 
-                      <div className="text-[11px] text-white/60">
+                      <div className="text-[11px]" style={{ color: 'var(--text-3)' }}>
                         Additional statistics are available in the raw payload tab.
                       </div>
                     </>
@@ -343,34 +409,69 @@ export default function BacktestResultsPanel() {
                     </div>
                   ) : (
                     <table className="w-full text-[11px] border-collapse">
-                      <thead className="bg-black/40 text-white/60">
+                      <thead 
+                        style={{
+                          position: 'sticky',
+                          top: 0,
+                          background: 'var(--surface-3)',
+                          zIndex: 10,
+                        }}
+                      >
                         <tr>
-                          <th className="px-2 py-1 text-left font-medium">Time</th>
-                          <th className="px-2 py-1 text-left font-medium">Side</th>
-                          <th className="px-2 py-1 text-right font-medium">Size</th>
-                          <th className="px-2 py-1 text-right font-medium">Price</th>
-                          <th className="px-2 py-1 text-right font-medium">PnL</th>
+                          <th 
+                            className="px-2 py-1 text-left font-medium"
+                            style={{ color: 'var(--text-3)' }}
+                          >
+                            Time
+                          </th>
+                          <th 
+                            className="px-2 py-1 text-left font-medium"
+                            style={{ color: 'var(--text-3)' }}
+                          >
+                            Side
+                          </th>
+                          <th 
+                            className="px-2 py-1 text-right font-medium"
+                            style={{ color: 'var(--text-3)' }}
+                          >
+                            Size
+                          </th>
+                          <th 
+                            className="px-2 py-1 text-right font-medium"
+                            style={{ color: 'var(--text-3)' }}
+                          >
+                            Price
+                          </th>
+                          <th 
+                            className="px-2 py-1 text-right font-medium"
+                            style={{ color: 'var(--text-3)' }}
+                          >
+                            PnL
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
                         {data.trades.slice(0, 120).map((t: AnyObj, idx: number) => (
                           <tr
                             key={idx}
-                            className="border-t border-white/5 odd:bg-white/[0.01]"
+                            style={{
+                              borderTop: '1px solid var(--stroke)',
+                              background: idx % 2 === 0 ? 'transparent' : 'var(--surface-2)',
+                            }}
                           >
-                            <td className="px-2 py-1">
+                            <td className="px-2 py-1" style={{ color: 'var(--text-1)' }}>
                               {t.time || t.timestamp || t.entry_time || "-"}
                             </td>
-                            <td className="px-2 py-1">
+                            <td className="px-2 py-1" style={{ color: 'var(--text-1)' }}>
                               {(t.side || t.direction || "").toString().toUpperCase() || "-"}
                             </td>
-                            <td className="px-2 py-1 text-right">
+                            <td className="px-2 py-1 text-right" style={{ color: 'var(--text-1)' }}>
                               {t.size ?? t.qty ?? t.quantity ?? "-"}
                             </td>
-                            <td className="px-2 py-1 text-right">
+                            <td className="px-2 py-1 text-right" style={{ color: 'var(--text-1)' }}>
                               {t.price ?? t.entry_price ?? "-"}
                             </td>
-                            <td className="px-2 py-1 text-right">
+                            <td className="px-2 py-1 text-right" style={{ color: 'var(--text-1)' }}>
                               {t.pnl ?? t.profit ?? "-"}
                             </td>
                           </tr>
@@ -396,7 +497,11 @@ export default function BacktestResultsPanel() {
                       {data.logs.slice(0, 200).map((line: any, idx: number) => (
                         <li
                           key={idx}
-                          className="rounded bg-black/30 px-2 py-1 font-mono text-[10px] text-white/80"
+                          className="rounded px-2 py-1 font-mono text-[10px]"
+                          style={{
+                            background: 'var(--surface-2)',
+                            color: 'var(--text-2)',
+                          }}
                         >
                           {typeof line === "string" ? line : JSON.stringify(line)}
                         </li>
@@ -418,91 +523,317 @@ export default function BacktestResultsPanel() {
                   ) : (
                     <>
                       {/* Controls */}
-                      <div className="rounded-lg border border-white/10 bg-black/20 p-3 space-y-3">
-                        <div className="text-[11px] font-semibold text-white/90 mb-2">Monte Carlo Parameters</div>
+                      <div 
+                        className="rounded-lg p-3 space-y-3"
+                        style={{
+                          border: '1px solid var(--stroke)',
+                          background: 'var(--surface-2)',
+                        }}
+                      >
+                        <div 
+                          className="text-[11px] font-semibold mb-2"
+                          style={{ color: 'var(--text-1)' }}
+                        >
+                          Monte Carlo Parameters
+                        </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className="text-[10px] text-white/60 mb-1 block">Iterations</label>
-                            <select className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-[11px] text-white focus:outline-none focus:border-[#21D4B4]">
+                            <label 
+                              className="text-[10px] mb-1 block"
+                              style={{ color: 'var(--text-3)' }}
+                            >
+                              Iterations
+                            </label>
+                            <select 
+                              className="w-full rounded px-2 py-1.5 text-[11px] focus:outline-none transition-colors"
+                              style={{ 
+                                background: 'var(--surface-3)',
+                                border: `1px solid ${focusedInputId === 'iterations' ? 'var(--accent-backtest-border)' : 'var(--stroke)'}`,
+                                color: 'var(--text-1)',
+                                boxShadow: focusedInputId === 'iterations' ? `0 0 0 1px var(--accent-backtest-glow)` : 'none',
+                              }}
+                              onFocus={() => {
+                                setFocusedInputId('iterations');
+                              }}
+                              onBlur={() => {
+                                setFocusedInputId(null);
+                              }}
+                            >
                               <option>500</option>
                               <option>1000</option>
                               <option>5000</option>
                             </select>
                           </div>
                           <div>
-                            <label className="text-[10px] text-white/60 mb-1 block">Method</label>
-                            <select className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-[11px] text-white focus:outline-none focus:border-[#21D4B4]">
+                            <label 
+                              className="text-[10px] mb-1 block"
+                              style={{ color: 'var(--text-3)' }}
+                            >
+                              Method
+                            </label>
+                            <select 
+                              className="w-full rounded px-2 py-1.5 text-[11px] focus:outline-none transition-colors"
+                              style={{
+                                background: 'var(--surface-3)',
+                                border: `1px solid ${focusedInputId === 'method' ? 'var(--accent-backtest-border)' : 'var(--stroke)'}`,
+                                color: 'var(--text-1)',
+                                boxShadow: focusedInputId === 'method' ? `0 0 0 1px var(--accent-backtest-glow)` : 'none',
+                              }}
+                              onFocus={() => {
+                                setFocusedInputId('method');
+                              }}
+                              onBlur={() => {
+                                setFocusedInputId(null);
+                              }}
+                            >
                               <option>Bootstrap Returns</option>
                               <option>Trade Shuffle</option>
                               <option>Block Bootstrap</option>
                             </select>
                           </div>
                           <div>
-                            <label className="text-[10px] text-white/60 mb-1 block">Horizon</label>
-                            <select className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-[11px] text-white focus:outline-none focus:border-[#21D4B4]">
+                            <label 
+                              className="text-[10px] mb-1 block"
+                              style={{ color: 'var(--text-3)' }}
+                            >
+                              Horizon
+                            </label>
+                            <select 
+                              className="w-full rounded px-2 py-1.5 text-[11px] focus:outline-none transition-colors"
+                              style={{
+                                background: 'var(--surface-3)',
+                                border: `1px solid ${focusedInputId === 'horizon' ? 'var(--accent-backtest-border)' : 'var(--stroke)'}`,
+                                color: 'var(--text-1)',
+                                boxShadow: focusedInputId === 'horizon' ? `0 0 0 1px var(--accent-backtest-glow)` : 'none',
+                              }}
+                              onFocus={() => {
+                                setFocusedInputId('horizon');
+                              }}
+                              onBlur={() => {
+                                setFocusedInputId(null);
+                              }}
+                            >
                               <option>30 days</option>
                               <option>100 trades</option>
                               <option>Custom</option>
                             </select>
                           </div>
                           <div>
-                            <label className="text-[10px] text-white/60 mb-1 block">Seed (optional)</label>
+                            <label 
+                              className="text-[10px] mb-1 block"
+                              style={{ color: 'var(--text-3)' }}
+                            >
+                              Seed (optional)
+                            </label>
                             <input
                               type="number"
                               placeholder="Auto"
-                              className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-[#21D4B4]"
+                              className="w-full rounded px-2 py-1.5 text-[11px] focus:outline-none transition-colors"
+                              style={{
+                                background: 'var(--surface-3)',
+                                border: `1px solid ${focusedInputId === 'seed' ? 'var(--accent-backtest-border)' : 'var(--stroke)'}`,
+                                color: 'var(--text-1)',
+                                boxShadow: focusedInputId === 'seed' ? `0 0 0 1px var(--accent-backtest-glow)` : 'none',
+                              }}
+                              onFocus={() => {
+                                setFocusedInputId('seed');
+                              }}
+                              onBlur={() => {
+                                setFocusedInputId(null);
+                              }}
                             />
                           </div>
                         </div>
-                        <button className="w-full bg-[#21D4B4] text-black text-[11px] font-semibold py-2 rounded hover:bg-[#1bb89a] transition-colors shadow-[0_0_8px_rgba(33,212,180,0.3)]">
+                        <button 
+                          className="w-full text-[11px] font-semibold py-2 rounded transition-colors"
+                          style={{
+                            background: isButtonHovered ? 'var(--accent-backtest)' : 'var(--accent-backtest-bg)',
+                            border: '1px solid var(--accent-backtest-border)',
+                            color: isButtonHovered ? 'var(--text-1)' : 'var(--accent-backtest)',
+                            boxShadow: `0 0 8px var(--accent-backtest-glow)`,
+                          }}
+                          onMouseEnter={() => {
+                            setIsButtonHovered(true);
+                          }}
+                          onMouseLeave={() => {
+                            setIsButtonHovered(false);
+                          }}
+                        >
                           Run Monte Carlo
                         </button>
                       </div>
 
                       {/* Output Placeholders */}
                       <div className="space-y-3">
-                        <div className="text-[11px] font-semibold text-white/90">Risk Analysis</div>
+                        <div 
+                          className="text-[11px] font-semibold"
+                          style={{ color: 'var(--text-1)' }}
+                        >
+                          Risk Analysis
+                        </div>
                         
                         {/* Histogram placeholder */}
-                        <div className="rounded-lg border border-white/10 bg-black/20 backdrop-blur-sm p-3">
-                          <div className="text-[10px] text-white/60 mb-2">Final Equity Distribution</div>
-                          <div className="h-32 bg-black/40 rounded flex items-center justify-center border border-white/5">
-                            <span className="text-[10px] text-white/40">Histogram placeholder (equity distribution)</span>
+                        <div 
+                          className="rounded-lg backdrop-blur-sm p-3"
+                          style={{
+                            border: '1px solid var(--stroke)',
+                            background: 'var(--surface-2)',
+                          }}
+                        >
+                          <div 
+                            className="text-[10px] mb-2"
+                            style={{ color: 'var(--text-3)' }}
+                          >
+                            Final Equity Distribution
+                          </div>
+                          <div 
+                            className="h-32 rounded flex items-center justify-center"
+                            style={{
+                              background: 'var(--surface-3)',
+                              border: '1px solid var(--stroke)',
+                            }}
+                          >
+                            <span 
+                              className="text-[10px]"
+                              style={{ color: 'var(--text-3)' }}
+                            >
+                              Histogram placeholder (equity distribution)
+                            </span>
                           </div>
                         </div>
 
                         {/* Fan chart placeholder */}
-                        <div className="rounded-lg border border-white/10 bg-black/20 backdrop-blur-sm p-3">
-                          <div className="text-[10px] text-white/60 mb-2">Equity Fan Chart (Percentiles: 5/25/50/75/95)</div>
-                          <div className="h-40 bg-black/40 rounded flex items-center justify-center border border-white/5">
-                            <span className="text-[10px] text-white/40">Fan chart placeholder (percentile bands over time)</span>
+                        <div 
+                          className="rounded-lg backdrop-blur-sm p-3"
+                          style={{
+                            border: '1px solid var(--stroke)',
+                            background: 'var(--surface-2)',
+                          }}
+                        >
+                          <div 
+                            className="text-[10px] mb-2"
+                            style={{ color: 'var(--text-3)' }}
+                          >
+                            Equity Fan Chart (Percentiles: 5/25/50/75/95)
+                          </div>
+                          <div 
+                            className="h-40 rounded flex items-center justify-center"
+                            style={{
+                              background: 'var(--surface-3)',
+                              border: '1px solid var(--stroke)',
+                            }}
+                          >
+                            <span 
+                              className="text-[10px]"
+                              style={{ color: 'var(--text-3)' }}
+                            >
+                              Fan chart placeholder (percentile bands over time)
+                            </span>
                           </div>
                         </div>
 
                         {/* Risk KPIs */}
                         <div className="grid grid-cols-2 gap-2">
-                          <div className="rounded-lg border border-white/10 bg-black/20 p-2">
-                            <div className="text-[10px] text-white/60">VaR (95%)</div>
-                            <div className="text-sm font-semibold text-rose-300">—</div>
+                          <div 
+                            className="rounded-lg p-2"
+                            style={{
+                              border: '1px solid var(--stroke)',
+                              background: 'var(--surface-2)',
+                            }}
+                          >
+                            <div 
+                              className="text-[10px]"
+                              style={{ color: 'var(--text-3)' }}
+                            >
+                              VaR (95%)
+                            </div>
+                            <div 
+                              className="text-sm font-semibold"
+                              style={{ color: 'var(--status-loss)' }}
+                            >
+                              —
+                            </div>
                           </div>
-                          <div className="rounded-lg border border-white/10 bg-black/20 p-2">
-                            <div className="text-[10px] text-white/60">CVaR (95%)</div>
-                            <div className="text-sm font-semibold text-rose-300">—</div>
+                          <div 
+                            className="rounded-lg p-2"
+                            style={{
+                              border: '1px solid var(--stroke)',
+                              background: 'var(--surface-2)',
+                            }}
+                          >
+                            <div 
+                              className="text-[10px]"
+                              style={{ color: 'var(--text-3)' }}
+                            >
+                              CVaR (95%)
+                            </div>
+                            <div 
+                              className="text-sm font-semibold"
+                              style={{ color: 'var(--status-loss)' }}
+                            >
+                              —
+                            </div>
                           </div>
-                          <div className="rounded-lg border border-white/10 bg-black/20 p-2">
-                            <div className="text-[10px] text-white/60">Probability of Ruin</div>
-                            <div className="text-sm font-semibold text-rose-300">—</div>
+                          <div 
+                            className="rounded-lg p-2"
+                            style={{
+                              border: '1px solid var(--stroke)',
+                              background: 'var(--surface-2)',
+                            }}
+                          >
+                            <div 
+                              className="text-[10px]"
+                              style={{ color: 'var(--text-3)' }}
+                            >
+                              Probability of Ruin
+                            </div>
+                            <div 
+                              className="text-sm font-semibold"
+                              style={{ color: 'var(--status-loss)' }}
+                            >
+                              —
+                            </div>
                           </div>
-                          <div className="rounded-lg border border-white/10 bg-black/20 p-2">
-                            <div className="text-[10px] text-white/60">Expected Drawdown</div>
-                            <div className="text-sm font-semibold text-rose-300">—</div>
+                          <div 
+                            className="rounded-lg p-2"
+                            style={{
+                              border: '1px solid var(--stroke)',
+                              background: 'var(--surface-2)',
+                            }}
+                          >
+                            <div 
+                              className="text-[10px]"
+                              style={{ color: 'var(--text-3)' }}
+                            >
+                              Expected Drawdown
+                            </div>
+                            <div 
+                              className="text-sm font-semibold"
+                              style={{ color: 'var(--status-loss)' }}
+                            >
+                              —
+                            </div>
                           </div>
                         </div>
 
                         {/* Explanation */}
-                        <div className="rounded-lg border border-[#21D4B4]/30 bg-[#21D4B4]/5 p-3">
-                          <div className="text-[10px] font-semibold text-[#21D4B4] mb-1">Analysis Summary</div>
-                          <div className="text-[11px] text-white/70 leading-relaxed">
+                        <div 
+                          className="rounded-lg p-3"
+                          style={{
+                            border: '1px solid var(--accent-backtest-border)',
+                            background: 'var(--accent-backtest-bg)',
+                          }}
+                        >
+                          <div 
+                            className="text-[10px] font-semibold mb-1"
+                            style={{ color: 'var(--accent-backtest)' }}
+                          >
+                            Analysis Summary
+                          </div>
+                          <div 
+                            className="text-[11px] leading-relaxed"
+                            style={{ color: 'var(--text-2)' }}
+                          >
                             Monte Carlo simulation will assess strategy robustness by generating multiple random scenarios based on historical trade patterns. Results will show probability distributions of outcomes, risk metrics, and potential worst-case scenarios.
                           </div>
                         </div>
@@ -523,10 +854,20 @@ export default function BacktestResultsPanel() {
                     </div>
                   ) : (
                     <>
-                      <div className="text-[11px] text-white/60">
+                      <div 
+                        className="text-[11px]"
+                        style={{ color: 'var(--text-3)' }}
+                      >
                         Raw payload (first 160 lines)
                       </div>
-                      <pre className="mt-1 max-h-64 overflow-auto rounded-lg border border-white/10 bg-black/30 p-2 text-[11px] leading-4">
+                      <pre 
+                        className="mt-1 max-h-64 overflow-auto rounded-lg p-2 text-[11px] leading-4"
+                        style={{
+                          border: '1px solid var(--stroke)',
+                          background: 'var(--surface-2)',
+                          color: 'var(--text-2)',
+                        }}
+                      >
                         {pretty.split("\n").slice(0, 160).join("\n")}
                       </pre>
                     </>

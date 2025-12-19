@@ -149,3 +149,243 @@ Next: pick конкретные папки/файлы для выноса + до
 - Clipboard: docs/CURSOR_FRONTEND_PROMPT.md
 - Action: create chat inside Project named 'Frontend/Cursor' and paste clipboard
 - Then wait for Cursor response (changed files + check steps) and paste that response back here
+
+## 2025-12-18 20:23:12 - Project orchestrator chat seed
+- Wrote: docs/PROJECT_ORCHESTRATOR_CHAT.md
+- Clipboard: docs/PROJECT_ORCHESTRATOR_CHAT.md
+
+## 2025-12-18 22:32:03
+- Generated docs/AUDIT_REVIEW.md (extracted issues/plan from audit).
+- Generated docs/REPO_INSPECTION.md (auto scan: entrypoints, endpoints, mode references).
+- Generated docs/CONTEXT_GAPS.md (explicit unknowns to confirm).
+
+## 2025-12-18 22:33:24
+- Read docs/AUDIT_REVIEW.md + docs/REPO_INSPECTION.md + docs/CONTEXT_GAPS.md to ground next task on real entrypoints/endpoints.
+
+## 2025-12-18 22:35:43
+- Generated docs/API_CONTRACT_AUDIT.md: discovered backend /api routes + compared (heuristically) against docs/CONTRACTS.md; captured frontend /api/backtest references.
+
+## 2025-12-18 22:40:10
+- Generated docs/CONTRACT_GAP_MATRIX.md: backend /api routes + heuristic return keys + backtest Trades/Equity/Metrics presence flags; extracted /api mentions and quick signals from docs/CONTRACTS.md.
+
+## 2025-12-18 22:44:48
+- Generated docs/AST_ROUTE_MAP.md using Python AST (authoritative decorator->function binding + heuristic return-shape/keys).
+
+## 2025-12-18 22:46:43
+- Generated docs/AST_ROUTE_MAP_V2.md (AST scan incl. nested defs).
+- Generated docs/ROUTE_CODE_SNIPPETS.md (code excerpts for backtest/candles/trades/equity/metrics endpoints).
+
+## 2025-12-18 22:48:48
+- Generated docs/CONTRACTS_EXTRACT.md (focused extract of Candles/Trades/Equity/Metrics/Backtest/Errors).
+- Generated docs/ENDPOINT_CONTRACT_MAP.md (AST-based endpoint-to-contract mapping + likely gap flags).
+
+## 2025-12-18 23:07:50
+- Generated docs/BACKEND_P0_2_3_PLAN.md (grounded plan from AST_ROUTE_MAP_V2 + snippets + CONTRACTS.md).
+
+## 2025-12-18 23:12:04
+- Wrote docs/REDESIGN_TIMING.md: recommended timing for redesign (structural now, visual+AI/ML after API/mode/backtest stabilization).
+
+## 2025-12-18 23:13:32
+- Wrote docs/STATUS_SUMMARY.md to consolidate current grounded findings and the two-wave redesign plan.
+
+## 2025-12-18 23:47:19
+- Backend P0-3 groundwork applied:
+  - Added canonical backtest normalizer -> always {trades,equity,metrics} and coerced common time fields to epoch ms.
+  - Added FastAPI HTTPException handler -> JSON {status:'error', message:'...'} (replaces default {detail}).
+  - Hardened GET /api/backtest to never return {} (normalized output).
+  - Best-effort: /api/candles raises HTTPException if local 'error' var exists (standardizes error path).
+
+## 2025-12-18 23:48:59
+- Discovery: api.py is missing; generated docs/BACKEND_ENDPOINT_FILES.md to locate real /api/backtest job endpoints module.
+- Wrote /tmp/py_compile_list.txt (server.py + top endpoint candidates) to avoid compile crash.
+
+## 2025-12-19 00:22:06
+- Backend P0-3 fix: patched core/backtest/api.py (real backtest job module).
+- /api/backtest/result now returns canonical {trades,equity,metrics} via _normalize_backtest_result (maps equity_curve/statistics; coerces time keys to epoch ms).
+- HTTPException detail strings converted to detail={"message": "..."} for status/result so server handler returns {"status":"error","message":"..."} consistently.
+
+## 2025-12-19 00:30:05
+- Generated docs/CORE_BACKTEST_API_MAP.md (AST route map + snippets for core/backtest/api.py).
+- This is used to patch the correct backtest job endpoints (previous patch assumed status/result names and did not match).
+
+## 2025-12-19 00:34:10
+- Patched core/backtest/api.py handlers (authoritative from docs/CORE_BACKTEST_API_MAP.md):
+  - result(job_id): returns _normalize_backtest_result(job.result) so payload always has trades/equity/metrics.
+  - status/result HTTPException detail -> {"message": ...} so server returns {"status":"error","message":"..."} consistently.
+
+## 2025-12-19 00:44:47
+- Backend P0-3: fixed core/backtest/api.py decorator+def integrity for /api/backtest/status and /api/backtest/result.
+- Removed detached decorators: 0.
+- status/result now: HTTPException detail is {"message": ...}; result returns _normalize_backtest_result(job.result) (always trades/equity/metrics).
+
+## 2025-12-19 00:51:58
+- Fixed core/backtest/api.py: removed duplicate backtest status/result routes and reinserted single canonical blocks.
+- Removed blocks/decorators count (best-effort): 8.
+- Canonical: result(job_id) returns _normalize_backtest_result(job.result); HTTPException detail uses {"message": ...}.
+
+## 2025-12-19 02:51:18
+- Ran backtest smoke check at http://127.0.0.1:8000; wrote docs/_ai_memory/SMOKE_BACKTEST_LAST.md.
+
+## 2025-12-19 02:55:00
+- Fix: GET /api/backtest returned empty payload in smoke check. Patched all exact '/api/backtest' handlers to always return canonical {trades,equity,metrics}.
+- Patched files:
+  - /Users/user/cryptobot_19_clean/server.py (blocks replaced: 1)
+
+## 2025-12-19 02:57:08
+- Diagnosed why GET /api/backtest still returns {} after patch: captured port-8000 listener PID/command and printed server.py handler snippet.
+- Appended observed GET /api/backtest response to docs/_ai_memory/SMOKE_BACKTEST_LAST.md.
+
+## 2025-12-19 02:59:59
+- Restarted uvicorn on :8000 with --reload so server.py changes apply immediately.
+- Appended GET /api/backtest response to docs/_ai_memory/SMOKE_BACKTEST_LAST.md.
+- Log: /tmp/uvicorn_8000.log
+
+## 2025-12-19 03:02:52
+- Tried to restart uvicorn with --reload; captured listener state + tailed /tmp/uvicorn_8000.log.
+- Appended GET /api/backtest response to docs/_ai_memory/SMOKE_BACKTEST_LAST.md.
+
+## 2025-12-19 03:04:41
+- P0-3 smoke OK: GET /api/backtest returns canonical keys. Proceeding to P0-2.
+- Wrote docs/_ai_memory/P0_2_GAP_REPORT.md (contracts vs live payload gap report).
+
+## 2025-12-19 03:07:20
+- P0-3 smoke OK: GET /api/backtest returns canonical keys. Proceeding to P0-2.
+- Wrote docs/_ai_memory/P0_2_GAP_REPORT.md (contracts vs live payload gap report).
+
+## 2025-12-19 03:08:31
+- P0-2 discovery: wrote /Users/user/cryptobot_19_clean/docs/_ai_memory/P0_2_CONTRACTS_AND_ROUTES.md (CONTRACTS headings index + repo-wide route discovery for trades/equity/metrics).
+
+## 2025-12-19 03:11:03
+- P0-2 blocker: docs/CONTRACTS.md appears empty/non-markdown (0 headings).
+- Wrote docs/_ai_memory/CONTRACTS_HEALTH_REPORT.md to identify best available contract source in repo.
+
+## 2025-12-19 03:14:58
+- Restored docs/CONTRACTS.md from /Users/user/cryptobot_19_clean/docs/_ai_memory/CONTRACTS_HEALTH_REPORT.md (previous CONTRACTS.md had no headings/keywords).
+
+## 2025-12-19 03:23:09
+- Fixed docs/CONTRACTS.md: previous content was a health report; restored proper contracts from docs/CONTRACTS.md.
+
+## 2025-12-19 03:23:39
+- Fixed docs/CONTRACTS.md: previous content was a health report; restored proper contracts from docs/CONTRACTS.md.
+
+## 2025-12-19 03:25:00
+- Hard-restored docs/CONTRACTS.md from docs/_archive_cleanup_20251218_183655/dashboard_api_contract.md (avoided self-referential restore).
+
+## 2025-12-19 03:28:31
+- P0-2: generated docs/_ai_memory/ENDPOINT_CONTRACT_DIFF.md (contract endpoints vs implemented routes map).
+
+## 2025-12-19 03:30:04
+- P0-2/P0-3: extended docs/CONTRACTS.md to include Candles/Trades/Equity/Metrics/Backtest sections (previously only dashboard snapshot).
+- Source: /Users/user/cryptobot_19_clean/docs/CONTRACTS_EXTRACT.md
+
+## 2025-12-19 03:54:55
+- Prepared chat transition snapshot: docs/_ai_memory/CHAT_HANDOFF.md
+- Prepared bootstrap command: docs/_ai_memory/BOOTSTRAP_COMMAND.sh (copied to clipboard).
+
+## 2025-12-19 04:11:52
+- Ran bootstrap for clean chat transition: docs/_ai_memory/BOOTSTRAP_COMMAND.sh
+
+## 2025-12-19 04:13:42
+- P0-2: added missing endpoints /api/trades, /api/equity, /api/metrics (proxy from latest canonical backtest).
+- P0-2: fixed /api/candles candle.time to unix epoch milliseconds.
+
+## 2025-12-19 04:15:44
+- P0-2: fixed /api/candles to return unix epoch milliseconds for candle time.
+- P0-2: ensured /api/trades,/api/equity,/api/metrics exist and respond quickly (proxy from last_backtest_context).
+
+## 2025-12-19 04:18:26
+- Updated progress tracker: docs/_ai_memory/PROGRESS.md (P0-2/P0-3 percentages + blockers).
+- Updated redesign timing plan: docs/REDESIGN_TIMING.md.
+- Refreshed Cursor Pro+ handoff: docs/CURSOR_UI_PROMPT.md (copied to clipboard).
+## 2025-12-19 04:42 — Context restored: UI Premium spec -> Cursor handoff
+
+- UI spec parsed: NO
+- Audit present: NO
+- Generated: docs/CURSOR_UI_PROMPT.md (detailed Cursor task spec)
+
+Progress (rough, %):
+- Step 1 (AUDIT + MAP): 60%
+- Step 2 (CURSOR HANDOFF UI/UX): 95%
+- Step 3 (AI Assistant MVP): 0%
+- Step 4 (ML Skeleton): 0%
+- Step 5 (QA / Tighten): 0%
+
+Next action:
+- Paste docs/CURSOR_UI_PROMPT.md into Cursor and execute P0 UI tasks (100vh, drawer, right panel, mode isolation UI).
+
+## 2025-12-19 12:34 — Consolidated review notes -> single Cursor task
+
+Created: docs/CURSOR_REVIEW_TASK.md
+
+процент прогресса текущего шага: 90%
+процент прогресса до конца дашборда: 58%
+
+Next:
+- Apply P0 fixes from CURSOR_REVIEW_TASK.md (App CTAs/KPIs, token validity, drawer max-height CSS, TS event types, chat mode isolation).
+- Re-run manual acceptance checks (no scroll, chart pinned, drawers 40vh, 10x mode switch).
+
+## 2025-12-19 13:50 — Cursor task: Premium Dark Terminal Redesign + P0 fixes
+
+- Created docs/CURSOR_UI_PROMPT.md with a single structured task for Cursor: premium dark terminal redesign (Backtest/Live/Test) on one layout + strict constraints (100vh/no page scroll/chart always visible/right panel fixed/bottom drawer) + mode isolation (abort + race guard) + concrete per-file fixes (App/TopBar/Sidebar/AIChatPanel/BacktestResultsPanel/Drawers/StatsTicker/index.css).
+
+
+## 2025-12-19 13:52 — Cursor task prepared (premium dark terminal + mode isolation)
+
+- Wrote docs/CURSOR_UI_PROMPT.md: premium dark terminal redesign for Backtest/Live/Test on one 100vh layout + bottom drawer + fixed right panel + token-only styling + abort/race-guard mode isolation.
+- Progress: step 90%, dashboard 58%.
+
+
+## 2025-12-19 13:53 — Cursor task prepared (premium dark terminal + mode isolation)
+
+- Wrote/updated docs/CURSOR_UI_PROMPT.md for Cursor: premium dark terminal redesign for Backtest/Live/Test on one 100vh layout + bottom drawer + fixed right panel + token-only styling + abort/race-guard mode isolation.
+- Progress: step 90%, dashboard 58%.
+
+
+## 2025-12-19 14:00 - Cursor task ready (premium dark terminal + mode isolation)
+
+- Updated docs/CURSOR_UI_PROMPT.md: single structured task (3 modes on one 100vh layout, fixed right panel, bottom drawer, token-only styling, abort+racesafe mode isolation).
+- Progress: step 100%, dashboard 58%.
+
+
+## 2025-12-19 18:43 - Cursor follow-up task (review pass)
+
+- Generated follow-up Cursor task focusing on LiveResultsDrawer: make it a true bottom drawer that does not push the chart; remove JS height/resizing coupling; enforce CSS max-height 40vh + internal overflow; keep token-only styling.
+
+
+## 2025-12-19 18:46 - Parallel plan while Cursor works: Business Logic Track
+
+- Added docs/BUSINESS_LOGIC_NEXT.md: AI Assistant MVP (/api/assistant stub + TradingContext) and ML skeleton plan (features->scoring->UI hook) with acceptance criteria.
+
+
+## 2025-12-19 18:51 - Cursor follow-up (ChartArea review)
+
+- Added Cursor follow-up task: remove  ML context in ChartArea.tsx via minimal typed context, and ensure drawers mount as true bottom overlays so they never push the chart.
+
+
+## 2025-12-19 18:54 - Business logic track started: backend audit for /api/assistant + ML skeleton
+
+- Added docs/BUSINESS_LOGIC_AUDIT.md with repo scan: backend entrypoints, framework hints, existing /api routes, and next insertion steps.
+
+
+## 2025-12-19 19:27 - Business logic: mode normalization for dashboard compatibility
+
+- Patched backend Pydantic contracts to accept UI modes 'live/test/backtest' and normalize to 'LIVE/TEST/BACKTEST' for:
+  - core/assistant/contract.py (TradingContext.mode)
+  - core/ml/contract.py (MLContext.mode)
+- This removes 422 validation risk when React sends lowercase mode.
+
+## 2025-12-19 20:23 - Cursor one-shot issued (speed up)
+
+- Replaced follow-ups with a single ONE-SHOT task: implement shared overlay bottom-drawer wrapper in ChartArea, remove Live drawer JS resizing, enforce mode isolation + chat reset/typing, and run a quick token-only styling audit.
+
+
+## 2025-12-19 20:39 - Cursor follow-up: index.css mode accent + scrollbar token + no-scroll polish
+
+- Issued Cursor follow-up task for web/dashboard-react/src/index.css: make --accent-active mode-scoped, add scrollbar hover token, remove redundant height rules, add overscroll-behavior:none, verify data-mode is applied to root.
+
+
+## 2025-12-19 20:42 - Cursor follow-up: wire data-mode to root (so CSS mode tokens apply)
+
+- index.css already has mode-scoped --accent-active and scrollbar hover tokens.
+- Follow-up: ensure App/top-level wrapper sets data-mode with exact lowercase values (live/test/backtest) so mode styling actually applies.
+

@@ -1,5 +1,5 @@
-import { Mode, AIPredictor } from '../types';
 import { useState } from 'react';
+import { Mode } from '../types';
 
 interface TopBarProps {
   mode: Mode;
@@ -7,29 +7,35 @@ interface TopBarProps {
   symbol: string;
   exchange: string;
   balance: number;
+  primaryCtaLabel: string;
+  onPrimaryCta: () => void;
+  primaryCtaDisabled?: boolean;
 }
-
-const mockPredictor: AIPredictor = {
-  bias: 'Bullish',
-  strength: 78,
-  explanation: 'Strong upward momentum with increasing volume. Key resistance levels broken.',
-};
 
 function ModeButton(props: {
   label: string;
+  value: Mode;
   active: boolean;
   onClick: () => void;
+  accent: { bg: string; glow: string };
+  hovered: boolean;
+  onHoverChange: (hovered: boolean) => void;
 }) {
-  const { label, active, onClick } = props;
+  const { label, active, onClick, accent, hovered, onHoverChange } = props;
 
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-1 text-[10px] font-medium rounded-full transition-colors ${
-        active
-          ? 'bg-[#21D4B4] text-black shadow-[0_0_8px_rgba(33,212,180,0.4)]'
-          : 'text-gray-400 hover:text-gray-200'
+      className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+        active ? 'shadow-lg' : ''
       }`}
+      style={{
+        background: active ? accent.bg : 'transparent',
+        boxShadow: active ? `0 0 12px ${accent.glow}` : 'none',
+        color: active ? 'var(--text-1)' : (hovered ? 'var(--text-2)' : 'var(--text-3)'),
+      }}
+      onMouseEnter={() => onHoverChange(true)}
+      onMouseLeave={() => onHoverChange(false)}
     >
       {label}
     </button>
@@ -39,108 +45,130 @@ function ModeButton(props: {
 export default function TopBar({
   mode,
   onModeChange,
+  symbol,
   exchange,
   balance,
+  primaryCtaLabel,
+  onPrimaryCta,
+  primaryCtaDisabled = false,
 }: TopBarProps) {
-  const [predictor] = useState<AIPredictor>(mockPredictor);
-  const isTest = mode === 'test';
+  const [hoveredMode, setHoveredMode] = useState<Mode | null>(null);
+  const [settingsHovered, setSettingsHovered] = useState(false);
+  
+  const modeAccents: Record<Mode, { color: string; bg: string; border: string; glow: string }> = {
+    backtest: {
+      color: 'var(--accent-backtest)',
+      bg: 'var(--accent-backtest-bg)',
+      border: 'var(--accent-backtest-border)',
+      glow: 'var(--accent-backtest-glow)',
+    },
+    live: {
+      color: 'var(--accent-live)',
+      bg: 'var(--accent-live-bg)',
+      border: 'var(--accent-live-border)',
+      glow: 'var(--accent-live-glow)',
+    },
+    test: {
+      color: 'var(--accent-test)',
+      bg: 'var(--accent-test-bg)',
+      border: 'var(--accent-test-border)',
+      glow: 'var(--accent-test-glow)',
+    },
+  };
 
-  const biasColor =
-    predictor.bias === 'Bullish'
-      ? 'text-emerald-400'
-      : predictor.bias === 'Bearish'
-        ? 'text-red-400'
-        : 'text-gray-400';
+  const accent = modeAccents[mode];
 
   return (
-    <div className="h-12 min-h-[48px] flex items-center justify-between px-6 border-b border-[#1A1C22]/50 bg-[#05070A]/80 backdrop-blur-sm flex-shrink-0">
-      {/* Left: Brand + Exchange + Balance */}
+    <div 
+      className="h-14 min-h-[56px] flex items-center justify-between px-6 flex-shrink-0"
+      style={{
+        background: 'var(--surface-1)',
+        borderBottom: `1px solid var(--stroke)`,
+      }}
+    >
+      {/* Left: Brand + Symbol + Exchange + Balance */}
       <div className="flex items-center gap-3 flex-shrink-0">
         <div className="text-base font-semibold">
-          <span className="text-white">Crypto</span>
-          <span className="text-[#21D4B4]">Bot Pro</span>
+          <span style={{ color: 'var(--text-1)' }}>Crypto</span>
+          <span style={{ color: accent.color }}>Bot Pro</span>
         </div>
-        {isTest && (
-          <div className="px-1.5 py-0.5 text-[9px] font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded">
-            TESTNET
-          </div>
-        )}
-        <div className="text-[10px] text-gray-400">
-          {exchange} • <span className="text-gray-300">${balance.toLocaleString()}</span>
+        <div className="text-xs" style={{ color: 'var(--text-3)' }}>
+          {symbol} • {exchange} • <span style={{ color: 'var(--text-2)' }}>${balance.toLocaleString()}</span>
         </div>
       </div>
 
-      {/* Center: AI Predictor block */}
-      <div className="flex items-center gap-4 flex-1 px-6 min-w-0">
-        <div className="flex items-center gap-2 min-w-[100px] flex-shrink-0">
-          <span className="text-[10px] text-gray-500">AI:</span>
-          <span className={`text-[11px] font-medium ${biasColor}`}>{predictor.bias}</span>
-        </div>
-
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div className="flex-1 min-w-0 max-w-[200px]">
-            <div className="h-1 bg-[#0D0F12] rounded-full overflow-hidden">
-              <div
-                className={`h-full transition-all ${
-                  predictor.bias === 'Bullish'
-                    ? 'bg-emerald-400'
-                    : predictor.bias === 'Bearish'
-                      ? 'bg-red-400'
-                      : 'bg-gray-400'
-                }`}
-                style={{ width: `${predictor.strength}%` }}
-              />
-            </div>
-          </div>
-          <div className="text-[10px] text-gray-400 min-w-[50px] flex-shrink-0">
-            {predictor.strength}%
-          </div>
-        </div>
-
-        <div className="text-[10px] text-gray-400 max-w-[250px] truncate flex-shrink-0">
-          {predictor.explanation}
-        </div>
+      {/* Center: Mode Segmented Control (DOMINANT) */}
+      <div className="flex items-center gap-2 flex-shrink-0" style={{ background: 'var(--surface-2)', padding: '4px', borderRadius: 'var(--radius-2)' }}>
+        <ModeButton
+          label="LIVE"
+          value="live"
+          active={mode === 'live'}
+          onClick={() => onModeChange('live')}
+          accent={{ bg: modeAccents.live.bg, glow: modeAccents.live.glow }}
+          hovered={hoveredMode === 'live'}
+          onHoverChange={(h) => setHoveredMode(h ? 'live' : null)}
+        />
+        <ModeButton
+          label="TEST"
+          value="test"
+          active={mode === 'test'}
+          onClick={() => onModeChange('test')}
+          accent={{ bg: modeAccents.test.bg, glow: modeAccents.test.glow }}
+          hovered={hoveredMode === 'test'}
+          onHoverChange={(h) => setHoveredMode(h ? 'test' : null)}
+        />
+        <ModeButton
+          label="BACKTEST"
+          value="backtest"
+          active={mode === 'backtest'}
+          onClick={() => onModeChange('backtest')}
+          accent={{ bg: modeAccents.backtest.bg, glow: modeAccents.backtest.glow }}
+          hovered={hoveredMode === 'backtest'}
+          onHoverChange={(h) => setHoveredMode(h ? 'backtest' : null)}
+        />
       </div>
 
-      {/* Right: Connection + Mode + Settings */}
+      {/* Right: CTA + Connection + Settings */}
       <div className="flex items-center gap-3 flex-shrink-0">
-        <div className="flex items-center gap-1.5 text-[10px] text-gray-400">
-          <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+        {/* Primary CTA */}
+        <button
+          onClick={onPrimaryCta}
+          disabled={primaryCtaDisabled}
+          className="px-4 py-1.5 text-xs font-semibold rounded-lg transition-all shadow-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{
+            background: primaryCtaDisabled 
+              ? 'var(--surface-2)'
+              : accent.bg,
+            boxShadow: primaryCtaDisabled 
+              ? 'none'
+              : `0 0 12px ${accent.glow}`,
+            border: primaryCtaDisabled ? '1px solid var(--stroke)' : `1px solid ${accent.border}`,
+            color: primaryCtaDisabled ? 'var(--text-3)' : accent.color,
+          }}
+          title={primaryCtaDisabled ? 'Action unavailable' : undefined}
+          aria-label={primaryCtaLabel}
+        >
+          {primaryCtaLabel}
+        </button>
+
+        <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-3)' }}>
+          <span 
+            className="inline-flex h-1.5 w-1.5 rounded-full"
+            style={{ background: 'var(--status-profit)' }}
+          />
           <span>Connected</span>
         </div>
-        <div className="flex items-center gap-1 bg-black/40 backdrop-blur-sm border border-[#1A1C22]/50 rounded-full px-1 py-0.5">
-          <ModeButton
-            label="LIVE"
-            active={mode === 'live'}
-            onClick={() => onModeChange('live')}
-          />
-          <ModeButton
-            label="TEST"
-            active={mode === 'test'}
-            onClick={() => onModeChange('test')}
-          />
-          <ModeButton
-            label="BACKTEST"
-            active={mode === 'backtest'}
-            onClick={() => onModeChange('backtest')}
-          />
-        </div>
-        {mode === 'backtest' && (
-          <div className="px-2 py-0.5 text-[9px] font-medium bg-[#21D4B4]/20 text-[#21D4B4] border border-[#21D4B4]/40 rounded-full">
-            BACKTEST
-          </div>
-        )}
-        {mode === 'test' && (
-          <div className="px-2 py-0.5 text-[9px] font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full">
-            TEST
-          </div>
-        )}
-        {mode === 'live' && (
-          <div className="px-2 py-0.5 text-[9px] font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full">
-            LIVE
-          </div>
-        )}
-        <button className="p-1.5 text-gray-400 hover:text-gray-200 transition-colors">
+
+        <button 
+          className="p-1.5 transition-colors rounded-lg"
+          style={{ 
+            color: 'var(--text-3)',
+            background: settingsHovered ? 'var(--surface-2)' : 'transparent',
+          }}
+          onMouseEnter={() => setSettingsHovered(true)}
+          onMouseLeave={() => setSettingsHovered(false)}
+          aria-label="Settings"
+        >
           <svg
             className="w-4 h-4"
             fill="none"

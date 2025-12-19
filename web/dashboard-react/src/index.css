@@ -2,6 +2,93 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Base colors */
+  --bg: #05070a;
+  --surface-1: #0a0d12;
+  --surface-2: #0f1419;
+  --surface-3: #141a20;
+  --stroke: rgba(255, 255, 255, 0.08);
+  --stroke-strong: rgba(255, 255, 255, 0.12);
+  --text-1: rgba(255, 255, 255, 0.95);
+  --text-2: rgba(255, 255, 255, 0.7);
+  --text-3: rgba(255, 255, 255, 0.5);
+  
+  /* Shadows (elevation) */
+  --shadow-e1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.2);
+  --shadow-e2: 0 4px 8px rgba(0, 0, 0, 0.4), 0 0 2px rgba(0, 0, 0, 0.3);
+  --shadow-e3: 0 8px 16px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.4);
+  
+  /* Radius */
+  --radius-1: 8px;
+  --radius-2: 12px;
+  --radius-3: 16px;
+  --radius-pill: 9999px;
+  
+  /* Spacing (4px baseline) */
+  --space-0: 0px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --space-9: 48px;
+  
+  /* Mode accents */
+  --accent-backtest: #a855f7; /* purple-500 */
+  --accent-backtest-light: #c084fc; /* purple-400 */
+  --accent-backtest-dark: #9333ea; /* purple-600 */
+  --accent-backtest-bg: rgba(168, 85, 247, 0.1);
+  --accent-backtest-border: rgba(168, 85, 247, 0.3);
+  --accent-backtest-glow: rgba(168, 85, 247, 0.25);
+  
+  --accent-live: #14b8a6; /* teal-500 */
+  --accent-live-light: #2dd4bf; /* teal-400 */
+  --accent-live-dark: #0d9488; /* teal-600 */
+  --accent-live-bg: rgba(20, 184, 166, 0.1);
+  --accent-live-border: rgba(20, 184, 166, 0.3);
+  --accent-live-glow: rgba(20, 184, 166, 0.25);
+  
+  --accent-test: #f59e0b; /* amber-500 */
+  --accent-test-light: #fbbf24; /* amber-400 */
+  --accent-test-dark: #d97706; /* amber-600 */
+  --accent-test-bg: rgba(245, 158, 11, 0.1);
+  --accent-test-border: rgba(245, 158, 11, 0.3);
+  --accent-test-glow: rgba(245, 158, 11, 0.25);
+  
+  /* Status colors */
+  --status-loss: #ef4444; /* red-500 */
+  --status-loss-bg: rgba(239, 68, 68, 0.1);
+  --status-loss-border: rgba(239, 68, 68, 0.3);
+  
+  --status-profit: #10b981; /* emerald-500 */
+  --status-profit-bg: rgba(16, 185, 129, 0.1);
+  --status-profit-border: rgba(16, 185, 129, 0.3);
+  
+  --status-warn: #f59e0b; /* amber-500 */
+  --status-warn-bg: rgba(245, 158, 11, 0.1);
+  --status-warn-border: rgba(245, 158, 11, 0.3);
+  
+  --status-info: #3b82f6; /* blue-500 */
+  --status-info-bg: rgba(59, 130, 246, 0.1);
+  --status-info-border: rgba(59, 130, 246, 0.3);
+  
+  /* Active mode accent (for mode-aware selection) - default to live */
+  --accent-active: var(--accent-live);
+  
+  /* Scrollbar tokens */
+  --scrollbar-thumb: var(--stroke-strong);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
+  
+  /* Gradients */
+  --gradient-backtest: linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(236, 72, 153, 0.1) 100%);
+  --gradient-live: linear-gradient(135deg, rgba(20, 184, 166, 0.15) 0%, rgba(59, 130, 246, 0.1) 100%);
+  --gradient-test: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(251, 191, 36, 0.1) 100%);
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -12,18 +99,22 @@ html,
 body,
 #root {
   width: 100%;
-  height: 100%;
   height: 100vh;
-  background: #05070a;
+  min-height: 100vh;
+  background: var(--bg);
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 body {
   overflow: hidden;
+  overscroll-behavior: none;
   font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
     -apple-system, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  color: var(--text-1);
+  color-scheme: dark;
 }
 
 .hide-scrollbar {
@@ -44,11 +135,41 @@ body {
 }
 
 .chat-scrollbar::-webkit-scrollbar-thumb {
-  background: #2a303d;
-  border-radius: 9999px;
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-pill);
 }
 
+.chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* Mode-scoped accent-active (tracks current mode) */
+[data-mode="backtest"] {
+  --accent-active: var(--accent-backtest);
+}
+
+[data-mode="live"] {
+  --accent-active: var(--accent-live);
+}
+
+[data-mode="test"] {
+  --accent-active: var(--accent-test);
+}
+
+/* Mode-aware selection (uses active accent) */
 ::selection {
-  background: #21d4b4;
-  color: #05070a;
+  background: var(--accent-active);
+  color: var(--bg);
+}
+
+/* Tabular numbers for KPI */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Placeholder color */
+input::placeholder {
+  color: var(--text-3);
+  opacity: 1;
 }

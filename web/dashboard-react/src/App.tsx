@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import TopBar from './components/TopBar';
 import StatsTicker from './components/StatsTicker';
 import ChartArea from './components/ChartArea';
@@ -16,9 +16,9 @@ function num(v: any, d: number): number {
   return Number.isFinite(n) ? n : d;
 }
 
-async function fetchBacktestKpi(apiBase: string): Promise<BacktestKpi> {
+async function fetchBacktestKpi(apiBase: string, signal?: AbortSignal): Promise<BacktestKpi> {
   try {
-    const r = await fetch(`${apiBase}/api/backtest`);
+    const r = await fetch(`${apiBase}/api/backtest`, { signal });
     const data = await r.json().catch(() => ({}));
     const src = (data && (data.kpi || data.summary || data)) || {};
     return {
@@ -26,7 +26,8 @@ async function fetchBacktestKpi(apiBase: string): Promise<BacktestKpi> {
       profitFactor: num(src.profitFactor ?? src.pf ?? src.profit_factor, 0),
       maxDrawdown: num(src.maxDrawdown ?? src.dd ?? src.max_drawdown, 0),
     };
-  } catch {
+  } catch (e: any) {
+    if (e.name === 'AbortError') throw e;
     return { totalTrades: 0, profitFactor: 0, maxDrawdown: 0 };
   }
 }
@@ -45,121 +46,324 @@ function App() {
   const [timeframe, setTimeframe] = useState('15m');
   const [strategy] = useState('Mean Reversion v2');
   const [balance] = useState(10000);
+  
+  // Mode isolation: separate state per mode
   const [backtestKpi, setBacktestKpi] = useState<BacktestKpi>({ totalTrades: 0, profitFactor: 0, maxDrawdown: 0 });
-
-  
   const [backtestResult, setBacktestResult] = useState<any | null>(null);
-
-  const [backtestParams, setBacktestParams] = useState<any>({
-    dateRange: { from: '', to: '' },
-    initialBalance: 1000,
-    feesBps: 6,
-    slippageBps: 2,
-    limit: 600,
-  });
-  void setBacktestParams;
-  const [backtestLoading, setBacktestLoading] = useState(false);
+  const [backtestError, setBacktestError] = useState<string | null>(null);
+  const [backtestRunStatus, setBacktestRunStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   
-  void backtestLoading;
-const [backtestError, setBacktestError] = useState<string | null>(null);
+  // Live mode state
+  const [liveRunning, setLiveRunning] = useState(false);
+  
+  // Test mode state
+  const [testRunning, setTestRunning] = useState(false);
+  const [testPaused, setTestPaused] = useState(false);
+  const [testKpi, setTestKpi] = useState<KPIData>({
+    totalPnl: 0,
+    winrate: 0,
+    activePositions: 0,
+    riskLevel: 'Low',
+  });
+  
+  // Race guards
+  const modeVersionRef = useRef(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const intervalRef = useRef<number | null>(null);
+  
+  // Separate AbortController for RUN request
+  const runAbortControllerRef = useRef<AbortController | null>(null);
+  const runVersionRef = useRef(0);
 
-  void backtestError;
-const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://127.0.0.1:8000';
+  const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://127.0.0.1:8000';
 
-  useEffect(() => {
-    fetchBacktestKpi(apiBase).then(setBacktestKpi);
-  }, [apiBase]);
-
-  useEffect(() => {
-    const handler = (e: any) => {
-      const data = e?.detail || {};
-      const src = (data && (data.kpi || data.summary || data)) || {};
-      setBacktestKpi({
-        totalTrades: num(src.totalTrades ?? src.trades ?? src.total_trades, 0),
-        profitFactor: num(src.profitFactor ?? src.pf ?? src.profit_factor, 0),
-        maxDrawdown: num(src.maxDrawdown ?? src.dd ?? src.max_drawdown, 0),
-      });
-    };
-
-    window.addEventListener('backtest:updated', handler as any);
-
-  const runBacktestSync = async () => {
-    try {
-      setBacktestLoading(true);
-      setBacktestError(null);
-      const base = String(apiBase || '').replace(/\/$/, '');
-      const url = `${base}/api/backtest/run_sync`;
-      const payload: any = {
-        mode: 'test',
-        exchange: 'bybit',
-        symbol: 'BTCUSDT',
-        timeframe: timeframe,
-        limit: Number(backtestParams?.limit || 600),
-        feesBps: Number(backtestParams?.feesBps || 6),
-        slippageBps: Number(backtestParams?.slippageBps || 2),
-        _port: 8000,
-      };
-      const r = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const j = await r.json().catch(() => ({}));
-      setBacktestResult(j);
-      const summary = (j && j.summary) ? j.summary : {};
-      const kpi = {
-        totalTrades: Number(summary.totalTrades || 0),
-        profitFactor: Number(summary.profitFactor || 0),
-        maxDrawdown: Number(summary.maxDrawdown || 0),
-      };
-      try {
-        setBacktestKpi(kpi as any);
-        window.dispatchEvent(new CustomEvent('backtest:updated', { detail: kpi }));
-      } catch (e) {
-      }
-    } catch (e: any) {
-      setBacktestError(String(e?.message || e));
-    } finally {
-      setBacktestLoading(false);
+  // Mode change handler with isolation
+  const handleModeChange = useCallback((newMode: Mode) => {
+    // Cancel all in-flight requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
     }
-  };
-
-  useEffect(() => {
-    if (mode !== 'backtest') return;
-    if (backtestResult) return;
-    runBacktestSync();
-  }, [mode]);
-
-  return() => window.removeEventListener('backtest:updated', handler as any);
+    
+    // Cancel RUN request if any
+    if (runAbortControllerRef.current) {
+      runAbortControllerRef.current.abort();
+      runAbortControllerRef.current = null;
+    }
+    
+    // Clear intervals
+    if (intervalRef.current) {
+      window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    
+    // Increment mode version (race guard)
+    modeVersionRef.current += 1;
+    
+    // Reset mode-specific state
+    if (newMode !== 'backtest') {
+      setBacktestKpi({ totalTrades: 0, profitFactor: 0, maxDrawdown: 0 });
+      setBacktestResult(null);
+      setBacktestError(null);
+      setBacktestRunStatus('idle');
+    }
+    if (newMode !== 'live') {
+      // Don't reset liveRunning on mode switch (preserve state)
+    }
+    if (newMode !== 'test') {
+      setTestRunning(false);
+      setTestPaused(false);
+      setTestKpi({ totalPnl: 0, winrate: 0, activePositions: 0, riskLevel: 'Low' });
+    }
+    
+    setMode(newMode);
+    
+    // Toast notification (simple console for now, can be replaced with toast library)
+    const modeLabels: Record<Mode, string> = {
+      live: 'Live',
+      test: 'Test',
+      backtest: 'Backtest',
+    };
+    console.log(`Switched to ${modeLabels[newMode]} mode`);
   }, []);
 
+  // Removed backtest:updated event listener - using direct setState only
+
+  // Backtest polling (only in backtest mode, with race guards)
   useEffect(() => {
     if (mode !== 'backtest') return;
 
+    const version = modeVersionRef.current;
     let cancelled = false;
 
     const tick = async () => {
-      const data = await fetchBacktestKpi(apiBase).catch(() => ({
-        totalTrades: 0,
-        profitFactor: 0,
-        maxDrawdown: 0,
-      }));
-
-      if (cancelled) return;
-
-      setBacktestKpi(data);
-      window.dispatchEvent(new CustomEvent('backtest:updated', { detail: data }));
+      // Check if mode changed
+      if (cancelled || modeVersionRef.current !== version) return;
+      
+      // Abort previous controller before creating new one
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      
+      try {
+        const data = await fetchBacktestKpi(apiBase, controller.signal);
+        
+        // Double-check after async
+        if (cancelled || modeVersionRef.current !== version) return;
+        
+        setBacktestKpi(data);
+      } catch (e: any) {
+        if (e.name !== 'AbortError' && !cancelled && modeVersionRef.current === version) {
+          // Silent fail for network errors
+        }
+      } finally {
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null;
+        }
+      }
     };
 
     tick();
     const id = window.setInterval(tick, 2000);
+    intervalRef.current = id;
 
     return () => {
       cancelled = true;
       window.clearInterval(id);
+      intervalRef.current = null;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
     };
   }, [mode, apiBase]);
-const isBacktest = mode === 'backtest';
+
+  // Backtest handlers
+  const handleBacktestRun = useCallback(async () => {
+    if (backtestRunStatus === 'running') return;
+    
+    // Abort previous RUN request if any
+    if (runAbortControllerRef.current) {
+      runAbortControllerRef.current.abort();
+    }
+    
+    // Create new AbortController for this RUN request
+    const controller = new AbortController();
+    runAbortControllerRef.current = controller;
+    
+    // Increment run version for race guard
+    runVersionRef.current += 1;
+    const currentRunVersion = runVersionRef.current;
+    
+    setBacktestRunStatus('running');
+    setBacktestError(null);
+
+    try {
+      // Use current UI state for payload
+      const payload: Record<string, unknown> = {
+        strategy: strategy,
+        symbol: symbol,
+        interval: timeframe.replace(/[^0-9]/g, '') || "60",
+        initial_balance: balance,
+      };
+
+      const base = String(apiBase || '').replace(/\/$/, '');
+      const url = `${base}/api/backtest/run`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      // Check if aborted before processing response
+      if (controller.signal.aborted || runVersionRef.current !== currentRunVersion) {
+        return;
+      }
+
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`HTTP ${res.status} ${res.statusText} ${txt}`.trim());
+      }
+
+      const result = (await res.json().catch(() => ({}))) as any;
+      
+      // Double-check after async operations
+      if (controller.signal.aborted || runVersionRef.current !== currentRunVersion) {
+        return;
+      }
+      
+      // Extract KPI from result
+      const stat = result.statistics || result.summary || result;
+      const kpi = {
+        totalTrades: num(stat.total_trades ?? stat.totalTrades, 0),
+        profitFactor: num(stat.profit_factor ?? stat.profitFactor, 0),
+        maxDrawdown: num(stat.max_drawdown ?? stat.maxDrawdown, 0),
+      };
+
+      // Final check before updating state
+      if (controller.signal.aborted || runVersionRef.current !== currentRunVersion) {
+        return;
+      }
+
+      setBacktestKpi(kpi);
+      setBacktestResult(result);
+      setBacktestRunStatus('done');
+    } catch (e: any) {
+      // Ignore AbortError - request was cancelled
+      if (e.name === 'AbortError' || controller.signal.aborted) {
+        return;
+      }
+      
+      // Check if this run was superseded
+      if (runVersionRef.current !== currentRunVersion) {
+        return;
+      }
+      
+      const msg = e instanceof Error ? e.message : String(e);
+      setBacktestError(msg);
+      setBacktestRunStatus('error');
+    } finally {
+      // Clean up controller if it's still the current one
+      if (runAbortControllerRef.current === controller) {
+        runAbortControllerRef.current = null;
+      }
+    }
+  }, [apiBase, backtestRunStatus, symbol, timeframe, strategy, balance]);
+
+  const handleBacktestCancel = useCallback(() => {
+    if (backtestRunStatus === 'running') {
+      // Abort the RUN request specifically
+      if (runAbortControllerRef.current) {
+        runAbortControllerRef.current.abort();
+        runAbortControllerRef.current = null;
+      }
+      // Increment version to invalidate any pending responses
+      runVersionRef.current += 1;
+      setBacktestRunStatus('idle');
+      setBacktestError(null);
+      // Clear results/KPIs on cancel
+      setBacktestResult(null);
+      setBacktestKpi({ totalTrades: 0, profitFactor: 0, maxDrawdown: 0 });
+    }
+  }, [backtestRunStatus]);
+
+  // Live handlers
+  const handleLiveStart = useCallback(() => {
+    setLiveRunning(true);
+    console.log('Live bot started');
+  }, []);
+
+  const handleLiveStop = useCallback(() => {
+    setLiveRunning(false);
+    console.log('Live bot stopped');
+  }, []);
+
+  // Test handlers
+  const handleTestStart = useCallback(() => {
+    setTestRunning(true);
+    setTestPaused(false);
+    console.log('Test started');
+  }, []);
+
+  const handleTestPause = useCallback(() => {
+    if (testRunning) {
+      setTestPaused(true);
+      console.log('Test paused');
+    }
+  }, [testRunning]);
+
+  const handleTestResume = useCallback(() => {
+    if (testRunning && testPaused) {
+      setTestPaused(false);
+      console.log('Test resumed');
+    }
+  }, [testRunning, testPaused]);
+
+  const handleTestStop = useCallback(() => {
+    setTestRunning(false);
+    setTestPaused(false);
+    console.log('Test stopped');
+  }, []);
+
+  // Compute CTA based on mode
+  const getPrimaryCta = useCallback(() => {
+    switch (mode) {
+      case 'backtest':
+        if (backtestRunStatus === 'running') {
+          return { label: 'Cancel', action: handleBacktestCancel, disabled: false };
+        } else if (backtestRunStatus === 'done') {
+          return { label: 'Re-run', action: handleBacktestRun, disabled: false };
+        } else {
+          return { label: 'Run Backtest', action: handleBacktestRun, disabled: false };
+        }
+      case 'live':
+        if (liveRunning) {
+          return { label: 'Stop Bot', action: handleLiveStop, disabled: false };
+        } else {
+          return { label: 'Start Bot', action: handleLiveStart, disabled: false };
+        }
+      case 'test':
+        if (testRunning) {
+          if (testPaused) {
+            return { label: 'Resume', action: handleTestResume, disabled: false };
+          } else {
+            return { label: 'Pause', action: handleTestPause, disabled: false };
+          }
+        } else {
+          return { label: 'Start Test', action: handleTestStart, disabled: false };
+        }
+    }
+  }, [mode, backtestRunStatus, liveRunning, testRunning, testPaused, handleBacktestRun, handleBacktestCancel, handleLiveStart, handleLiveStop, handleTestStart, handleTestPause, handleTestResume]);
+
+  const primaryCta = getPrimaryCta();
+
+  const isBacktest = mode === 'backtest';
+  const isTest = mode === 'test';
   const kpi: KPIData | BacktestKPIData | null = isBacktest
     ? {
         totalPnl: 0, // Will be calculated from backtest results if available
@@ -168,43 +372,69 @@ const isBacktest = mode === 'backtest';
         profitFactor: backtestKpi.profitFactor,
         maxDrawdown: backtestKpi.maxDrawdown,
       }
+    : isTest
+    ? testKpi
     : liveKPI;
 
+  // Ensure data-mode is always lowercase to match CSS selectors
+  const modeLower = mode.toLowerCase() as Mode;
+  
+  // Sync data-mode to document root as backup (ensures CSS selectors work)
+  useEffect(() => {
+    document.documentElement.setAttribute('data-mode', modeLower);
+    return () => {
+      document.documentElement.removeAttribute('data-mode');
+    };
+  }, [modeLower]);
+
   return (
-    <div className="h-screen w-screen bg-[#05070A] text-gray-100 overflow-hidden relative">
-      {/* Background waves pattern */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-30">
-        <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="wave1" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#21D4B4" stopOpacity="0.1" />
-              <stop offset="100%" stopColor="#21D4B4" stopOpacity="0" />
-            </linearGradient>
-            <linearGradient id="wave2" x1="100%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#6366F1" stopOpacity="0.1" />
-              <stop offset="100%" stopColor="#6366F1" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          <path d="M0,200 Q400,100 800,200 T1600,200" stroke="url(#wave1)" strokeWidth="1" fill="none" />
-          <path d="M0,400 Q600,300 1200,400 T2400,400" stroke="url(#wave2)" strokeWidth="1" fill="none" />
-          <path d="M0,600 Q500,500 1000,600 T2000,600" stroke="url(#wave1)" strokeWidth="1" fill="none" />
-        </svg>
-      </div>
+    <div 
+      className="h-screen w-full overflow-hidden relative" 
+      style={{ background: 'var(--bg)' }}
+      data-mode={modeLower}
+    >
+      {/* Subtle gradient overlay based on mode */}
+      <div 
+        className="absolute inset-0 overflow-hidden pointer-events-none opacity-20"
+        style={{
+          background: mode === 'backtest' 
+            ? 'var(--gradient-backtest)'
+            : mode === 'live'
+            ? 'var(--gradient-live)'
+            : 'var(--gradient-test)',
+        }}
+      />
 
       <div className="w-full h-full flex flex-col relative z-10">
         <TopBar
           mode={mode}
-          onModeChange={setMode}
+          onModeChange={handleModeChange}
           symbol={symbol}
           exchange={exchange}
           balance={balance}
+          primaryCtaLabel={primaryCta.label}
+          onPrimaryCta={primaryCta.action}
+          primaryCtaDisabled={primaryCta.disabled}
         />
 
         <StatsTicker mode={mode} kpi={kpi} backtestKpi={isBacktest ? backtestKpi : undefined} />
 
         <div className="flex flex-1 overflow-hidden min-h-0">
           <div className="flex flex-col flex-1 overflow-hidden min-w-0 min-h-0">
-            <ChartArea mode={mode} symbol={symbol} exchange={exchange} timeframe={timeframe} strategy={strategy} onTimeframeChange={setTimeframe} backtestResult={backtestResult} />
+            <ChartArea 
+              mode={mode} 
+              symbol={symbol} 
+              exchange={exchange} 
+              timeframe={timeframe} 
+              strategy={strategy} 
+              onTimeframeChange={setTimeframe} 
+              backtestResult={backtestResult}
+              apiBase={apiBase}
+              onBacktestRun={handleBacktestRun}
+              onBacktestCancel={handleBacktestCancel}
+              backtestRunStatus={backtestRunStatus}
+              backtestRunError={backtestError || undefined}
+            />
           </div>
 
           <Sidebar mode={mode} />

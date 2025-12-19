@@ -1,15 +1,33 @@
 import { Mode } from '../types';
 import AIChatPanel from './AIChatPanel';
 
+// Minimal typed TradingContext stub (UI only, no contract changes)
+interface TradingContext {
+  mode: Mode;
+}
+
+function createTradingContext(mode: Mode): TradingContext {
+  return { mode };
+}
+
 interface SidebarProps {
   mode: Mode;
 }
 
 export default function Sidebar({ mode }: SidebarProps) {
+  const context = createTradingContext(mode);
+  
   return (
-    <div className="w-[25%] min-w-[300px] max-w-[400px] flex-shrink-0 flex flex-col border-l border-t border-[#1A1C22]/50 bg-[#05070A]/50 backdrop-blur-sm">
+    <div 
+      className="flex-shrink-0 flex flex-col"
+      style={{ 
+        width: '380px',
+        background: 'var(--surface-1)',
+        borderLeft: '1px solid var(--stroke)',
+      }}
+    >
       <div className="flex-1 overflow-hidden min-h-0">
-        <AIChatPanel mode={mode}  context={ { mode: mode } as any } />
+        <AIChatPanel mode={mode} context={context} />
       </div>
     </div>
   );
