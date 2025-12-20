@@ -467,3 +467,6 @@ Next:
 
 ## 2025-12-21 02:35
 - Fixed autoscan script (SyntaxError), generated real autoscan outputs at docs/COMPLIANCE_SAMPLES/20251221_023541 (probe_index + summary + raw bodies). Next: fix FAIL endpoints to match docs/CONTRACTS.md starting with /api/ml/score.
+
+## 2025-12-21 02:50
+- Added local assistant execution rules: docs/ASSISTANT_OPERATOR_RULES.md (one-command, safe ops, clean EOF, no hidden UTF, bash -lc wrapper, end-of-command TASK/STEP/DASHBOARD lines).
