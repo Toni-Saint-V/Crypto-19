@@ -39,6 +39,9 @@ class Trade(BaseModel):
 
 
 class DashboardSnapshot(BaseModel):
+    symbol: str = "BTCUSDT",
+    timeframe: str = "15m",
+
     balance: float = Field(0.0)
     daily_pnl_pct: float = Field(0.0)
     total_profit: float = Field(0.0)
@@ -81,8 +84,6 @@ async def get_dashboard_snapshot(
 
 
 def get_dashboard_snapshot_sync(
-    symbol: str = "BTCUSDT",
-    timeframe: str = "15m",
     mode: str | None = None,
 ) -> DashboardSnapshot:
     return asyncio.run(

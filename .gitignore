@@ -78,3 +78,6 @@ archive/dashboard_snapshot_*
 web/static/dashboard-build/
 docs/_archive_cleanup_*/
 docs/__layout_hits.txt
+.backup/
+docs/_scratch/
+docs/_ai_memory/

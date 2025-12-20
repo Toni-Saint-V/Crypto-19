@@ -195,6 +195,40 @@ class BacktestEngine:
         slippage: float = 0.0,
         **kwargs,
     ) -> Dict[str, Any]:
+        # FIX_BUG3_SYMBOL_TF_GUARD
+        # Ensure symbol/timeframe are never None in result metadata when candles/signals are precomputed.
+        if symbol is None or timeframe is None:
+            _sym = symbol
+            _tf = timeframe
+            if candles:
+                c0 = candles[0]
+                if _sym is None:
+                    if isinstance(c0, dict):
+                        for k in ("symbol", "pair", "market"):
+                            v = c0.get(k)
+                            if v:
+                                _sym = v
+                                break
+                    else:
+                        _sym = getattr(c0, "symbol", None) or getattr(c0, "pair", None) or getattr(c0, "market", None)
+                if _tf is None:
+                    if isinstance(c0, dict):
+                        for k in ("timeframe", "tf", "interval"):
+                            v = c0.get(k)
+                            if v:
+                                _tf = v
+                                break
+                    else:
+                        _tf = getattr(c0, "timeframe", None) or getattr(c0, "tf", None) or getattr(c0, "interval", None)
+            if _sym is None:
+                _sym = getattr(self, "symbol", None) or getattr(self, "default_symbol", None)
+            if _tf is None:
+                _tf = getattr(self, "timeframe", None) or getattr(self, "default_timeframe", None)
+            if _sym is None or _tf is None:
+                raise ValueError("BacktestEngine.run requires symbol and timeframe (provide args or ensure candles include them).")
+            symbol = _sym
+            timeframe = _tf
+
         if candles is None or signals is None:
             if not symbol or not timeframe:
                 raise TypeError("BacktestEngine.run requires either (candles, signals) or (symbol, timeframe)")
