@@ -455,3 +455,15 @@ Next:
 
 ## 2025-12-20 14:11
 - Added remaining untracked docs: BUGFIX_SNIPPETS.md and RECOVER_CURSOR_CHAT_BUGFIX.md (kept for reference).
+
+## 2025-12-20 14:40
+- Recovered after terminal window closed: restarted backend(:8000) + frontend(:5173) via nohup with logs/pids in .run, verified listeners and opened browser.
+
+## 2025-12-20 14:47
+- Fixed backend startup (bash-safe): ensured uvicorn in .venv (fallback trusted-host), started server.py on :8000, verified /docs, tailed .run/backend.log, ignored docs/COMPLIANCE_SAMPLES/.
+
+## 2025-12-21 02:31
+- Fixed backend boot: installed requests + PyYAML + Jinja2 (was blocking Jinja2Templates), restarted server.py on :8000, verified /docs. Log: .run/fix_backend_jinja2_20251221_023151.log
+
+## 2025-12-21 02:35
+- Fixed autoscan script (SyntaxError), generated real autoscan outputs at docs/COMPLIANCE_SAMPLES/20251221_023541 (probe_index + summary + raw bodies). Next: fix FAIL endpoints to match docs/CONTRACTS.md starting with /api/ml/score.

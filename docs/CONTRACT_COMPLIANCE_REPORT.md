@@ -34,3 +34,8 @@ Generated: 2025-12-20 04:32
 2) TEST и BACKTEST всегда отдают trades+equity+metrics (пусть пустые, но структурно валидные).
 3) Любая ошибка — явная: status + message (без “тихих” 422/traceback для UI).
 4) Переключение режимов 10 раз подряд не оставляет хвостов состояния/данных.
+
+## Autoscan snapshot
+- Generated: 2025-12-21 02:35
+- Samples: docs/COMPLIANCE_SAMPLES/20251221_023541
+- Summary: docs/COMPLIANCE_SAMPLES/20251221_023541/SUMMARY.md
