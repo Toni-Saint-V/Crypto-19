@@ -452,3 +452,6 @@ Next:
 
 ## 2025-12-20 05:17
 - Cleaned accidental .tmp_target from repo root after Bug2 automation run; re-verified compile for core/notifications/notification_manager.py.
+
+## 2025-12-20 14:11
+- Added remaining untracked docs: BUGFIX_SNIPPETS.md and RECOVER_CURSOR_CHAT_BUGFIX.md (kept for reference).
