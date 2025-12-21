@@ -1,7 +1,7 @@
 # Dashboard checklist (source of truth)
 
 ## P0 Core
-- [ ] App boots locally with one command
+- [x] App boots locally with one command
 - [ ] UI loads without console errors
 - [ ] Core routes wired (candles/trades/equity/metrics)
 - [ ] Backtest engine runs end-to-end (baseline strategy)
