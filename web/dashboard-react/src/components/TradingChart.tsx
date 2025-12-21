@@ -8,6 +8,11 @@ interface TradingChartProps {
   height?: number;
 }
 
+// Design token colors as hex values (lightweight-charts doesn't support CSS variables)
+const COLOR_GOOD = '#3EF08A';
+const COLOR_BAD = '#FF5C7A';
+const COLOR_NEUTRAL = '#9AA8C7'; // Muted color for break-even/unknown
+
 // Generate mock candlestick data if none provided
 function generateMockData(count: number = 200): CandlestickData<Time>[] {
   const data: CandlestickData<Time>[] = [];
@@ -72,14 +77,14 @@ export default function TradingChart({ data, trades, height }: TradingChartProps
       height: height || chartContainerRef.current.clientHeight,
     });
 
-    // Add candlestick series (v5+ API)
+    // Add candlestick series (v5+ API) - using hex colors (lightweight-charts doesn't support CSS variables)
     const candlestickSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#10b981', // emerald-500
-      downColor: '#ef4444', // red-500
-      borderUpColor: '#10b981',
-      borderDownColor: '#ef4444',
-      wickUpColor: '#10b981',
-      wickDownColor: '#ef4444',
+      upColor: COLOR_GOOD,
+      downColor: COLOR_BAD,
+      borderUpColor: COLOR_GOOD,
+      borderDownColor: COLOR_BAD,
+      wickUpColor: COLOR_GOOD,
+      wickDownColor: COLOR_BAD,
     });
 
     candlestickSeries.setData(chartData);
@@ -98,7 +103,18 @@ export default function TradingChart({ data, trades, height }: TradingChartProps
     };
 
     window.addEventListener('resize', handleResize);
-  // BACKTEST_MARKERS_EFFECT
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (chartRef.current) {
+        chartRef.current.remove();
+        chartRef.current = null;
+        seriesRef.current = null;
+      }
+    };
+  }, [data, height]);
+
+  // Trade markers effect (separate hook - moved outside to fix Rules of Hooks violation)
   useEffect(() => {
     const s: any = seriesRef.current;
     if (!s || typeof s.setMarkers !== 'function') return;
@@ -121,38 +137,56 @@ export default function TradingChart({ data, trades, height }: TradingChartProps
       const exitTime = normTime(tr?.exitTime ?? tr?.exit_ts ?? tr?.exit_time);
 
       if (entryTime !== undefined) {
+        const entryPriceRaw = tr?.entryPrice ?? tr?.entry_price ?? tr?.price;
+        // Convert to number before calling toFixed (handles string values)
+        const entryPrice = typeof entryPriceRaw === 'number' ? entryPriceRaw : Number(entryPriceRaw);
         markers.push({
           time: entryTime,
           position: side === 'short' ? 'aboveBar' : 'belowBar',
-          color: side === 'short' ? '#ef4444' : '#22c55e',
+          color: side === 'short' ? COLOR_BAD : COLOR_GOOD, // Use hex color, not CSS variable
           shape: side === 'short' ? 'arrowDown' : 'arrowUp',
-          text: 'IN',
+          text: (entryPriceRaw !== undefined && entryPriceRaw !== null && Number.isFinite(entryPrice)) 
+            ? `IN ${entryPrice.toFixed(2)}` 
+            : 'IN',
+          size: 1,
         });
       }
       if (exitTime !== undefined) {
+        const exitPriceRaw = tr?.exitPrice ?? tr?.exit_price ?? tr?.close_price;
+        // Convert to number before calling toFixed (handles string values)
+        const exitPrice = typeof exitPriceRaw === 'number' ? exitPriceRaw : Number(exitPriceRaw);
+        const pnlRaw = tr?.pnl ?? tr?.profit ?? tr?.result_R;
+        const pnl = typeof pnlRaw === 'number' ? pnlRaw : Number(pnlRaw);
+        
+        // Determine exit marker color: good for profit, bad for loss, neutral for break-even or missing
+        let exitColor: string;
+        if (side === 'short') {
+          // For shorts: profit when price goes down (pnl > 0)
+          exitColor = (Number.isFinite(pnl) && pnl > 0) ? COLOR_GOOD : 
+                      (Number.isFinite(pnl) && pnl < 0) ? COLOR_BAD : 
+                      COLOR_NEUTRAL; // Neutral for break-even (pnl === 0) or missing data
+        } else {
+          // For longs: profit when price goes up (pnl > 0)
+          exitColor = (Number.isFinite(pnl) && pnl > 0) ? COLOR_GOOD : 
+                      (Number.isFinite(pnl) && pnl < 0) ? COLOR_BAD : 
+                      COLOR_NEUTRAL; // Neutral for break-even (pnl === 0) or missing data
+        }
+        
         markers.push({
           time: exitTime,
           position: side === 'short' ? 'belowBar' : 'aboveBar',
-          color: side === 'short' ? '#22c55e' : '#ef4444',
+          color: exitColor,
           shape: side === 'short' ? 'arrowUp' : 'arrowDown',
-          text: 'OUT',
+          text: (exitPriceRaw !== undefined && exitPriceRaw !== null && Number.isFinite(exitPrice)) 
+            ? `OUT ${exitPrice.toFixed(2)}` 
+            : 'OUT',
+          size: 1,
         });
       }
     }
 
     s.setMarkers(markers);
   }, [trades]);
-
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      if (chartRef.current) {
-        chartRef.current.remove();
-        chartRef.current = null;
-        seriesRef.current = null;
-      }
-    };
-  }, [data, height]);
 
   // Update data when it changes
   useEffect(() => {

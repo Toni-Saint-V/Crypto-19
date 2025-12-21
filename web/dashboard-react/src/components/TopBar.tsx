@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Mode } from '../types';
+import ModeBadge from './ModeBadge';
+import DataHealthIndicator from './DataHealthIndicator';
 
 interface TopBarProps {
   mode: Mode;
@@ -10,6 +12,7 @@ interface TopBarProps {
   primaryCtaLabel: string;
   onPrimaryCta: () => void;
   primaryCtaDisabled?: boolean;
+  apiBase?: string;
 }
 
 function ModeButton(props: {
@@ -51,6 +54,7 @@ export default function TopBar({
   primaryCtaLabel,
   onPrimaryCta,
   primaryCtaDisabled = false,
+  apiBase,
 }: TopBarProps) {
   const [hoveredMode, setHoveredMode] = useState<Mode | null>(null);
   const [settingsHovered, setSettingsHovered] = useState(false);
@@ -128,8 +132,14 @@ export default function TopBar({
         />
       </div>
 
-      {/* Right: CTA + Connection + Settings */}
+      {/* Right: CTA + Mode Badge + Data Health + Settings */}
       <div className="flex items-center gap-3 flex-shrink-0">
+        {/* Mode Badge */}
+        <ModeBadge mode={mode} />
+        
+        {/* Data Health Indicator */}
+        <DataHealthIndicator apiBase={apiBase} />
+        
         {/* Primary CTA */}
         <button
           onClick={onPrimaryCta}
@@ -150,14 +160,6 @@ export default function TopBar({
         >
           {primaryCtaLabel}
         </button>
-
-        <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-3)' }}>
-          <span 
-            className="inline-flex h-1.5 w-1.5 rounded-full"
-            style={{ background: 'var(--status-profit)' }}
-          />
-          <span>Connected</span>
-        </div>
 
         <button 
           className="p-1.5 transition-colors rounded-lg"

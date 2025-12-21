@@ -77,9 +77,9 @@ function App() {
 
   const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://127.0.0.1:8000';
 
-  // Mode change handler with isolation
+  // Mode change handler with isolation (strengthened for 10 rapid switches)
   const handleModeChange = useCallback((newMode: Mode) => {
-    // Cancel all in-flight requests
+    // Cancel all in-flight requests immediately
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
@@ -97,34 +97,36 @@ function App() {
       intervalRef.current = null;
     }
     
-    // Increment mode version (race guard)
-    modeVersionRef.current += 1;
+    // Increment mode version (race guard) - critical for rapid switches
+    const currentVersion = modeVersionRef.current + 1;
+    modeVersionRef.current = currentVersion;
     
-    // Reset mode-specific state
-    if (newMode !== 'backtest') {
-      setBacktestKpi({ totalTrades: 0, profitFactor: 0, maxDrawdown: 0 });
-      setBacktestResult(null);
-      setBacktestError(null);
-      setBacktestRunStatus('idle');
-    }
+    // Reset ALL mode-specific state immediately (no conditional checks)
+    // This ensures no state leaks after rapid switches
+    setBacktestKpi({ totalTrades: 0, profitFactor: 0, maxDrawdown: 0 });
+    setBacktestResult(null);
+    setBacktestError(null);
+    setBacktestRunStatus('idle');
+    
+    setTestRunning(false);
+    setTestPaused(false);
+    setTestKpi({ totalPnl: 0, winrate: 0, activePositions: 0, riskLevel: 'Low' });
+    
+    // Only preserve liveRunning if switching TO live mode
     if (newMode !== 'live') {
-      // Don't reset liveRunning on mode switch (preserve state)
-    }
-    if (newMode !== 'test') {
-      setTestRunning(false);
-      setTestPaused(false);
-      setTestKpi({ totalPnl: 0, winrate: 0, activePositions: 0, riskLevel: 'Low' });
+      setLiveRunning(false);
     }
     
+    // Set mode last to ensure all state is reset first
     setMode(newMode);
     
-    // Toast notification (simple console for now, can be replaced with toast library)
-    const modeLabels: Record<Mode, string> = {
-      live: 'Live',
-      test: 'Test',
-      backtest: 'Backtest',
-    };
-    console.log(`Switched to ${modeLabels[newMode]} mode`);
+    // Double-check version after async state updates (defense in depth)
+    setTimeout(() => {
+      if (modeVersionRef.current !== currentVersion) {
+        // Mode changed again, ignore this update
+        return;
+      }
+    }, 0);
   }, []);
 
   // Removed backtest:updated event listener - using direct setState only
@@ -389,8 +391,12 @@ function App() {
 
   return (
     <div 
-      className="h-screen w-full overflow-hidden relative" 
-      style={{ background: 'var(--bg)' }}
+      className="h-screen w-screen overflow-hidden relative" 
+      style={{ 
+        background: 'var(--bg)',
+        height: '100vh',
+        width: '100vw',
+      }}
       data-mode={modeLower}
     >
       {/* Subtle gradient overlay based on mode */}
@@ -415,6 +421,7 @@ function App() {
           primaryCtaLabel={primaryCta.label}
           onPrimaryCta={primaryCta.action}
           primaryCtaDisabled={primaryCta.disabled}
+          apiBase={apiBase}
         />
 
         <StatsTicker mode={mode} kpi={kpi} backtestKpi={isBacktest ? backtestKpi : undefined} />

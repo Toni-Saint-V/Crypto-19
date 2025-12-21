@@ -355,37 +355,47 @@ export default function BacktestResultsPanel({
                     <>
                       <div className="grid grid-cols-3 gap-2">
                         <div 
-                          className="rounded-lg p-2"
+                          className="card"
                           style={{
                             border: '1px solid var(--stroke)',
                             background: 'var(--surface-2)',
+                            borderRadius: 'var(--radius-1)',
+                            padding: 'var(--space-2)',
                           }}
                         >
-                          <div className="text-[11px]" style={{ color: 'var(--text-3)' }}>Total Trades</div>
-                          <div className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>{kpi.totalTrades}</div>
+                          <div className="caption-text" style={{ color: 'var(--text-3)' }}>Total Trades</div>
+                          <div className="body-text font-semibold" style={{ color: 'var(--text-1)' }}>{kpi.totalTrades > 0 ? kpi.totalTrades : '—'}</div>
                         </div>
                         <div 
-                          className="rounded-lg p-2"
+                          className="card"
                           style={{
                             border: '1px solid var(--stroke)',
                             background: 'var(--surface-2)',
+                            borderRadius: 'var(--radius-1)',
+                            padding: 'var(--space-2)',
                           }}
                         >
-                          <div className="text-[11px]" style={{ color: 'var(--text-3)' }}>Profit Factor</div>
-                          <div className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>
-                            {kpi.profitFactor.toFixed(2)}
+                          <div className="caption-text" style={{ color: 'var(--text-3)' }}>Profit Factor</div>
+                          <div className="body-text font-semibold" style={{ color: 'var(--text-1)' }}>
+                            {typeof kpi.profitFactor === 'number' && Number.isFinite(kpi.profitFactor) 
+                              ? kpi.profitFactor.toFixed(2) 
+                              : '—'}
                           </div>
                         </div>
                         <div 
-                          className="rounded-lg p-2"
+                          className="card"
                           style={{
                             border: '1px solid var(--stroke)',
                             background: 'var(--surface-2)',
+                            borderRadius: 'var(--radius-1)',
+                            padding: 'var(--space-2)',
                           }}
                         >
-                          <div className="text-[11px]" style={{ color: 'var(--text-3)' }}>Max Drawdown</div>
-                          <div className="text-sm font-semibold" style={{ color: 'var(--status-loss)' }}>
-                            {kpi.maxDrawdown.toFixed(2)}
+                          <div className="caption-text" style={{ color: 'var(--text-3)' }}>Max Drawdown</div>
+                          <div className="body-text font-semibold" style={{ color: 'var(--status-loss)' }}>
+                            {typeof kpi.maxDrawdown === 'number' && Number.isFinite(kpi.maxDrawdown) 
+                              ? `${(-kpi.maxDrawdown).toFixed(2)}%` 
+                              : '—'}
                           </div>
                         </div>
                       </div>

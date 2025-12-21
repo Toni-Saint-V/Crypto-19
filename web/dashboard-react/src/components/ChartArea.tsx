@@ -46,7 +46,7 @@ export default function ChartArea({
   const [riskFilter, setRiskFilter] = useState('All');
   const [drawerExpanded, setDrawerExpanded] = useState(false);
   
-  // Reset drawer expanded state on mode change
+  // Reset drawer expanded state on mode change (always collapsed by default)
   useEffect(() => {
     setDrawerExpanded(false);
   }, [mode]);
@@ -99,16 +99,17 @@ export default function ChartArea({
           <TradingChart />
         </div>
 
-        {/* Shared bottom drawer wrapper (always overlay-mounted) */}
+        {/* Shared bottom drawer wrapper (always overlay-mounted, does not affect chart height) */}
+        {/* Drawer is constrained to left area only (does not cover chat on right) */}
         <div
           className="flex flex-col z-10"
           style={{
             position: 'absolute',
             left: 0,
-            right: 0,
+            right: '380px', // Leave space for chat panel (fixed width)
             bottom: 0,
-            height: drawerExpanded ? '40vh' : '48px',
-            maxHeight: '40vh',
+            height: drawerExpanded ? '38vh' : '48px',
+            maxHeight: '38vh',
             transition: 'height 200ms ease-out',
             background: 'var(--surface-1)',
             borderTop: '1px solid var(--stroke)',
