@@ -470,3 +470,6 @@ Next:
 
 ## 2025-12-21 02:50
 - Added local assistant execution rules: docs/ASSISTANT_OPERATOR_RULES.md (one-command, safe ops, clean EOF, no hidden UTF, bash -lc wrapper, end-of-command TASK/STEP/DASHBOARD lines).
+
+## 2025-12-21 03:00
+- Added stub TEST endpoints in server.py: /api/trades,/api/equity,/api/metrics (no 404). Restarted backend and confirmed via autoscan: docs/COMPLIANCE_SAMPLES/20251221_030039/SUMMARY.md. Backup: .backup/20251221_030037_stub_test_endpoints

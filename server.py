@@ -1133,6 +1133,24 @@ def handle_command(command: str) -> str:
 
 # === RUN SERVER ===
 
+# __API_STUB_DATA_ENDPOINTS__
+# Contract-required data endpoints. Must not 404 in TEST mode.
+# Temporary stubs: stable envelope, empty payload.
+
+@app.get("/api/trades")
+def api_trades(symbol: str, timeframe: str, mode: str = "TEST"):
+    return {"status": "ok", "data": []}
+
+@app.get("/api/equity")
+def api_equity(symbol: str, timeframe: str, mode: str = "TEST"):
+    return {"status": "ok", "data": []}
+
+@app.get("/api/metrics")
+def api_metrics(symbol: str, timeframe: str, mode: str = "TEST"):
+    return {"status": "ok", "data": {}}
+
+# __API_STUB_DATA_ENDPOINTS__END
+
 if __name__ == "__main__":
     print("🚀 Launching CryptoBot Pro Dashboard")
     print("🌐 Dashboard: http://127.0.0.1:8000/dashboard")
