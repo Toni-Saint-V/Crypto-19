@@ -476,3 +476,6 @@ Next:
 
 ## 2025-12-21 05:40
 - Pinned latest autoscan in docs/AUTOSCAN.md -> docs/COMPLIANCE_SAMPLES/20251221_030039 (SUMMARY.md + probe_index.json)
+
+## 2025-12-21 05:47
+- Added scripts/verify.sh to run compile/lint/type/test (if available) + API smoke + autoscan pin.
