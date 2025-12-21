@@ -1207,6 +1207,21 @@ def api_metrics(symbol: str, timeframe: str, mode: str = "TEST"):
 
 # __API_STUB_DATA_ENDPOINTS__END
 
+# === DASHBOARD_SNAPSHOT_API_START ===
+try:
+    from fastapi import HTTPException  # noqa: E402
+    from core.dashboard.service import get_dashboard_snapshot  # noqa: E402
+except Exception:
+    HTTPException = None
+    get_dashboard_snapshot = None
+
+@app.get("/api/dashboard")
+async def api_dashboard(symbol: str = "BTCUSDT", timeframe: str = "1h", mode: str = "TEST"):
+    if get_dashboard_snapshot is None or HTTPException is None:
+        raise Exception("dashboard snapshot not available")
+    return await get_dashboard_snapshot(symbol=symbol, timeframe=timeframe, mode=mode)
+# === DASHBOARD_SNAPSHOT_API_END ===
+
 if __name__ == "__main__":
     print("🚀 Launching CryptoBot Pro Dashboard")
     print("🌐 Dashboard: http://127.0.0.1:8000/dashboard")
