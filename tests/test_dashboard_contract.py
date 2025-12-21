@@ -11,7 +11,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from core.dashboard.service import get_dashboard_snapshot  # type: ignore[import]
+from core.dashboard.service import get_dashboard_snapshot      # noqa: E402
 
 
 SAMPLE_PATH = ROOT_DIR / "docs" / "dashboard_snapshot_sample.json"

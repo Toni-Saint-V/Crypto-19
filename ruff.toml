@@ -1,0 +1,4 @@
+line-length = 100
+
+[lint]
+per-file-ignores = { "server.py" = ["E402", "F811"], "tests/test_dashboard_contract.py" = ["E402"] }
