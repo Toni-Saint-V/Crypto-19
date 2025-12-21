@@ -3,8 +3,8 @@
 ## P0 Core
 - [x] App boots locally with one command
 - [ ] UI loads without console errors
-- [ ] Core routes wired (candles/trades/equity/metrics)
-- [ ] Backtest engine runs end-to-end (baseline strategy)
+- [x] Core routes wired (candles/trades/equity/metrics)
+- [x] Backtest engine runs end-to-end (baseline strategy)
 - [ ] Data pipeline stable (fetch/cache/resample)
 - [ ] Deterministic runs (seed, reproducible results)
 - [ ] Error handling + user-facing messages
