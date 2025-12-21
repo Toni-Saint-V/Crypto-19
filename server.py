@@ -14,7 +14,7 @@ import json
 import random
 import os
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from datetime import datetime, timezone
 import math
 import time
@@ -34,12 +34,8 @@ import yaml
 app = FastAPI(title="CryptoBot Pro — Neural Dashboard")
 
 # === APP_OBSERVABILITY_START ===
-import os
 import logging
-import time
 import uuid
-from fastapi import Request
-from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -461,7 +457,6 @@ async def api_ai_predict(
         current_price = recent_prices[-1]
         
         # Simple momentum-based prediction
-        price_change_24h = ((current_price - recent_prices[0]) / recent_prices[0]) * 100 if recent_prices[0] > 0 else 0
         
         # Calculate support and resistance
         highs = [float(c.high) for c in ohlcv_data[-50:]]
@@ -677,7 +672,7 @@ async def api_backtest_current():
     return await api_backtest_current()
 
 @app.get("/api/backtest_legacy/mock")
-async def api_backtest_current():
+async def api_backtest_current_mock():
     """
     Returns the latest REAL backtest result if available (from last_backtest_context),
     otherwise falls back to legacy mock endpoint.
@@ -1174,8 +1169,8 @@ def generate_contextual_info() -> str:
     info_types = [
         f"Current PNL is {random.uniform(-2, 3):.2f}%.",
         f"Confidence level is at {random.uniform(70, 95):.1f}%.",
-        f"Risk-adjusted returns are positive this week.",
-        f"Market conditions are favorable for the current strategy."
+        "Risk-adjusted returns are positive this week.",
+        "Market conditions are favorable for the current strategy."
     ]
     return random.choice(info_types)
 
@@ -1313,13 +1308,11 @@ async def api_ml_score_stub_v2(payload: dict):
 
 # BACKTEST_RUN_SYNC_MVP_START
 # Dashboard MVP: provide a synchronous backtest endpoint that returns trades/equity/summary.
-import asyncio as _asyncio
+import asyncio as _asyncio  # noqa: E402
 # Registered via add_api_route to avoid decorator/name issues.
 
-from datetime import datetime as _dt
-from typing import Any as _Any, Dict as _Dict, List as _List
-
-
+from datetime import datetime as _dt  # noqa: E402
+from typing import Any as _Any, Dict as _Dict, List as _List  # noqa: E402
 _last_backtest_sync_result: _Dict[str, _Any] = {}
 
 def _bt_make_trade(entry_ts: int, entry: float, exit_ts: int, exit_p: float, side: str = "long") -> _Dict[str, _Any]:

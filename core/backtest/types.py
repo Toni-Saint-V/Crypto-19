@@ -7,9 +7,7 @@ These dataclasses are internal to the backtest engine but are simple enough
 to be converted to dicts for JSON responses.
 """
 
-from dataclasses import dataclass
-
-
+from dataclasses import dataclass  # noqa: E402
 @dataclass
 class Candle:
     time: int

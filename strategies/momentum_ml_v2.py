@@ -46,7 +46,6 @@ def momentum_ml_v2(df: pd.DataFrame, risk_per_trade: float = 100.0, rr_ratio: fl
     
     # Calculate indicators
     closes = np.array([c['close'] for c in df_list])
-    highs = np.array([c['high'] for c in df_list])
     lows = np.array([c['low'] for c in df_list])
     volumes = np.array([c.get('volume', 0) for c in df_list])
     
@@ -78,7 +77,6 @@ def momentum_ml_v2(df: pd.DataFrame, risk_per_trade: float = 100.0, rr_ratio: fl
     for i in range(ma_long, len(df_list) - 3):
         # Get recent data for indicators
         recent_closes = closes[i-ma_long:i+1]
-        recent_highs = highs[i-ma_long:i+1]
         recent_lows = lows[i-ma_long:i+1]
         recent_volumes = volumes[i-ma_long:i+1]
         

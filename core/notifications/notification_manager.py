@@ -273,7 +273,6 @@ class NotificationManager:
     
     async def send_price_alert(self, symbol: str, current_price: float, target_price: float, direction: str):
         """Send price alert"""
-        emoji = "📈" if direction == "above" else "📉"
         await self.create_alert(
             alert_type=AlertType.PRICE,
             title=f"Price Alert: {symbol}",

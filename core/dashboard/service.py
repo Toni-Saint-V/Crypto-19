@@ -86,6 +86,10 @@ async def get_dashboard_snapshot(
 def get_dashboard_snapshot_sync(
     mode: str | None = None,
 ) -> DashboardSnapshot:
+    symbol = 'BTCUSDT'
+    timeframe = '1h'
+    mode = 'TEST'
+
     return asyncio.run(
         get_dashboard_snapshot(symbol=symbol, timeframe=timeframe, mode=mode)
     )

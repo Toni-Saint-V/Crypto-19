@@ -1,4 +1,6 @@
-import json, os, time
+import json
+import os
+import time
 CACHE_DIR = "cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
 
@@ -9,7 +11,8 @@ def save_cache(name, data):
 
 def load_cache(name, max_age=30):
     path = os.path.join(CACHE_DIR, f"{name}.json")
-    if not os.path.exists(path): return None
+    if not os.path.exists(path):
+        return None
     with open(path, "r") as f:
         payload = json.load(f)
     if time.time() - payload["timestamp"] > max_age:
