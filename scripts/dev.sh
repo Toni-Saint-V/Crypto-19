@@ -2,6 +2,8 @@
 set -euo pipefail
 
 host="${HOST:-127.0.0.1}"
+port="${PORT:-8010}"
+log="${LOG_LEVEL:-info}"
 
 pick_target() {
   if test -f server.py && grep -q "FastAPI" server.py && grep -qE "^[[:space:]]*app[[:space:]]*=" server.py; then
@@ -23,37 +25,5 @@ test -n "${target:-}" || { echo "FAIL: cannot find FastAPI app target"; exit 1; 
 
 python -c "import uvicorn" >/dev/null 2>&1 || { echo "FAIL: uvicorn not installed"; exit 1; }
 
-port="$(python - <<'PY'
-import socket
-s=socket.socket()
-s.bind(("127.0.0.1",0))
-print(s.getsockname()[1])
-s.close()
-PY
-)"
-
-python -m uvicorn "$target" --host "$host" --port "$port" --log-level warning >/dev/null 2>&1 &
-pid="$!"
-
-cleanup() {
-  kill "$pid" >/dev/null 2>&1 || true
-  wait "$pid" >/dev/null 2>&1 || true
-}
-trap cleanup EXIT
-
-python - "$host" "$port" <<'PY'
-import socket, sys, time
-host=sys.argv[1]; port=int(sys.argv[2])
-t0=time.time()
-while time.time()-t0 < 12:
-    s=socket.socket(); s.settimeout(0.5)
-    try:
-        s.connect((host, port)); s.close(); sys.exit(0)
-    except Exception:
-        try: s.close()
-        except Exception: pass
-        time.sleep(0.2)
-sys.exit(1)
-PY
-
-HOST="$host" PORT="$port" bash scripts/smoke_api_200.sh
+echo "Starting: uvicorn $target --host $host --port $port --reload (LOG_LEVEL=$log)"
+exec python -m uvicorn "$target" --host "$host" --port "$port" --reload --log-level "$log"

@@ -1,12 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-port="${PORT:-8010}"
 host="${HOST:-127.0.0.1}"
+port="${PORT:-8010}"
 base="http://$host:$port"
 
-get_code() { curl -sS -o /dev/null -w "%{http_code}" "$1" || echo "000"; }
-post_code() { curl -sS -o /dev/null -w "%{http_code}" -X POST -H "Content-Type: application/json" -d "$2" "$1" || echo "000"; }
+get_code() {
+  local url="$1"
+  local code
+  code="$(curl -sS -o /dev/null -w "%{http_code}" "$url" 2>/dev/null || true)"
+  test -n "${code:-}" || code="000"
+  printf "%s" "$code"
+}
+
+post_code() {
+  local url="$1"
+  local body="$2"
+  local code
+  code="$(curl -sS -o /dev/null -w "%{http_code}" -X POST -H "Content-Type: application/json" -d "$body" "$url" 2>/dev/null || true)"
+  test -n "${code:-}" || code="000"
+  printf "%s" "$code"
+}
 
 c1="$(get_code "$base/api/candles?symbol=BTCUSDT&timeframe=1h&limit=5")"
 c2="$(get_code "$base/api/trades?symbol=BTCUSDT&timeframe=1h&mode=TEST")"

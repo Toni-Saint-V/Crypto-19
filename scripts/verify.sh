@@ -21,9 +21,9 @@ if have pytest && (test -d tests || test -f pytest.ini || test -f pyproject.toml
   pytest -q || true
 fi
 
-if test -f scripts/smoke_api_200.sh; then
-  echo "=== verify: api smoke ==="
-  bash scripts/smoke_api_200.sh
+if test -f scripts/boot_once.sh; then
+  echo "=== verify: api smoke (boot_once) ==="
+  bash scripts/boot_once.sh
 fi
 
 if test -f scripts/pin_autoscan_doc_link.sh; then
