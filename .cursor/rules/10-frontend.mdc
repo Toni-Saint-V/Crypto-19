@@ -1,0 +1,10 @@
+# Frontend Rules (Auto)
+
+- All API calls go through a single apiClient:
+  - apiBase = import.meta.env.VITE_API_BASE ?? ""
+  - default same-origin; dev uses Vite proxy
+- Mode stored only as UPPER in state. Normalize at boundaries.
+- No magic layout constants like right: 380px.
+  - Use CSS vars: --chat-w, --drawer-max-h (38vh).
+- HUD must show truth (no UNKNOWN). If data missing -> explicit empty/partial state.
+- Backtest drawer reads from app state (job_id/status/result). No window events.

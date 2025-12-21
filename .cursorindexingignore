@@ -1,0 +1,14 @@
+node_modules/
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+coverage/
+web_build/
+logs/
+reports/
+*.log
