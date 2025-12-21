@@ -33,6 +33,67 @@ import yaml
 # === FASTAPI INITIALIZATION ===
 app = FastAPI(title="CryptoBot Pro — Neural Dashboard")
 
+# === APP_OBSERVABILITY_START ===
+import os
+import logging
+import time
+import uuid
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+def _setup_logging() -> None:
+    level = os.getenv('LOG_LEVEL', 'info').upper()
+    root = logging.getLogger()
+    if not root.handlers:
+        logging.basicConfig(
+            level=level,
+            format='%(asctime)s %(levelname)s %(name)s %(message)s',
+        )
+    else:
+        root.setLevel(level)
+
+_setup_logging()
+logger = logging.getLogger('app')
+
+class RequestIdMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        rid = request.headers.get('x-request-id') or str(uuid.uuid4())
+        request.state.request_id = rid
+        t0 = time.time()
+        try:
+            response = await call_next(request)
+        except Exception:
+            logger.exception('unhandled_error', extra={'request_id': rid, 'path': request.url.path, 'method': request.method})
+            raise
+        dt_ms = int((time.time() - t0) * 1000)
+        response.headers['x-request-id'] = rid
+        response.headers['x-response-time-ms'] = str(dt_ms)
+        logger.info('request', extra={'request_id': rid, 'path': request.url.path, 'method': request.method, 'status': getattr(response, 'status_code', None), 'duration_ms': dt_ms})
+        return response
+
+app.add_middleware(RequestIdMiddleware)
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    rid = getattr(request.state, 'request_id', None)
+    detail = getattr(exc, 'detail', 'HTTP error')
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={'error': {'message': detail, 'code': 'http_error', 'request_id': rid}},
+    )
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    rid = getattr(request.state, 'request_id', None)
+    logger.exception('unhandled_exception', extra={'request_id': rid})
+    return JSONResponse(
+        status_code=500,
+        content={'error': {'message': 'Internal server error', 'code': 'internal_error', 'request_id': rid}},
+    )
+# === APP_OBSERVABILITY_END ===
+
 # === BACKTEST ROUTER (AUTO) ===
 from core.backtest.api import router as backtest_router
 import os as _os

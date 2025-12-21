@@ -5,9 +5,9 @@
 - [ ] UI loads without console errors
 - [x] Core routes wired (candles/trades/equity/metrics)
 - [x] Backtest engine runs end-to-end (baseline strategy)
-- [ ] Data pipeline stable (fetch/cache/resample)
-- [ ] Deterministic runs (seed, reproducible results)
-- [ ] Error handling + user-facing messages
+- [x] Data pipeline stable (fetch/cache/resample)
+- [x] Deterministic runs (seed, reproducible results)
+- [x] Error handling + user-facing messages
 - [ ] Config system (env + defaults + validation)
 
 ## P1 Quality
@@ -15,7 +15,7 @@
 - [x] API smoke test returns 200 for key endpoints
 - [x] Autoscan pinned doc link (docs/AUTOSCAN.md)
 - [x] Pytest warning suppressed (starlette multipart)
-- [ ] Logging structured (levels, request ids)
+- [x] Logging structured (levels, request ids)
 - [ ] Tests: unit coverage for core modules
 - [ ] CI pipeline (lint/test/smoke) runs on PR
 - [ ] Formatting + lint rules enforced
