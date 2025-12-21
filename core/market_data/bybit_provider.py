@@ -63,7 +63,7 @@ class BybitMarketDataProvider(MarketDataProvider):
                         time=t,
                         open=o,
                         high=h,
-                        low=l,
+                        low=low,
                         close=cl,
                         volume=max(0.0, v),
                     )
