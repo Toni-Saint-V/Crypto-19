@@ -17,7 +17,7 @@
 - [x] Pytest warning suppressed (starlette multipart)
 - [x] Logging structured (levels, request ids)
 - [ ] Tests: unit coverage for core modules
-- [ ] CI pipeline (lint/test/smoke) runs on PR
+- [x] CI pipeline (lint/test/smoke) runs on PR
 - [ ] Formatting + lint rules enforced
 
 ## P2 Product

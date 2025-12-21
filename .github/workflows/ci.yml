@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [ "**" ]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install deps
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -U pip
+          if [ -f requirements.txt ]; then
+            python -m pip install -r requirements.txt
+          elif [ -f pyproject.toml ]; then
+            python -m pip install -e .
+          elif [ -f requirements-dev.txt ]; then
+            python -m pip install -r requirements-dev.txt
+          fi
+          python -m pip install -U pytest uvicorn python-multipart ruff mypy
+
+      - name: Verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify.sh
+
+      - name: Determinism probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f scripts/p0_determinism_probe.sh && bash scripts/p0_determinism_probe.sh || true
