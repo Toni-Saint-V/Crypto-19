@@ -473,3 +473,6 @@ Next:
 
 ## 2025-12-21 03:00
 - Added stub TEST endpoints in server.py: /api/trades,/api/equity,/api/metrics (no 404). Restarted backend and confirmed via autoscan: docs/COMPLIANCE_SAMPLES/20251221_030039/SUMMARY.md. Backup: .backup/20251221_030037_stub_test_endpoints
+
+## 2025-12-21 05:40
+- Pinned latest autoscan in docs/AUTOSCAN.md -> docs/COMPLIANCE_SAMPLES/20251221_030039 (SUMMARY.md + probe_index.json)
