@@ -1,0 +1,6 @@
+# Backend Rules (Auto)
+
+- One route per path+method (no duplicates).
+- Mode enum is UPPER everywhere; accept any-case input and normalize immediately.
+- Backtest is job-only contract; sync backtest is forbidden.
+- Unified error schema includes request_id; OpenAPI must be clean (no duplicates).
