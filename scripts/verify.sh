@@ -4,7 +4,7 @@ set -euo pipefail
 have() { command -v "$1" >/dev/null 2>&1; }
 
 echo "=== verify: python sanity ==="
-python -m compileall -q . || true
+python -m compileall -q -x '(/\.backup/|/\.venv/|/node_modules/|/\.git/)' . || true
 
 if have ruff; then
   echo "=== verify: ruff ==="
@@ -21,16 +21,12 @@ if have pytest && (test -d tests || test -f pytest.ini || test -f pyproject.toml
   pytest -q || true
 fi
 
-if test -f .run/one_cmd_smoke_api_200.sh; then
+if test -f scripts/smoke_api_200.sh; then
   echo "=== verify: api smoke ==="
-  bash .run/one_cmd_smoke_api_200.sh
+  bash scripts/smoke_api_200.sh
 fi
 
-if test -f .run/one_cmd_fix_autoscan_doc_link.sh; then
-  echo "=== verify: autoscan doc pin ==="
-  bash .run/one_cmd_fix_autoscan_doc_link.sh || true
+if test -f scripts/pin_autoscan_doc_link.sh; then
+  echo "=== verify: autoscan doc pin (dry) ==="
+  NO_COMMIT=1 bash scripts/pin_autoscan_doc_link.sh || true
 fi
-
-echo "TASK: add scripts/verify.sh to run local checks + smoke"
-echo "STEP_PROGRESS: 100%"
-echo "DASHBOARD_PROGRESS: 76%"
