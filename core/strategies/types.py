@@ -5,7 +5,6 @@ Defines common types and contracts for trading strategies
 
 from typing import List, Dict, Any, Protocol, Optional
 from dataclasses import dataclass
-from datetime import datetime
 import pandas as pd
 
 

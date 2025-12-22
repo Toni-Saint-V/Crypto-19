@@ -19,10 +19,18 @@ function nowIso(): string {
   }
 }
 
+// Format value: show —/N/A/Partial instead of UNKNOWN
+function formatValue(value: string | undefined, fallback: string = "—"): string {
+  if (!value || value.trim() === "" || value.toUpperCase() === "UNKNOWN") {
+    return fallback;
+  }
+  return value;
+}
+
 export default function ChartHUD(props: Props) {
   const mode = props.mode || "LIVE";
-  const symbol = props.symbol || "UNKNOWN";
-  const timeframe = props.timeframe || "UNKNOWN";
+  const symbol = formatValue(props.symbol);
+  const timeframe = formatValue(props.timeframe);
 
   const [healthCode, setHealthCode] = useState<number | null>(null);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
@@ -80,8 +88,14 @@ export default function ChartHUD(props: Props) {
         body: JSON.stringify(payload)
       });
       const j = (await r.json()) as AssistantResponse;
-      const answer = (j && j.answer) ? String(j.answer) : `No answer (HTTP ${r.status})`;
-      setAssistantText(answer);
+      if (j && j.answer) {
+        setAssistantText(String(j.answer));
+      } else {
+        // Don't show HTTP codes - show human message
+        const errorMsg = (j as any)?.error || (j as any)?.message || "Не удалось получить ответ";
+        const requestId = (j as any)?.request_id || (j as any)?.requestId || "";
+        setAssistantText(requestId ? `${errorMsg} (request: ${requestId})` : errorMsg);
+      }
     } catch (e) {
       setAssistantText("Ошибка ассистента");
     } finally {

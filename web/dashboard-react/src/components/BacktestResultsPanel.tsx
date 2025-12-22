@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 type AnyObj = Record<string, any>;
 
@@ -16,51 +16,40 @@ function pickKpi(data: AnyObj) {
   };
 }
 
-type RunStatus = "idle" | "running" | "done" | "error";
-
-function toNumber(v: unknown, fallback: number): number {
-  if (typeof v === "number" && Number.isFinite(v)) return v;
-  if (typeof v === "string") {
-    const x = Number(v);
-    if (Number.isFinite(x)) return x;
-  }
-  return fallback;
-}
+type JobStatus = "idle" | "queued" | "running" | "done" | "error";
 
 interface BacktestResultsPanelProps {
   apiBase?: string;
   onRun?: () => void;
   onCancel?: () => void;
-  runStatus?: RunStatus;
+  onRetry?: () => void;
+  jobStatus?: JobStatus;
+  jobProgress?: number;
   runError?: string;
+  result?: AnyObj;
   onExpandedChange?: (expanded: boolean) => void;
 }
 
 export default function BacktestResultsPanel({ 
-  apiBase, 
   onRun,
   onCancel,
-  runStatus: externalRunStatus,
+  onRetry,
+  jobStatus: externalJobStatus,
+  jobProgress: externalJobProgress,
   runError: externalRunError,
+  result: externalResult,
   onExpandedChange,
 }: BacktestResultsPanelProps = {}) {
-  const [data, setData] = useState<AnyObj | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<"results" | "trades" | "logs" | "monte-carlo" | "raw">("results");
   const [focusedInputId, setFocusedInputId] = useState<string | null>(null);
   const [isButtonHovered, setIsButtonHovered] = useState(false);
   
-  // Use external status if provided, otherwise internal state
-  const [internalRunStatus, setInternalRunStatus] = useState<RunStatus>("idle");
-  const [internalRunError, setInternalRunError] = useState<string>("");
-  const runStatus = externalRunStatus ?? internalRunStatus;
-  const runError = externalRunError ?? internalRunError;
-
-  useEffect(() => {
-    const handler = (e: any) => setData(e?.detail || null);
-    window.addEventListener("backtest:updated", handler as any);
-    return () => window.removeEventListener("backtest:updated", handler as any);
-  }, []);
+  // Job-only: use external state (no window events)
+  const jobStatus = externalJobStatus || 'idle';
+  const jobProgress = externalJobProgress || 0;
+  const runError = externalRunError;
+  const data = externalResult;
 
   const kpi = useMemo(() => pickKpi(data || {}), [data]);
   
@@ -92,61 +81,10 @@ export default function BacktestResultsPanel({
     });
   };
 
-  const handleRunBacktest = async () => {
-    if (runStatus === "running") return;
-    
-    // Use external handler if provided
-    if (onRun) {
-      onRun();
-      return;
-    }
-
-    // Fallback to internal handler if no external handler
-    setInternalRunStatus("running");
-    setInternalRunError("");
-
-    try {
-      const payload: Record<string, unknown> = {
-        strategy: "pattern3_extreme",
-        symbol: "BTCUSDT",
-        interval: "60",
-        initial_balance: 10000,
-      };
-
-      const base = String(apiBase || '').replace(/\/$/, '');
-      const url = `${base}/api/backtest/run`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        throw new Error(`HTTP ${res.status} ${res.statusText} ${txt}`.trim());
-      }
-
-      const result = (await res.json().catch(() => ({}))) as AnyObj;
-      
-      // Extract KPI from result
-      const stat = result.statistics || result.summary || result;
-      const kpi = {
-        totalTrades: toNumber(stat.total_trades ?? stat.totalTrades, 0),
-        profitFactor: toNumber(stat.profit_factor ?? stat.profitFactor, 0),
-        maxDrawdown: toNumber(stat.max_drawdown ?? stat.maxDrawdown, 0),
-      };
-
-      // Dispatch event for other components
-      window.dispatchEvent(new CustomEvent("backtest:updated", { detail: { ...kpi, ...result } }));
-      
-      // Update local state
-      setData({ ...kpi, ...result });
-      setInternalRunStatus("done");
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setInternalRunError(msg);
-      setInternalRunStatus("error");
-    }
+  // Job-only: use external handlers only
+  const handleRunBacktest = () => {
+    if (jobStatus === "running" || jobStatus === "queued") return;
+    onRun?.();
   };
 
   return (
@@ -212,7 +150,7 @@ export default function BacktestResultsPanel({
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-          {runStatus === "running" && onCancel && (
+          {(jobStatus === "running" || jobStatus === "queued") && onCancel && (
             <button
               type="button"
               onClick={onCancel}
@@ -229,17 +167,17 @@ export default function BacktestResultsPanel({
           <button
             type="button"
             onClick={handleRunBacktest}
-            disabled={runStatus === "running"}
+            disabled={jobStatus === "running" || jobStatus === "queued"}
             className="inline-flex h-7 items-center rounded-lg px-3 text-xs font-semibold transition-all disabled:opacity-50"
             style={{
-              background: runStatus === "error"
+              background: jobStatus === "error"
                 ? 'var(--status-loss-bg)'
                 : 'var(--accent-backtest-bg)',
-              color: runStatus === "error" ? 'var(--status-loss)' : 'var(--text-1)',
-              border: `1px solid ${runStatus === "error" ? 'var(--status-loss-border)' : 'var(--accent-backtest-border)'}`,
+              color: jobStatus === "error" ? 'var(--status-loss)' : 'var(--text-1)',
+              border: `1px solid ${jobStatus === "error" ? 'var(--status-loss-border)' : 'var(--accent-backtest-border)'}`,
             }}
           >
-            {runStatus === "running" ? (
+            {(jobStatus === "running" || jobStatus === "queued") ? (
               <>
                 <svg
                   className="animate-spin -ml-1 mr-2 h-3 w-3"
@@ -261,11 +199,11 @@ export default function BacktestResultsPanel({
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                   />
                 </svg>
-                Running...
+                {jobStatus === "queued" ? "Queued..." : `Running... ${Math.round(jobProgress * 100)}%`}
               </>
-            ) : runStatus === "done" ? (
+            ) : jobStatus === "done" ? (
               "✓ Done"
-            ) : runStatus === "error" ? (
+            ) : jobStatus === "error" ? (
               "✗ Error"
             ) : (
               "▶ Run"
@@ -324,9 +262,9 @@ export default function BacktestResultsPanel({
 
             {/* Scrollable content */}
             <div className="flex-1 min-h-0 overflow-y-auto chat-scrollbar text-xs space-y-3">
-              {runStatus === "error" && runError && (
+              {jobStatus === "error" && runError && (
                 <div 
-                  className="rounded-lg p-3 text-[11px]"
+                  className="rounded-lg p-3 text-[11px] space-y-2"
                   style={{
                     border: '1px solid var(--status-loss-border)',
                     background: 'var(--status-loss-bg)',
@@ -337,9 +275,23 @@ export default function BacktestResultsPanel({
                     className="font-semibold mb-1"
                     style={{ color: 'var(--status-loss)' }}
                   >
-                    Backtest Error
+                    Не удалось обработать запрос
                   </div>
                   <div style={{ color: 'var(--text-2)' }}>{runError}</div>
+                  {onRetry && (
+                    <button
+                      type="button"
+                      onClick={onRetry}
+                      className="px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
+                      style={{
+                        background: 'var(--accent-backtest-bg)',
+                        border: '1px solid var(--accent-backtest-border)',
+                        color: 'var(--accent-backtest)',
+                      }}
+                    >
+                      Retry
+                    </button>
+                  )}
                 </div>
               )}
               {activeTab === "results" && (

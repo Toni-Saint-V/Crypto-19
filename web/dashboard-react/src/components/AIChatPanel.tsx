@@ -34,8 +34,13 @@ export default function AIChatPanel({mode, context}: AIChatPanelProps) {
         body: JSON.stringify(payload),
       });
       const j = await r.json().catch(() => ({} as any));
-      const answer = (j && j.answer) ? String(j.answer) : `HTTP ${r.status}`;
-      return answer;
+      if (j && j.answer) {
+        return String(j.answer);
+      }
+      // Don't show HTTP codes - show human message + request_id if available
+      const errorMsg = j?.error || j?.message || "Assistant temporarily unavailable";
+      const requestId = j?.request_id || j?.requestId || "";
+      return requestId ? `${errorMsg} (request: ${requestId})` : errorMsg;
     } catch {
       return "Assistant error";
     }
@@ -119,20 +124,20 @@ export default function AIChatPanel({mode, context}: AIChatPanelProps) {
   };
 
   const modeLabel =
-    mode === 'live' ? 'Live trading' : mode === 'test' ? 'Test sandbox' : 'Backtest review';
+    mode === 'LIVE' ? 'Live trading' : mode === 'TEST' ? 'Test sandbox' : 'Backtest review';
 
   const modeAccents: Record<Mode, { color: string; bg: string; border: string }> = {
-    backtest: {
+    BACKTEST: {
       color: 'var(--accent-backtest)',
       bg: 'var(--accent-backtest-bg)',
       border: 'var(--accent-backtest-border)',
     },
-    live: {
+    LIVE: {
       color: 'var(--accent-live)',
       bg: 'var(--accent-live-bg)',
       border: 'var(--accent-live-border)',
     },
-    test: {
+    TEST: {
       color: 'var(--accent-test)',
       bg: 'var(--accent-test-bg)',
       border: 'var(--accent-test-border)',
@@ -144,20 +149,20 @@ export default function AIChatPanel({mode, context}: AIChatPanelProps) {
   // Mode-specific quick actions
   const getQuickActions = () => {
     switch (mode) {
-      case 'backtest':
+      case 'BACKTEST':
         return [
           { label: 'Explain drawdown', action: 'Explain the current drawdown and its causes' },
           { label: 'Why entries?', action: 'Explain why these entry points were chosen' },
           { label: 'Optimize params', action: 'Suggest parameter optimizations for this strategy' },
           { label: 'Risk checks', action: 'Analyze and highlight potential risk factors' },
         ];
-      case 'live':
+      case 'LIVE':
         return [
           { label: 'Risk warnings', action: 'Check for current risk warnings' },
           { label: 'Data health', action: 'Check data feed health and latency' },
           { label: 'Reconnect', action: 'Help troubleshoot connection issues' },
         ];
-      case 'test':
+      case 'TEST':
         return [
           { label: 'What changed?', action: 'What changed compared to baseline?' },
           { label: 'Why different?', action: 'Why is the result different from expected?' },

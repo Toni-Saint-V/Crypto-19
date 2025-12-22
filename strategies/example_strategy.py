@@ -6,7 +6,6 @@ This is a simple template showing how to implement a new strategy.
 import pandas as pd
 from typing import List, Dict, Any
 from datetime import datetime
-from core.strategies.types import StrategyConfig, Trade
 
 
 def example_strategy(df: pd.DataFrame, risk_per_trade: float = 100.0, rr_ratio: float = 4.0) -> List[Dict[str, Any]]:

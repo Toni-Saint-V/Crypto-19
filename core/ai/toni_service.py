@@ -4,11 +4,9 @@ Supports multiple backends: stub, OpenAI, and local models
 """
 
 import os
-import json
 import logging
 from typing import Dict, Any, Optional, List
-from dataclasses import dataclass, asdict
-from datetime import datetime
+from dataclasses import dataclass
 from enum import Enum
 
 log = logging.getLogger(__name__)
@@ -184,7 +182,7 @@ Guidelines:
         
         if context.last_backtest:
             summary = context.last_backtest.get('summary', {})
-            prompt += f"\nCurrent Backtest Results:\n"
+            prompt += "\nCurrent Backtest Results:\n"
             prompt += f"- Total Return: {summary.get('pnl_%', 0)}%\n"
             prompt += f"- Total Trades: {summary.get('total_trades', 0)}\n"
             prompt += f"- Win Rate: {summary.get('winrate', 0)}%\n"
@@ -209,7 +207,7 @@ Guidelines:
             avg_r = summary.get('avg_R', 0)
             max_dd = summary.get('max_dd', 0)
             
-            response = f"📊 **Backtest Results Summary:**\n\n"
+            response = "📊 **Backtest Results Summary:**\n\n"
             response += f"• **Total Return:** {pnl:+.2f}%\n"
             response += f"• **Total Trades:** {trades}\n"
             response += f"• **Win Rate:** {winrate:.1f}%\n"

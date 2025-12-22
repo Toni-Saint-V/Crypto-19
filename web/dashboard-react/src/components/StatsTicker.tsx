@@ -94,7 +94,7 @@ function KPICard({ label, value, delta, color = 'neutral', isLoading }: KPICardP
 }
 
 export default function StatsTicker({ mode, kpi, backtestKpi }: StatsTickerProps) {
-  const isBacktest = mode === 'backtest';
+  const isBacktest = mode === 'BACKTEST';
   const isLoading = !kpi;
 
   if (isLoading) {

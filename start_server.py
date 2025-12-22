@@ -1,4 +1,5 @@
-import uvicorn, os
+import os
+import uvicorn
 
 if __name__ == "__main__":
     host = os.getenv("HOST", "0.0.0.0")

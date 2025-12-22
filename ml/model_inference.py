@@ -1,4 +1,5 @@
-import random, asyncio
+import random
+import asyncio
 
 async def get_confidence():
     await asyncio.sleep(0.3)

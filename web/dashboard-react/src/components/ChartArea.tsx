@@ -26,7 +26,9 @@ interface ChartAreaProps {
   apiBase?: string;
   onBacktestRun?: () => void;
   onBacktestCancel?: () => void;
-  backtestRunStatus?: 'idle' | 'running' | 'done' | 'error';
+  onBacktestRetry?: () => void;
+  backtestJobStatus?: 'idle' | 'queued' | 'running' | 'done' | 'error';
+  backtestJobProgress?: number;
   backtestRunError?: string;
 }
 
@@ -40,7 +42,9 @@ export default function ChartArea({
   apiBase,
   onBacktestRun,
   onBacktestCancel,
-  backtestRunStatus,
+  onBacktestRetry,
+  backtestJobStatus,
+  backtestJobProgress,
   backtestRunError,
 }: ChartAreaProps) {
   const [riskFilter, setRiskFilter] = useState('All');
@@ -74,7 +78,7 @@ export default function ChartArea({
       {/* Chart topbar (HUD + ML Score) */}
       <div className="flex items-center justify-between px-4 py-2 flex-shrink-0" style={{ borderBottom: '1px solid var(--stroke)' }}>
         <div className="flex items-center gap-2">
-          <ChartHUD />
+          <ChartHUD mode={mode} symbol={symbol} timeframe={timeframe} />
         </div>
         <div className="flex items-center gap-2">
           <MLScoreWidget context={mlContext} />
@@ -107,8 +111,8 @@ export default function ChartArea({
             left: 0,
             right: 0,
             bottom: 0,
-            height: drawerExpanded ? '40vh' : '48px',
-            maxHeight: '40vh',
+            height: drawerExpanded ? 'var(--drawer-max-h)' : '48px',
+            maxHeight: 'var(--drawer-max-h)',
             transition: 'height 200ms ease-out',
             background: 'var(--surface-1)',
             borderTop: '1px solid var(--stroke)',
@@ -116,20 +120,23 @@ export default function ChartArea({
             overflow: 'hidden',
           }}
         >
-          {mode === 'backtest' && (
+          {mode === 'BACKTEST' && (
             <BacktestResultsPanel 
               apiBase={apiBase}
               onRun={onBacktestRun}
               onCancel={onBacktestCancel}
-              runStatus={backtestRunStatus}
+              onRetry={onBacktestRetry}
+              jobStatus={backtestJobStatus}
+              jobProgress={backtestJobProgress}
               runError={backtestRunError}
+              result={backtestResult}
               onExpandedChange={setDrawerExpanded}
             />
           )}
-          {mode === 'live' && (
+          {mode === 'LIVE' && (
             <LiveResultsDrawer onExpandedChange={setDrawerExpanded} />
           )}
-          {mode === 'test' && (
+          {mode === 'TEST' && (
             <TestResultsDrawer onExpandedChange={setDrawerExpanded} />
           )}
         </div>

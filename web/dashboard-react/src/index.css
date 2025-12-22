@@ -87,6 +87,10 @@
   --gradient-backtest: linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(236, 72, 153, 0.1) 100%);
   --gradient-live: linear-gradient(135deg, rgba(20, 184, 166, 0.15) 0%, rgba(59, 130, 246, 0.1) 100%);
   --gradient-test: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(251, 191, 36, 0.1) 100%);
+  
+  /* Layout contract: remove magic numbers */
+  --chat-w: 380px; /* Chat sidebar width (380-420px range) */
+  --drawer-max-h: 38vh; /* Bottom drawer max height */
 }
 
 * {
