@@ -7,6 +7,7 @@ import { MLScoreWidget } from "./MLScoreWidget";
 import BacktestResultsPanel from "./BacktestResultsPanel";
 import LiveResultsDrawer from "./LiveResultsDrawer";
 import TestResultsDrawer from "./TestResultsDrawer";
+import type { BacktestResult } from "../types/backtest";
 
 // Minimal typed ML context (UI only, no contract changes)
 interface MLContext {
@@ -16,7 +17,7 @@ interface MLContext {
 }
 
 interface ChartAreaProps {
-  backtestResult?: any;
+  backtestResult?: BacktestResult | null;
   mode: Mode;
   symbol: string;
   exchange: string;
@@ -33,6 +34,7 @@ interface ChartAreaProps {
 }
 
 export default function ChartArea({
+  backtestResult,
   mode,
   symbol,
   exchange,

@@ -4,6 +4,7 @@ import StatsTicker from './components/StatsTicker';
 import ChartArea from './components/ChartArea';
 import Sidebar from './components/Sidebar';
 import { Mode, KPIData, BacktestKPIData, normalizeMode } from './types';
+import type { BacktestResult, Metrics } from './types/backtest';
 
 type BacktestKpi = {
   totalTrades: number;
@@ -11,7 +12,7 @@ type BacktestKpi = {
   maxDrawdown: number;
 };
 
-function num(v: any, d: number): number {
+function num(v: unknown, d: number): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : d;
 }
@@ -38,7 +39,7 @@ function App() {
   const [backtestJobId, setBacktestJobId] = useState<string | null>(null);
   const [backtestJobStatus, setBacktestJobStatus] = useState<'idle' | 'queued' | 'running' | 'done' | 'error'>('idle');
   const [backtestJobProgress, setBacktestJobProgress] = useState<number>(0);
-  const [backtestResult, setBacktestResult] = useState<any | null>(null);
+  const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
   const [backtestError, setBacktestError] = useState<string | null>(null);
   const [backtestKpi, setBacktestKpi] = useState<BacktestKpi>({ totalTrades: 0, profitFactor: 0, maxDrawdown: 0 });
   
@@ -179,9 +180,9 @@ function App() {
           // Fetch result
           const resultRes = await fetch(`${base}/api/backtest/result/${backtestJobId}`, { signal: controller.signal });
           if (resultRes.ok) {
-            const result = await resultRes.json().catch(() => ({}));
+            const result = (await resultRes.json().catch(() => ({}))) as BacktestResult;
             setBacktestResult(result);
-            const stat = result.statistics || result.summary || result;
+            const stat: Metrics = (result.statistics ?? result.summary ?? result.metrics ?? result.kpi ?? result) as Metrics;
             setBacktestKpi({
               totalTrades: num(stat.total_trades ?? stat.totalTrades, 0),
               profitFactor: num(stat.profit_factor ?? stat.profitFactor, 0),
@@ -397,6 +398,10 @@ function App() {
   }, [mode, backtestJobStatus, liveRunning, testRunning, testPaused, handleBacktestRun, handleBacktestCancel, handleLiveStart, handleLiveStop, handleTestStart, handleTestPause, handleTestResume]);
 
   const primaryCta = getPrimaryCta();
+  const secondaryCta =
+    mode === 'TEST' && testRunning
+      ? { label: 'Stop', action: handleTestStop, disabled: false }
+      : null;
 
   const isBacktest = mode === 'BACKTEST';
   const isTest = mode === 'TEST';
@@ -450,6 +455,9 @@ function App() {
           primaryCtaLabel={primaryCta.label}
           onPrimaryCta={primaryCta.action}
           primaryCtaDisabled={primaryCta.disabled}
+          secondaryCtaLabel={secondaryCta?.label}
+          onSecondaryCta={secondaryCta?.action}
+          secondaryCtaDisabled={secondaryCta?.disabled}
         />
 
         <StatsTicker mode={mode} kpi={kpi} backtestKpi={isBacktest ? backtestKpi : undefined} />

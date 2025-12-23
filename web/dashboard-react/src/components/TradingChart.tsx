@@ -99,7 +99,7 @@ export default function TradingChart({ data, trades, height }: TradingChartProps
 
     window.addEventListener('resize', handleResize);
   // BACKTEST_MARKERS_EFFECT
-  useEffect(() => {
+  (function BACKTEST_MARKERS_EFFECT() {
     const s: any = seriesRef.current;
     if (!s || typeof s.setMarkers !== 'function') return;
 
@@ -141,7 +141,7 @@ export default function TradingChart({ data, trades, height }: TradingChartProps
     }
 
     s.setMarkers(markers);
-  }, [trades]);
+  })();
 
 
     return () => {

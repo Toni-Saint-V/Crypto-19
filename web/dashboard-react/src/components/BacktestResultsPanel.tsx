@@ -1,14 +1,13 @@
 import { useMemo, useState } from "react";
+import type { BacktestResult, Metrics } from "../types/backtest";
 
-type AnyObj = Record<string, any>;
-
-function num(v: any, d: number): number {
+function num(v: unknown, d: number): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : d;
 }
 
-function pickKpi(data: AnyObj) {
-  const src = (data && (data.kpi || data.summary || data)) || {};
+function pickKpi(data: BacktestResult | null | undefined) {
+  const src: Metrics = (data?.kpi ?? data?.summary ?? data?.metrics ?? data?.statistics ?? data ?? {}) as Metrics;
   return {
     totalTrades: num(src.totalTrades ?? src.trades ?? src.total_trades, 0),
     profitFactor: num(src.profitFactor ?? src.pf ?? src.profit_factor, 0),
@@ -26,7 +25,7 @@ interface BacktestResultsPanelProps {
   jobStatus?: JobStatus;
   jobProgress?: number;
   runError?: string;
-  result?: AnyObj;
+  result?: BacktestResult | null;
   onExpandedChange?: (expanded: boolean) => void;
 }
 
@@ -56,7 +55,7 @@ export default function BacktestResultsPanel({
   // Extract PnL from data (try multiple possible fields)
   const totalPnl = useMemo(() => {
     if (!data) return null;
-    const src = data.kpi || data.summary || data.metrics || data;
+    const src: Metrics = (data.kpi ?? data.summary ?? data.metrics ?? data.statistics ?? data) as Metrics;
     const pnl = src.totalPnl ?? src.pnl ?? src.total_pnl ?? src.total_pnl_usd ?? src.profit;
     if (typeof pnl === 'number' && Number.isFinite(pnl)) return pnl;
     return null;
@@ -403,7 +402,7 @@ export default function BacktestResultsPanel({
                         </tr>
                       </thead>
                       <tbody>
-                        {data.trades.slice(0, 120).map((t: AnyObj, idx: number) => (
+                        {data.trades.slice(0, 120).map((t, idx: number) => (
                           <tr
                             key={idx}
                             style={{
@@ -446,7 +445,7 @@ export default function BacktestResultsPanel({
                     </div>
                   ) : (
                     <ul className="space-y-1">
-                      {data.logs.slice(0, 200).map((line: any, idx: number) => (
+                      {data.logs.slice(0, 200).map((line, idx: number) => (
                         <li
                           key={idx}
                           className="rounded px-2 py-1 font-mono text-[10px]"

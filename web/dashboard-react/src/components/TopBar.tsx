@@ -10,6 +10,9 @@ interface TopBarProps {
   primaryCtaLabel: string;
   onPrimaryCta: () => void;
   primaryCtaDisabled?: boolean;
+  secondaryCtaLabel?: string;
+  onSecondaryCta?: () => void;
+  secondaryCtaDisabled?: boolean;
 }
 
 function ModeButton(props: {
@@ -51,6 +54,9 @@ export default function TopBar({
   primaryCtaLabel,
   onPrimaryCta,
   primaryCtaDisabled = false,
+  secondaryCtaLabel,
+  onSecondaryCta,
+  secondaryCtaDisabled = false,
 }: TopBarProps) {
   const [hoveredMode, setHoveredMode] = useState<Mode | null>(null);
   const [settingsHovered, setSettingsHovered] = useState(false);
@@ -130,6 +136,24 @@ export default function TopBar({
 
       {/* Right: CTA + Connection + Settings */}
       <div className="flex items-center gap-3 flex-shrink-0">
+        {/* Secondary CTA (optional) */}
+        {secondaryCtaLabel && onSecondaryCta && (
+          <button
+            onClick={onSecondaryCta}
+            disabled={secondaryCtaDisabled}
+            className="px-4 py-1.5 text-xs font-semibold rounded-lg transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              background: 'var(--surface-2)',
+              border: '1px solid var(--stroke)',
+              color: 'var(--text-2)',
+            }}
+            aria-label={secondaryCtaLabel}
+            title={secondaryCtaDisabled ? 'Action unavailable' : undefined}
+          >
+            {secondaryCtaLabel}
+          </button>
+        )}
+
         {/* Primary CTA */}
         <button
           onClick={onPrimaryCta}
