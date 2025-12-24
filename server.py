@@ -19,6 +19,9 @@ from datetime import datetime, timezone
 import math
 import time
 import numpy as np
+import requests
+import csv
+from pathlib import Path
 
 log = logging.getLogger(__name__)
 from core.backtest.engine import BacktestEngine
@@ -213,6 +216,160 @@ toni_service = ToniAIService(mode=toni_mode, api_key=toni_api_key)
 # Store last backtest context for Toni
 last_backtest_context = None
 
+# === HISTORY STORAGE HELPERS ===
+history_jobs = {}
+
+def _parse_ts(value):
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(float(value))
+        except Exception:
+            try:
+                return int(datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp())
+            except Exception:
+                return None
+    return None
+
+def _history_dir(exchange: str, symbol: str, timeframe: str) -> Path:
+    base = Path(os.getcwd()) / "data" / "history" / exchange.lower() / symbol.upper() / timeframe
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+def _history_file(exchange: str, symbol: str, timeframe: str, start_ts: int, end_ts: int) -> Path:
+    return _history_dir(exchange, symbol, timeframe) / f"{start_ts}-{end_ts}.csv"
+
+def _write_history_csv(path: Path, candles: list[dict]):
+    if not candles:
+        return
+    candles_sorted = sorted({int(c["time"]): c for c in candles if "time" in c}.values(), key=lambda x: x["time"])
+    with path.open("w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["time", "open", "high", "low", "close", "volume"])
+        for c in candles_sorted:
+            w.writerow([c.get("time"), c.get("open"), c.get("high"), c.get("low"), c.get("close"), c.get("volume")])
+
+def _load_history(exchange: str, symbol: str, timeframe: str, start_ts: int | None, end_ts: int | None) -> list[dict]:
+    dirp = _history_dir(exchange, symbol, timeframe)
+    if not dirp.exists():
+        return []
+    files = sorted(dirp.glob("*.csv"))
+    rows: list[dict] = []
+    for fp in files:
+        try:
+            parts = fp.stem.split("-")
+            if len(parts) == 2:
+                f_start = int(parts[0]); f_end = int(parts[1])
+                if start_ts and f_end < start_ts:
+                    continue
+                if end_ts and f_start > end_ts:
+                    continue
+            with fp.open() as f:
+                reader = csv.DictReader(f)
+                for r in reader:
+                    t = _parse_ts(r.get("time"))
+                    if t is None:
+                        continue
+                    if start_ts and t < start_ts:
+                        continue
+                    if end_ts and t > end_ts:
+                        continue
+                    rows.append({
+                        "time": t,
+                        "open": float(r.get("open", 0)),
+                        "high": float(r.get("high", 0)),
+                        "low": float(r.get("low", 0)),
+                        "close": float(r.get("close", 0)),
+                        "volume": float(r.get("volume", 0)),
+                    })
+        except Exception:
+            continue
+    rows = sorted({c["time"]: c for c in rows}.values(), key=lambda x: x["time"])
+    return rows
+
+def _bybit_history_page(symbol: str, timeframe: str, start_ms: int, end_ms: int, limit: int = 1000):
+    url = "https://api.bybit.com/v5/market/kline"
+    tf = timeframe.lower().strip()
+    mul = 1
+    if tf.endswith("h"):
+        mul = 60
+        tf_val = tf[:-1]
+    elif tf.endswith("d"):
+        mul = 60 * 24
+        tf_val = tf[:-1]
+    elif tf.endswith("m"):
+        mul = 1
+        tf_val = tf[:-1]
+    else:
+        tf_val = tf
+    try:
+        tf_num = int(tf_val)
+    except Exception:
+        tf_num = 1
+    interval_param = str(max(tf_num * mul, 1))
+    params = {
+        "category": "linear",
+        "symbol": symbol,
+        "interval": interval_param,
+        "limit": limit,
+        "start": start_ms,
+        "end": end_ms,
+    }
+    r = requests.get(url, params=params, timeout=10)
+    j = r.json()
+    if "result" not in j or "list" not in j["result"]:
+        raise Exception(f"bad response {j}")
+    items = j["result"]["list"]
+    items = list(reversed(items))
+    candles = []
+    for it in items:
+        try:
+            candles.append({
+                "time": int(it[0]) // 1000,
+                "open": float(it[1]),
+                "high": float(it[2]),
+                "low": float(it[3]),
+                "close": float(it[4]),
+                "volume": float(it[5]),
+            })
+        except Exception:
+            continue
+    return candles
+
+def _download_history(symbol: str, timeframe: str, start_ts: int, end_ts: int, limit: int = 1000) -> list[dict]:
+    all_candles: list[dict] = []
+    cur_start = start_ts * 1000
+    end_ms = end_ts * 1000
+    tf = timeframe.lower().strip()
+    mul = 1
+    if tf.endswith("h"):
+        mul = 60
+        tf_val = tf[:-1]
+    elif tf.endswith("d"):
+        mul = 60 * 24
+        tf_val = tf[:-1]
+    elif tf.endswith("m"):
+        mul = 1
+        tf_val = tf[:-1]
+    else:
+        tf_val = tf
+    try:
+        tf_num = int(tf_val)
+    except Exception:
+        tf_num = 1
+    step_ms = max(tf_num * mul, 1) * 60 * 1000
+    while cur_start < end_ms:
+        next_end = min(cur_start + step_ms * limit, end_ms)
+        chunk = _bybit_history_page(symbol, timeframe, cur_start, next_end, limit=limit)
+        if not chunk:
+            break
+        all_candles.extend(chunk)
+        last_ts = chunk[-1]["time"]
+        cur_start = (last_ts * 1000) + step_ms
+    return all_candles
 # === ROUTES ===
 
 
@@ -342,13 +499,26 @@ async def api_candles(
     timeframe: str = Query("15m", description="Timeframe"),
     limit: int = Query(500, description="Number of candles"),
     mode: str = Query("live", description="Mode: live or test"),
+    source: str = Query(None, description="history to read stored candles"),
+    start: int | None = Query(None, description="start ts (seconds)"),
+    end: int | None = Query(None, description="end ts (seconds)"),
 ):
     """
-    Get real market data candles from exchange or test mode.
+    Get candles from live/test or from locally stored history (source=history).
     """
     try:
+        if source == "history":
+            candles = _load_history(exchange, symbol, timeframe, start, end)
+            return {
+                "exchange": exchange,
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "mode": "history",
+                "candles": candles[:limit] if limit else candles,
+                "count": len(candles),
+            }
+
         if mode == "test":
-            # Test mode: return synthetic candles
             candles = _make_test_candles(symbol=symbol, timeframe=timeframe, limit=limit)
             return {
                 "exchange": exchange,
@@ -359,7 +529,6 @@ async def api_candles(
                 "count": len(candles),
             }
         else:
-            # Live mode: get real data from exchange
             market_service = MarketDataService()
             ohlcv_data = await market_service.get_candles(
                 exchange=exchange,
@@ -369,7 +538,6 @@ async def api_candles(
                 mode="live"
             )
             
-            # Convert OHLCV to dict format
             candles = []
             for candle in ohlcv_data:
                 candles.append({
@@ -391,7 +559,6 @@ async def api_candles(
             }
     except Exception as e:
         log.error(f"Error fetching candles: {e}")
-        # Fallback to test data on error
         candles = _make_test_candles(symbol=symbol, timeframe=timeframe, limit=limit)
         return {
             "exchange": exchange,
@@ -402,6 +569,43 @@ async def api_candles(
             "count": len(candles),
             "error": str(e),
         }
+
+
+@app.post("/api/history/pull")
+async def api_history_pull(payload: dict):
+    """
+    Pull historical candles and store on disk. Returns job_id and status.
+    """
+    job_id = str(uuid.uuid4())
+    history_jobs[job_id] = {"status": "pending"}
+    exchange = str(payload.get("exchange", "bybit"))
+    symbol = str(payload.get("symbol", "BTCUSDT"))
+    timeframe = str(payload.get("timeframe", "15m"))
+    start_ts = _parse_ts(payload.get("start"))
+    end_ts = _parse_ts(payload.get("end"))
+    if not start_ts or not end_ts:
+        history_jobs[job_id] = {"status": "error", "error": "start/end required"}
+        return history_jobs[job_id]
+
+    try:
+        candles = await asyncio.to_thread(_download_history, symbol, timeframe, start_ts, end_ts, limit=1000)
+        _write_history_csv(_history_file(exchange, symbol, timeframe, start_ts, end_ts), candles)
+        history_jobs[job_id] = {
+            "status": "done",
+            "count": len(candles),
+            "path": str(_history_file(exchange, symbol, timeframe, start_ts, end_ts)),
+        }
+    except Exception as e:
+        history_jobs[job_id] = {"status": "error", "error": str(e)}
+    return history_jobs[job_id] | {"job_id": job_id}
+
+
+@app.get("/api/history/status")
+async def api_history_status(job_id: str):
+    job = history_jobs.get(job_id)
+    if not job:
+        return {"status": "not_found"}
+    return job | {"job_id": job_id}
 
 
 @app.get("/api/selfcheck")
@@ -1504,22 +1708,38 @@ async def _api_backtest_run_sync(payload: dict):  # type: ignore
     initial_balance = float(payload.get("initial_balance", payload.get("initialBalance", 10000.0)) or 10000.0)
     interval = str(payload.get("interval") or "".join([ch for ch in timeframe if ch.isdigit()]) or "60")
     port = int(payload.get("_port", 8000))
+    source = str(payload.get("source", "")).lower()
+    start_ts = _parse_ts(payload.get("start"))
+    if start_ts is None:
+        start_ts = _parse_ts(payload.get("start_ts"))
+    end_ts = _parse_ts(payload.get("end"))
+    if end_ts is None:
+        end_ts = _parse_ts(payload.get("end_ts"))
+
+    candles_for_run = None
+    if source == "history":
+        candles_for_run = _load_history(exchange, symbol, timeframe, start_ts, end_ts)
 
     try:
-        # Prefer the real backtest engine if available (respects strategy/risk params)
-        result = backtest_engine.run(
-            symbol=symbol,
-            interval=interval,
-            strategy=strategy,
-            risk_per_trade=risk_per_trade,
-            rr_ratio=rr_ratio,
-            limit=limit,
-        )
+        result = None
+        if candles_for_run:
+            result = _bt_simulate_simple(candles_for_run, fee_bps=fee_bps, slippage_bps=sl_bps)
+        else:
+            result = backtest_engine.run(
+                symbol=symbol,
+                interval=interval,
+                strategy=strategy,
+                risk_per_trade=risk_per_trade,
+                rr_ratio=rr_ratio,
+                limit=limit,
+            )
     except Exception:
         result = None
 
     if not isinstance(result, dict):
-        candles = await _asyncio.to_thread(_bt_fetch_candles_http, port, exchange, symbol, timeframe, limit, mode)
+        candles = candles_for_run
+        if candles is None:
+            candles = await _asyncio.to_thread(_bt_fetch_candles_http, port, exchange, symbol, timeframe, limit, mode)
         result = _bt_simulate_simple(candles, fee_bps=fee_bps, slippage_bps=sl_bps)
 
     # Attach request/params for downstream consumers
@@ -1537,6 +1757,9 @@ async def _api_backtest_run_sync(payload: dict):  # type: ignore
         "feesBps": fee_bps,
         "slippageBps": sl_bps,
         "initial_balance": initial_balance,
+        "source": source,
+        "start": start_ts,
+        "end": end_ts,
     })
     result["parameters"] = params
     result["request"] = {"exchange": exchange, "symbol": symbol, "timeframe": timeframe, "mode": mode, "limit": limit}
