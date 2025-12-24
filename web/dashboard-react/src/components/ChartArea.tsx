@@ -152,11 +152,13 @@ export default function ChartArea({
     const fetchCandles = async () => {
       try {
         const base = String(apiBase || '').replace(/\/$/, '');
+        // Backend /api/candles supports live/test; map backtest -> test to avoid mixing live candles with historical trades.
+        const candlesMode = mode === 'backtest' ? 'test' : mode;
         const params = new URLSearchParams({
           symbol,
           timeframe,
           exchange,
-          mode,
+          mode: candlesMode,
         });
 
         const res = await fetch(`${base}/api/candles?${params.toString()}`, {

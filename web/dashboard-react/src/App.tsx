@@ -209,7 +209,10 @@ function App() {
       const payload: Record<string, unknown> = {
         strategy: strategy,
         symbol: symbol,
-        interval: timeframe.replace(/[^0-9]/g, '') || "60",
+        timeframe: timeframe, // send human-readable timeframe
+        interval: timeframe.replace(/[^0-9]/g, '') || "60", // keep interval for legacy compatibility
+        exchange: exchange,
+        mode,
         initial_balance: balance,
       };
 
@@ -227,12 +230,23 @@ function App() {
         return;
       }
 
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        throw new Error(`HTTP ${res.status} ${res.statusText} ${txt}`.trim());
-      }
+      let result: any = {};
 
-      const result = (await res.json().catch(() => ({}))) as any;
+      if (!res.ok) {
+        // Try to capture backend error message
+        try {
+          result = await res.json();
+        } catch {
+          const txt = await res.text().catch(() => "");
+          result = { error: txt || res.statusText || `HTTP ${res.status}` };
+        }
+        const msg = (result && (result.error || result.message || result.detail)) 
+          ? String(result.error || result.message || result.detail) 
+          : `HTTP ${res.status} ${res.statusText}`.trim();
+        throw new Error(msg || `HTTP ${res.status}`);
+      } else {
+        result = (await res.json().catch(() => ({}))) as any;
+      }
       
       // Double-check after async operations
       if (controller.signal.aborted || runVersionRef.current !== currentRunVersion) {

@@ -1303,7 +1303,29 @@ except Exception as _health_err:
 
 @app.post('/api/backtest/run')
 async def api_backtest_run_v2(request: 'Request'):
-    return await api_backtest_run(request)
+    """
+    Dashboard-friendly backtest endpoint.
+    Accepts {"symbol": "...", "tf": "15m"} or {"symbol": "...", "timeframe": "15m"}.
+    Routes to the sync MVP backtest runner to return trades/equity/summary in one call.
+    """
+    global last_backtest_context
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+
+    if not isinstance(payload, dict):
+        payload = {}
+
+    if "timeframe" not in payload and "tf" in payload:
+        payload["timeframe"] = payload.get("tf")
+
+    try:
+        result = await _api_backtest_run_sync(payload)
+        last_backtest_context = result
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
 
 @app.get('/api/backtest')
 async def api_backtest_latest_v2():
@@ -1462,19 +1484,65 @@ def _bt_find_app():
     return None
 
 async def _api_backtest_run_sync(payload: dict):  # type: ignore
-    global _last_backtest_sync_result
+    global _last_backtest_sync_result, last_backtest_context
+
+    if "timeframe" not in payload and "tf" in payload:
+        payload["timeframe"] = payload.get("tf")
+
     exchange = str(payload.get("exchange", "bybit")).lower()
     symbol = str(payload.get("symbol", "BTCUSDT"))
     timeframe = str(payload.get("timeframe", "1m"))
-    mode = str(payload.get("mode", "test"))
+    mode_raw = str(payload.get("mode", "test"))
+    # normalize: backend candles support "test"/"live"; treat "backtest" as "test"
+    mode = "test" if mode_raw.lower() == "backtest" else mode_raw
     limit = int(payload.get("limit", 400))
     fee_bps = float(payload.get("feesBps", 6.0) or 6.0)
     sl_bps = float(payload.get("slippageBps", 2.0) or 2.0)
+    strategy = payload.get("strategy", "pattern3_extreme")
+    risk_per_trade = float(payload.get("risk_per_trade", payload.get("riskPerTrade", 100.0)) or 100.0)
+    rr_ratio = float(payload.get("rr_ratio", payload.get("rrRatio", 4.0)) or 4.0)
+    initial_balance = float(payload.get("initial_balance", payload.get("initialBalance", 10000.0)) or 10000.0)
+    interval = str(payload.get("interval") or "".join([ch for ch in timeframe if ch.isdigit()]) or "60")
     port = int(payload.get("_port", 8000))
-    candles = await _asyncio.to_thread(_bt_fetch_candles_http, port, exchange, symbol, timeframe, limit, mode)
-    result = _bt_simulate_simple(candles, fee_bps=fee_bps, slippage_bps=sl_bps)
+
+    try:
+        # Prefer the real backtest engine if available (respects strategy/risk params)
+        result = backtest_engine.run(
+            symbol=symbol,
+            interval=interval,
+            strategy=strategy,
+            risk_per_trade=risk_per_trade,
+            rr_ratio=rr_ratio,
+            limit=limit,
+        )
+    except Exception:
+        result = None
+
+    if not isinstance(result, dict):
+        candles = await _asyncio.to_thread(_bt_fetch_candles_http, port, exchange, symbol, timeframe, limit, mode)
+        result = _bt_simulate_simple(candles, fee_bps=fee_bps, slippage_bps=sl_bps)
+
+    # Attach request/params for downstream consumers
+    params = dict(result.get("parameters") or {})
+    params.update({
+        "exchange": exchange,
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "interval": interval,
+        "strategy": strategy,
+        "risk_per_trade": risk_per_trade,
+        "rr_ratio": rr_ratio,
+        "limit": limit,
+        "mode": mode,
+        "feesBps": fee_bps,
+        "slippageBps": sl_bps,
+        "initial_balance": initial_balance,
+    })
+    result["parameters"] = params
     result["request"] = {"exchange": exchange, "symbol": symbol, "timeframe": timeframe, "mode": mode, "limit": limit}
+
     _last_backtest_sync_result = result
+    last_backtest_context = result
     return result
 
 def _api_backtest_latest_sync():
