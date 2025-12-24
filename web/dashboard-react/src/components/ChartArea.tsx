@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { CandlestickData, Time } from 'lightweight-charts';
 import { Mode } from '../types';
 import TradingChart from './TradingChart';
 import ChartParametersRow from './ChartParametersRow';
@@ -8,6 +9,85 @@ import BacktestResultsPanel from "./BacktestResultsPanel";
 import LiveResultsDrawer from "./LiveResultsDrawer";
 import TestResultsDrawer from "./TestResultsDrawer";
 
+type CandleLike = {
+  time?: any;
+  timestamp?: any;
+  ts?: any;
+  open?: any;
+  high?: any;
+  low?: any;
+  close?: any;
+};
+
+function toUnixSeconds(value: any): number | undefined {
+  if (value === null || value === undefined) return undefined;
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return Math.floor(value.getTime() / 1000);
+  }
+
+  if (typeof value === 'string') {
+    const asNum = Number(value);
+    if (Number.isFinite(asNum)) {
+      return asNum > 1000000000000 ? Math.floor(asNum / 1000) : Math.floor(asNum);
+    }
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed)) {
+      return Math.floor(parsed / 1000);
+    }
+    return undefined;
+  }
+
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return undefined;
+    return value > 1000000000000 ? Math.floor(value / 1000) : Math.floor(value);
+  }
+
+  return undefined;
+}
+
+function normalizeCandles(raw: any): CandlestickData<Time>[] {
+  if (!Array.isArray(raw)) return [];
+
+  const mapped: CandlestickData<Time>[] = [];
+
+  for (const c of raw) {
+    const time = toUnixSeconds((c as CandleLike)?.time ?? (c as CandleLike)?.timestamp ?? (c as CandleLike)?.ts);
+    const open = Number((c as CandleLike)?.open);
+    const high = Number((c as CandleLike)?.high);
+    const low = Number((c as CandleLike)?.low);
+    const close = Number((c as CandleLike)?.close);
+
+    if (
+      time === undefined ||
+      !Number.isFinite(open) ||
+      !Number.isFinite(high) ||
+      !Number.isFinite(low) ||
+      !Number.isFinite(close)
+    ) {
+      continue;
+    }
+
+    mapped.push({
+      time: time as Time,
+      open,
+      high,
+      low,
+      close,
+    });
+  }
+
+  mapped.sort((a, b) => (Number(a.time) || 0) - (Number(b.time) || 0));
+  return mapped;
+}
+
+function extractTrades(result: any): any[] {
+  if (!result) return [];
+  const candidates = result.trades ?? result.positions ?? result.results ?? result.payload ?? result.data;
+  if (Array.isArray(candidates)) return candidates;
+  return [];
+}
+
 // Minimal typed ML context (UI only, no contract changes)
 interface MLContext {
   mode: Mode;
@@ -16,7 +96,6 @@ interface MLContext {
 }
 
 interface ChartAreaProps {
-  backtestResult?: any;
   mode: Mode;
   symbol: string;
   exchange: string;
@@ -28,6 +107,7 @@ interface ChartAreaProps {
   onBacktestCancel?: () => void;
   backtestRunStatus?: 'idle' | 'running' | 'done' | 'error';
   backtestRunError?: string;
+  backtestResult?: any;
 }
 
 export default function ChartArea({
@@ -42,9 +122,11 @@ export default function ChartArea({
   onBacktestCancel,
   backtestRunStatus,
   backtestRunError,
+  backtestResult,
 }: ChartAreaProps) {
   const [riskFilter, setRiskFilter] = useState('All');
   const [drawerExpanded, setDrawerExpanded] = useState(false);
+  const [candles, setCandles] = useState<CandlestickData<Time>[]>([]);
   
   // Reset drawer expanded state on mode change (always collapsed by default)
   useEffect(() => {
@@ -62,6 +144,44 @@ export default function ChartArea({
     symbol,
     timeframe,
   };
+
+  // Load candles from backend whenever symbol/timeframe/mode/exchange changes
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const fetchCandles = async () => {
+      try {
+        const base = String(apiBase || '').replace(/\/$/, '');
+        const params = new URLSearchParams({
+          symbol,
+          timeframe,
+          exchange,
+          mode,
+        });
+
+        const res = await fetch(`${base}/api/candles?${params.toString()}`, {
+          signal: controller.signal,
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const json = await res.json().catch(() => ({}));
+        const list = Array.isArray(json?.candles) ? json.candles : Array.isArray(json) ? json : [];
+        setCandles(normalizeCandles(list));
+      } catch (e: any) {
+        if (controller.signal.aborted) return;
+        // On error, clear candles to avoid showing stale/mocked data
+        setCandles([]);
+      }
+    };
+
+    fetchCandles();
+    return () => controller.abort();
+  }, [apiBase, symbol, timeframe, exchange, mode]);
+
+  const chartTrades = useMemo(() => extractTrades(backtestResult), [backtestResult]);
   
   return (
     <div 
@@ -96,7 +216,7 @@ export default function ChartArea({
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
         {/* Chart always visible, takes remaining space */}
         <div className="flex-1 min-h-0 overflow-hidden">
-          <TradingChart />
+          <TradingChart data={candles} trades={chartTrades} />
         </div>
 
         {/* Shared bottom drawer wrapper (always overlay-mounted, does not affect chart height) */}

@@ -13,35 +13,6 @@ const COLOR_GOOD = '#3EF08A';
 const COLOR_BAD = '#FF5C7A';
 const COLOR_NEUTRAL = '#9AA8C7'; // Muted color for break-even/unknown
 
-// Generate mock candlestick data if none provided
-function generateMockData(count: number = 200): CandlestickData<Time>[] {
-  const data: CandlestickData<Time>[] = [];
-  let price = 2500;
-  const now = Math.floor(Date.now() / 1000);
-  const interval = 60; // 1 minute intervals
-
-  for (let i = count - 1; i >= 0; i--) {
-    const time = (now - i * interval) as Time;
-    const change = (Math.random() - 0.5) * 20;
-    const open = price;
-    const close = price + change;
-    const high = Math.max(open, close) + Math.random() * 10;
-    const low = Math.min(open, close) - Math.random() * 10;
-
-    data.push({
-      time,
-      open,
-      high,
-      low,
-      close,
-    });
-
-    price = close;
-  }
-
-  return data;
-}
-
 export default function TradingChart({ data, trades, height }: TradingChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -50,7 +21,7 @@ export default function TradingChart({ data, trades, height }: TradingChartProps
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
-    const chartData = data || generateMockData(200);
+    const chartData = data || [];
 
     // Create chart
     const chart = createChart(chartContainerRef.current, {
@@ -125,9 +96,30 @@ export default function TradingChart({ data, trades, height }: TradingChartProps
     }
 
     const normTime = (t: any) => {
-      const n = Number(t);
-      if (!Number.isFinite(n)) return undefined;
-      return n > 1000000000000 ? Math.floor(n / 1000) : n;
+      if (t === null || t === undefined) return undefined;
+
+      if (t instanceof Date && !Number.isNaN(t.getTime())) {
+        return Math.floor(t.getTime() / 1000);
+      }
+
+      if (typeof t === 'string') {
+        const asNum = Number(t);
+        if (Number.isFinite(asNum)) {
+          return asNum > 1000000000000 ? Math.floor(asNum / 1000) : Math.floor(asNum);
+        }
+        const parsed = Date.parse(t);
+        if (!Number.isNaN(parsed)) {
+          return Math.floor(parsed / 1000);
+        }
+        return undefined;
+      }
+
+      if (typeof t === 'number') {
+        if (!Number.isFinite(t)) return undefined;
+        return t > 1000000000000 ? Math.floor(t / 1000) : Math.floor(t);
+      }
+
+      return undefined;
     };
 
     const markers: any[] = [];
@@ -190,8 +182,8 @@ export default function TradingChart({ data, trades, height }: TradingChartProps
 
   // Update data when it changes
   useEffect(() => {
-    if (seriesRef.current && data) {
-      seriesRef.current.setData(data);
+    if (seriesRef.current) {
+      seriesRef.current.setData(data ?? []);
     }
   }, [data]);
 
