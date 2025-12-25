@@ -558,7 +558,7 @@ function App() {
             historyPath={historyPath || undefined}
             historyError={historyError || undefined}
             onHistoryPresetChange={applyPreset}
-            onHistoryDateChange={(which, value) => {
+            onHistoryDateChange={(which: 'start' | 'end', value: number) => {
               if (which === 'start') setHistoryStart(value);
               else setHistoryEnd(value);
               setHistoryPreset('custom');

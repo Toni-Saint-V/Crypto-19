@@ -146,7 +146,7 @@ export default function ChartArea({
   onHistoryDateChange,
   onHistoryDownload,
 
-}: ChartAreaProps) {
+  historyRowCount,}: ChartAreaProps) {
   const [riskFilter, setRiskFilter] = useState('All');
   const [drawerExpanded, setDrawerExpanded] = useState(false);
   const [candles, setCandles] = useState<CandlestickData<Time>[]>([]);
@@ -270,19 +270,18 @@ export default function ChartArea({
               runStatus={backtestRunStatus}
               runError={backtestRunError}
               onExpandedChange={setDrawerExpanded}
-historyCount={historyCount}
-historyError={historyError}
-              onHistoryPresetChange={onHistoryPresetChange}
-
               historyPreset={historyPreset}
               historyStart={historyStart}
               historyEnd={historyEnd}
               historyStatus={historyStatus}
-
+              historyCount={historyCount}
               historyPath={historyPath}
+              historyError={historyError}
+              onHistoryPresetChange={onHistoryPresetChange}
               onHistoryDateChange={onHistoryDateChange}
               onHistoryDownload={onHistoryDownload}
-            />
+            /
+              historyRowCount={historyRowCount}>
           )}
           {mode === 'live' && (
             <LiveResultsDrawer onExpandedChange={setDrawerExpanded} />
