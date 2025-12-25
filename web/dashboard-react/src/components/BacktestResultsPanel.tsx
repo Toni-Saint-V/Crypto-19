@@ -34,6 +34,16 @@ interface BacktestResultsPanelProps {
   runStatus?: RunStatus;
   runError?: string;
   onExpandedChange?: (expanded: boolean) => void;
+  historyPreset: '1Y' | '3Y' | 'custom';
+  historyStart: number;
+  historyEnd: number;
+  historyStatus: 'idle' | 'pending' | 'done' | 'error';
+  historyCount: number;
+  historyPath?: string | null;
+  historyError?: string | null;
+  onHistoryPresetChange: (preset: '1Y' | '3Y' | 'custom') => void;
+  onHistoryDateChange: (which: 'start' | 'end', value: number) => void;
+  onHistoryDownload: () => void;
 }
 
 export default function BacktestResultsPanel({ 
@@ -43,12 +53,24 @@ export default function BacktestResultsPanel({
   runStatus: externalRunStatus,
   runError: externalRunError,
   onExpandedChange,
-}: BacktestResultsPanelProps = {}) {
+  historyPreset,
+  historyStart,
+  historyEnd,
+  historyStatus,
+  historyCount,
+  historyPath,
+  historyError,
+  onHistoryPresetChange,
+  onHistoryDateChange,
+  onHistoryDownload,
+}: BacktestResultsPanelProps) {
   const [data, setData] = useState<AnyObj | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<"results" | "trades" | "logs" | "monte-carlo" | "raw">("results");
   const [focusedInputId, setFocusedInputId] = useState<string | null>(null);
   const [isButtonHovered, setIsButtonHovered] = useState(false);
+  const [customStartInput, setCustomStartInput] = useState<string>("");
+  const [customEndInput, setCustomEndInput] = useState<string>("");
   
   // Use external status if provided, otherwise internal state
   const [internalRunStatus, setInternalRunStatus] = useState<RunStatus>("idle");
@@ -63,6 +85,19 @@ export default function BacktestResultsPanel({
   }, []);
 
   const kpi = useMemo(() => pickKpi(data || {}), [data]);
+  useEffect(() => {
+    if (historyPreset === 'custom') {
+      // keep inputs in sync if external updates occur
+      if (!customStartInput && historyStart) {
+        const d = new Date(historyStart * 1000);
+        setCustomStartInput(d.toISOString().slice(0, 10));
+      }
+      if (!customEndInput && historyEnd) {
+        const d = new Date(historyEnd * 1000);
+        setCustomEndInput(d.toISOString().slice(0, 10));
+      }
+    }
+  }, [historyPreset, historyStart, historyEnd]);
   
   // Extract PnL from data (try multiple possible fields)
   const totalPnl = useMemo(() => {
@@ -90,6 +125,23 @@ export default function BacktestResultsPanel({
       onExpandedChange?.(newExpanded);
       return newExpanded;
     });
+  };
+
+  const handlePreset = (preset: '1Y' | '3Y' | 'custom') => {
+    onHistoryPresetChange(preset);
+    if (preset !== 'custom') {
+      setCustomStartInput('');
+      setCustomEndInput('');
+    }
+  };
+
+  const handleCustomInput = (which: 'start' | 'end', value: string) => {
+    if (which === 'start') setCustomStartInput(value);
+    else setCustomEndInput(value);
+    const ts = value ? Math.floor(new Date(value).getTime() / 1000) : NaN;
+    if (!Number.isNaN(ts)) {
+      onHistoryDateChange(which, ts);
+    }
   };
 
   const handleRunBacktest = async () => {
@@ -151,6 +203,56 @@ export default function BacktestResultsPanel({
 
   return (
     <div className="w-full h-full flex flex-col">
+      {/* History controls (backtest mode only) */}
+      <div className="px-4 py-3 flex flex-col gap-2 border-b border-[#1A1C22]">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] text-gray-400">History range:</span>
+          {(['1Y','3Y','custom'] as const).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => handlePreset(p)}
+              className={`px-2 py-1 text-[11px] rounded border transition-colors ${historyPreset === p ? 'bg-[#21D4B4] border-[#21D4B4] text-black font-semibold' : 'bg-transparent border-[#1A1C22] text-gray-400 hover:text-gray-200 hover:border-[#2A2C32]'}`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+        {historyPreset === 'custom' && (
+          <div className="flex items-center gap-2 flex-wrap text-[11px] text-gray-300">
+            <span>Start:</span>
+            <input
+              type="date"
+              value={customStartInput}
+              onChange={(e) => handleCustomInput('start', e.target.value)}
+              className="bg-[#0C0F15] border border-[#1A1C22] rounded px-2 py-1 text-[11px] text-gray-100 focus:outline-none focus:border-[#21D4B4]"
+            />
+            <span>End:</span>
+            <input
+              type="date"
+              value={customEndInput}
+              onChange={(e) => handleCustomInput('end', e.target.value)}
+              className="bg-[#0C0F15] border border-[#1A1C22] rounded px-2 py-1 text-[11px] text-gray-100 focus:outline-none focus:border-[#21D4B4]"
+            />
+          </div>
+        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={onHistoryDownload}
+            className="px-3 py-1.5 text-[11px] rounded border border-[#21D4B4] text-black font-semibold"
+            style={{ background: 'var(--accent-backtest)' }}
+          >
+            Download dataset
+          </button>
+          <span className="text-[11px] text-gray-400">
+            {historyStatus === 'pending' && 'Downloading...'}
+            {historyStatus === 'done' && `Ready (${historyCount} rows) ${historyPath ? `@ ${historyPath}` : ''}`}
+            {historyStatus === 'error' && `Error: ${historyError || 'failed'}`}
+            {historyStatus === 'idle' && 'Not downloaded'}
+          </span>
+        </div>
+      </div>
       {/* Collapsed header / Summary strip */}
       <div
         className="w-full flex items-center justify-between gap-3 px-4 py-2 flex-shrink-0"

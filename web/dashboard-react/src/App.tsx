@@ -52,6 +52,16 @@ function App() {
   const [backtestResult, setBacktestResult] = useState<any | null>(null);
   const [backtestError, setBacktestError] = useState<string | null>(null);
   const [backtestRunStatus, setBacktestRunStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+  const [historyPreset, setHistoryPreset] = useState<'1Y' | '3Y' | 'custom'>('1Y');
+  const [historyStart, setHistoryStart] = useState<number>(() => Math.floor((Date.now() - 365 * 24 * 3600 * 1000) / 1000));
+  const [historyEnd, setHistoryEnd] = useState<number>(() => Math.floor(Date.now() / 1000));
+  const [historyJobId, setHistoryJobId] = useState<string | null>(null);
+  void historyJobId;
+  const [historyStatus, setHistoryStatus] = useState<'idle' | 'pending' | 'done' | 'error'>('idle');
+  const [historyCount, setHistoryCount] = useState<number>(0);
+  const [historyPath, setHistoryPath] = useState<string | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const historyPollRef = useRef<number | null>(null);
   
   // Live mode state
   const [liveRunning, setLiveRunning] = useState(false);
@@ -76,6 +86,89 @@ function App() {
   const runVersionRef = useRef(0);
 
   const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://127.0.0.1:8000';
+  const historyBase = apiBase.replace(/\/$/, '');
+
+  const applyPreset = useCallback((preset: '1Y' | '3Y' | 'custom') => {
+    const now = Date.now();
+    if (preset === '1Y') {
+      setHistoryStart(Math.floor((now - 365 * 24 * 3600 * 1000) / 1000));
+      setHistoryEnd(Math.floor(now / 1000));
+    } else if (preset === '3Y') {
+      setHistoryStart(Math.floor((now - 3 * 365 * 24 * 3600 * 1000) / 1000));
+      setHistoryEnd(Math.floor(now / 1000));
+    }
+    setHistoryPreset(preset);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (historyPollRef.current) {
+        window.clearInterval(historyPollRef.current);
+      }
+    };
+  }, []);
+
+  const handleHistoryDownload = useCallback(async () => {
+    // clear previous poll
+    if (historyPollRef.current) {
+      window.clearInterval(historyPollRef.current);
+      historyPollRef.current = null;
+    }
+    setHistoryStatus('pending');
+    setHistoryError(null);
+    setHistoryCount(0);
+    setHistoryPath(null);
+    setHistoryJobId(null);
+    try {
+      const res = await fetch(`${historyBase}/api/history/pull`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          exchange,
+          symbol,
+          timeframe,
+          start: historyStart,
+          end: historyEnd,
+          category: 'linear',
+        }),
+      });
+      const body = await res.json().catch(() => ({} as any));
+      if (!res.ok || body.status === 'error') {
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      const jobId = body.job_id || body.jobId;
+      if (!jobId) {
+        throw new Error('job_id missing');
+      }
+      setHistoryJobId(jobId);
+      const poll = async () => {
+        const statusRes = await fetch(`${historyBase}/api/history/status?job_id=${encodeURIComponent(jobId)}`);
+        const statusBody = await statusRes.json().catch(() => ({}));
+        const s = statusBody.status || statusBody.state;
+        if (s === 'done') {
+          setHistoryStatus('done');
+          setHistoryCount(Number(statusBody.count || 0));
+          setHistoryPath(statusBody.path || null);
+          if (historyPollRef.current) {
+            window.clearInterval(historyPollRef.current);
+            historyPollRef.current = null;
+          }
+        } else if (s === 'error') {
+          setHistoryStatus('error');
+          setHistoryError(String(statusBody.error || 'unknown error'));
+          if (historyPollRef.current) {
+            window.clearInterval(historyPollRef.current);
+            historyPollRef.current = null;
+          }
+        }
+      };
+      await poll();
+      historyPollRef.current = window.setInterval(poll, 2000);
+    } catch (e: any) {
+      setHistoryStatus('error');
+      setHistoryError(e?.message ? String(e.message) : 'history download failed');
+    }
+  }, [historyBase, exchange, symbol, timeframe, historyStart, historyEnd]);
 
   // Mode change handler with isolation (strengthened for 10 rapid switches)
   const handleModeChange = useCallback((newMode: Mode) => {
@@ -215,6 +308,13 @@ function App() {
         mode,
         initial_balance: balance,
       };
+
+      // Only request history mode if a dataset was downloaded successfully
+      if (historyStatus === 'done' && historyCount > 0) {
+        payload.source = "history";
+        payload.start = historyStart;
+        payload.end = historyEnd;
+      }
 
       const base = String(apiBase || '').replace(/\/$/, '');
       const url = `${base}/api/backtest/run`;
@@ -450,6 +550,20 @@ function App() {
               onBacktestCancel={handleBacktestCancel}
               backtestRunStatus={backtestRunStatus}
               backtestRunError={backtestError || undefined}
+            historyPreset={historyPreset}
+            historyStart={historyStart}
+            historyEnd={historyEnd}
+            historyStatus={historyStatus}
+            historyCount={historyCount}
+            historyPath={historyPath || undefined}
+            historyError={historyError || undefined}
+            onHistoryPresetChange={applyPreset}
+            onHistoryDateChange={(which, value) => {
+              if (which === 'start') setHistoryStart(value);
+              else setHistoryEnd(value);
+              setHistoryPreset('custom');
+            }}
+            onHistoryDownload={handleHistoryDownload}
             />
           </div>
 
