@@ -7,6 +7,10 @@
     "запуск": "npm run dev",
     "проверка": "npm run verify",
     "run": "npm run dev",
-    "check": "npm run verify"
+    "check": "npm run verify",
+    "start": "npm run dev",
+    "test": "npm run verify",
+    "s": "npm run dev",
+    "v": "npm run verify"
   }
 }
