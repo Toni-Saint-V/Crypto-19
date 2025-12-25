@@ -82,3 +82,5 @@ docs/__layout_hits.txt
 docs/_scratch/
 docs/_ai_memory/
 docs/COMPLIANCE_SAMPLES/
+.pytest_cache/
+.ruff_cache/
