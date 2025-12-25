@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+pytest
+ruff
+
+httpx
+numpy
+
+requests
+
+scikit-learn
+
+PyYAML
+
+Jinja2

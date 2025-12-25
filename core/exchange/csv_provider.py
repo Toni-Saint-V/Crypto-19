@@ -4,7 +4,6 @@ Allows importing local CSV files for backtesting
 """
 
 import pandas as pd
-import os
 from typing import List, Dict, Any, Optional
 from core.exchange.exchange_provider import ExchangeProvider
 

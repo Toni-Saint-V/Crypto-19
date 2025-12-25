@@ -1,4 +1,6 @@
-import torch, torch.nn as nn, random, asyncio
+import torch
+import torch.nn as nn
+import asyncio
 
 class ConfidenceModel(nn.Module):
     def __init__(self):

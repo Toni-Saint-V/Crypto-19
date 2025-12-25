@@ -4,8 +4,6 @@ Handles model training, prediction, and online learning
 """
 
 import os
-import pandas as pd
-import numpy as np
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 import logging
@@ -198,7 +196,7 @@ class MLService:
             try:
                 metrics = self.model.get_performance_metrics()
                 info.update(metrics)
-            except:
+            except Exception:
                 pass
         
         return info

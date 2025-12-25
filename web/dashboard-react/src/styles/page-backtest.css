@@ -1,0 +1,267 @@
+/* Backtest scoped UX (ONLY when data-page="backtest") */
+#root [data-page="backtest"]{
+  --bt-border: rgba(255,255,255,0.10);
+  --bt-surface: rgba(255,255,255,0.03);
+  --bt-radius: 14px;
+}
+#root [data-page="backtest"] .bt-stack{ display:grid; gap:12px; }
+#root [data-page="backtest"] .bt-panel{
+  border:1px solid var(--bt-border);
+  border-radius:var(--bt-radius);
+  background:var(--bt-surface);
+  overflow:hidden;
+}
+#root [data-page="backtest"] .bt-panel-header{
+  padding:12px 14px;
+  border-bottom:1px solid rgba(255,255,255,0.07);
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+}
+#root [data-page="backtest"] .bt-panel-title{ font-weight:800; opacity:0.95; }
+#root [data-page="backtest"] .bt-panel-body{ padding:12px 14px; }
+
+#root [data-page="backtest"] .bt-cta{
+  border:1px solid rgba(94,234,212,0.35);
+  background:rgba(94,234,212,0.12);
+  border-radius:999px;
+  padding:10px 14px;
+  font-weight:800;
+}
+#root [data-page="backtest"] .bt-cta:hover{ background:rgba(94,234,212,0.16); }
+
+#root [data-page="backtest"] .bt-metrics{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px;
+}
+@media (max-width:1100px){ #root [data-page="backtest"] .bt-metrics{ grid-template-columns:1fr; } }
+#root [data-page="backtest"] .bt-metric{
+  border:1px solid var(--bt-border);
+  border-radius:14px;
+  background:rgba(255,255,255,0.02);
+  padding:10px 12px;
+}
+#root [data-page="backtest"] .bt-metric-label{ font-size:12px; opacity:0.70; }
+#root [data-page="backtest"] .bt-metric-value{ margin-top:6px; font-size:20px; font-weight:900; }
+
+#root [data-page="backtest"] details.bt-details{
+  border:1px solid var(--bt-border);
+  border-radius:12px;
+  background:rgba(255,255,255,0.02);
+  overflow:hidden;
+}
+#root [data-page="backtest"] details.bt-details>summary{
+  cursor:pointer; user-select:none;
+  padding:10px 12px;
+  font-weight:800; opacity:0.90;
+}
+#root [data-page="backtest"] details.bt-details[open]>summary{
+  border-bottom:1px solid rgba(255,255,255,0.07);
+}
+#root [data-page="backtest"] details.bt-details pre{
+  margin:0;
+  max-height:220px;
+  overflow:auto;
+  padding:12px 14px;
+  background:rgba(0,0,0,0.22);
+}
+
+#root [data-page="backtest"] .bt-empty{
+  border:1px dashed rgba(255,255,255,0.16);
+  border-radius:14px;
+  background:rgba(255,255,255,0.02);
+  padding:14px;
+}
+#root [data-page="backtest"] .bt-empty-title{ font-weight:900; margin-bottom:6px; }
+#root [data-page="backtest"] .bt-empty-sub{ opacity:0.75; line-height:1.35; }
+
+
+.chart-topbar {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.chart-topbar-left {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.chart-topbar-right {
+  flex: 0 0 auto;
+  width: 260px;
+  min-width: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.chart-hud-chips {
+  scrollbar-width: none;
+}
+
+.chart-hud-chips::-webkit-scrollbar {
+  display: none;
+}
+
+/* UI polish: strategy text must not overflow */
+.strategy-label,
+.strategy-chip,
+.strategy-pill,
+.strategy-select,
+[data-role="strategy"],
+[data-testid="strategy"] {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Risk input: keep compact */
+.risk-input,
+input[name*="risk" i],
+input[id*="risk" i] {
+  max-width: 140px;
+}
+
+.strategy-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.strategy-icon {
+  flex: 0 0 auto;
+  opacity: 0.9;
+}
+
+.strategy-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 190px;
+}
+
+.ml-widget {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 260px;
+  justify-content: flex-end;
+}
+
+.ml-traffic {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.ml-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  opacity: 0.25;
+  background: currentColor;
+}
+
+.ml-dot.is-green { opacity: 1; }
+.ml-dot.is-yellow { opacity: 1; }
+.ml-dot.is-red { opacity: 1; }
+
+.ml-text {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  max-width: 220px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.ml-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+
+.ml-metric {
+  opacity: 0.85;
+}
+
+.ml-muted {
+  opacity: 0.65;
+}
+
+.shimmer-line {
+  display: inline-block;
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.14) 50%, rgba(255,255,255,0.06) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Hide noisy topbar above chart (HUD + ML) */
+.chart-topbar {
+  display: none !important;
+}
+
+/* Backtest runbar */
+.bt-runbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.04);
+  margin-bottom: 8px;
+}
+
+.bt-runbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  cursor: pointer;
+}
+
+.bt-runbtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.bt-runstatus {
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bt-result-mini {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.bt-result-title {
+  opacity: 0.85;
+  margin-bottom: 6px;
+}
+
+.bt-result-pre {
+  max-height: 180px;
+  overflow: auto;
+  margin: 0;
+}

@@ -1,0 +1,30 @@
+# Dashboard checklist (source of truth)
+
+## P0 Core
+- [x] App boots locally with one command
+- [ ] UI loads without console errors
+- [x] Core routes wired (candles/trades/equity/metrics)
+- [x] Backtest engine runs end-to-end (baseline strategy)
+- [x] Data pipeline stable (fetch/cache/resample)
+- [x] Deterministic runs (seed, reproducible results)
+- [x] Error handling + user-facing messages
+- [ ] Config system (env + defaults + validation)
+
+## P1 Quality
+- [x] Local verify script (compile/lint/type/test if available)
+- [x] API smoke test returns 200 for key endpoints
+- [x] Autoscan pinned doc link (docs/AUTOSCAN.md)
+- [x] Pytest warning suppressed (starlette multipart)
+- [x] Logging structured (levels, request ids)
+- [ ] Tests: unit coverage for core modules
+- [x] CI pipeline (lint/test/smoke) runs on PR
+- [ ] Formatting + lint rules enforced
+
+## P2 Product
+- [ ] UI redesign applied (layout, typography, spacing)
+- [ ] Performance pass (slow endpoints, caching)
+- [ ] ML/AI module integrated (score endpoint + feature pipeline)
+- [ ] Metrics & charts validated
+- [ ] Export/report (csv/json) works
+- [ ] Docs: setup, run, architecture
+- [ ] Release/deploy instructions

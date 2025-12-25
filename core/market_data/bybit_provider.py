@@ -41,7 +41,7 @@ class BybitMarketDataProvider(MarketDataProvider):
                     t = int(float(c[0]))
                     o = float(c[1])
                     h = float(c[2])
-                    l = float(c[3])
+                    low = float(c[3])
                     cl = float(c[4])
                     v = float(c[5])
 
@@ -50,7 +50,7 @@ class BybitMarketDataProvider(MarketDataProvider):
                     t = int(float(c.get("time") or c.get("timestamp") or c.get("t")))
                     o = float(c.get("open") or c.get("o"))
                     h = float(c.get("high") or c.get("h"))
-                    l = float(c.get("low") or c.get("l"))
+                    low = float(c.get("low") or c.get('low'))
                     cl = float(c.get("close") or c.get("c"))
                     v = float(c.get("volume") or c.get("v") or 0)
 
@@ -63,7 +63,7 @@ class BybitMarketDataProvider(MarketDataProvider):
                         time=t,
                         open=o,
                         high=h,
-                        low=l,
+                        low=low,
                         close=cl,
                         volume=max(0.0, v),
                     )

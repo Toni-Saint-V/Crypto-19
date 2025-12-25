@@ -1,264 +1,257 @@
-"""
-Enhanced Backtest Engine
-Supports multiple strategies, risk/reward calculations, and comprehensive metrics
-"""
+from __future__ import annotations
 
-import pandas as pd
-import numpy as np
-from typing import Dict, List, Optional, Any
-from datetime import datetime
-from core.backtest.loader import load_dataset
-from core.backtest.diagnostics import diagnose
-from core.risk.risk_manager import RiskManager, RiskLimits
-import logging
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
 
-log = logging.getLogger(__name__)
+from .data import Candle
+
+
+@dataclass
+class Trade:
+    entry_ts: int
+    exit_ts: int
+    entry_price: float
+    exit_price: float
+    qty: float
+    entry_fee: float
+    exit_fee: float
+    pnl: float
+    pnl_pct: float
+
+
+def run_backtest(
+    candles: List[Candle],
+    signals: List[int],
+    initial_balance: float,
+    fee_rate: float,
+    slippage: float,
+) -> Dict[str, Any]:
+    if not candles:
+        raise RuntimeError("No candles")
+    if len(signals) != len(candles):
+        raise RuntimeError("signals length mismatch candles length")
+
+    cash = float(initial_balance)
+    position_qty = 0.0
+    entry_price = 0.0
+    entry_ts = 0
+    entry_fee = 0.0
+
+    equity_curve: List[Tuple[int, float]] = []
+    trades: List[Trade] = []
+
+    fr = float(fee_rate)
+    sl = float(slippage)
+
+    def fee(amount: float) -> float:
+        return abs(float(amount)) * fr
+
+    def _buy(price_close: float, ts_i: int) -> None:
+        nonlocal cash, position_qty, entry_price, entry_ts, entry_fee
+        if position_qty != 0.0:
+            return
+        buy_price = float(price_close) * (1.0 + sl)
+        if buy_price <= 0.0:
+            return
+
+        # fee-aware sizing with float-safe adjustment
+        denom = buy_price * (1.0 + fr)
+        qty = (cash / denom) if denom > 0.0 else 0.0
+        if qty <= 0.0:
+            return
+
+        cost = qty * buy_price
+        f = fee(cost)
+        total = cost + f
+
+        if total > cash and total > 0.0:
+            # scale down slightly to avoid epsilon overshoot
+            scale = (cash / total) * (1.0 - 1e-9)
+            qty *= scale
+            cost = qty * buy_price
+            f = fee(cost)
+            total = cost + f
+
+        if qty > 0.0 and total <= (cash + 1e-6):
+            cash -= total
+            position_qty = qty
+            entry_price = buy_price
+            entry_ts = int(ts_i)
+            entry_fee = f
+
+    def _sell(price_close: float, ts_i: int) -> None:
+        nonlocal cash, position_qty, entry_price, entry_ts, entry_fee
+        if position_qty <= 0.0:
+            return
+        sell_price = float(price_close) * (1.0 - sl)
+        proceeds = position_qty * sell_price
+        f = fee(proceeds)
+        cash += (proceeds - f)
+
+        pnl = (sell_price - entry_price) * position_qty - (entry_fee + f)
+        pnl_pct = (sell_price / entry_price - 1.0) if entry_price > 0.0 else 0.0
+
+        trades.append(
+            Trade(
+                entry_ts=int(entry_ts),
+                exit_ts=int(ts_i),
+                entry_price=float(entry_price),
+                exit_price=float(sell_price),
+                qty=float(position_qty),
+                entry_fee=float(entry_fee),
+                exit_fee=float(f),
+                pnl=float(pnl),
+                pnl_pct=float(pnl_pct),
+            )
+        )
+
+        position_qty = 0.0
+        entry_price = 0.0
+        entry_ts = 0
+        entry_fee = 0.0
+
+    for i, c in enumerate(candles):
+        price = float(c.close)
+        sig = int(signals[i])
+
+        if sig > 0:
+            _buy(price, int(c.ts))
+        elif sig < 0:
+            _sell(price, int(c.ts))
+
+        equity_curve.append((int(c.ts), float(cash + position_qty * price)))
+
+    # forced close at end if still holding
+    if position_qty > 0.0:
+        last = candles[-1]
+        _sell(float(last.close), int(last.ts))
+        equity_curve[-1] = (int(last.ts), float(cash))
+
+    metrics = compute_metrics(equity_curve, trades, float(initial_balance))
+    return {
+        "equity_curve": [{"ts": ts, "equity": eq} for ts, eq in equity_curve],
+        "trades": [t.__dict__ for t in trades],
+        "metrics": metrics,
+    }
+
+
+def compute_metrics(
+    equity_curve: List[Tuple[int, float]],
+    trades: List[Trade],
+    initial_balance: float,
+) -> Dict[str, Any]:
+    eq = [v for _, v in equity_curve]
+    if not eq:
+        return {
+            "initial_balance": float(initial_balance),
+            "final_balance": float(initial_balance),
+            "total_return": 0.0,
+            "max_drawdown": 0.0,
+            "trades": 0,
+            "win_rate": 0.0,
+        }
+
+    total_return = (eq[-1] / float(initial_balance) - 1.0) if initial_balance > 0 else 0.0
+
+    peak = eq[0]
+    max_dd = 0.0
+    for v in eq:
+        if v > peak:
+            peak = v
+        dd = (v / peak - 1.0) if peak > 0 else 0.0
+        if dd < max_dd:
+            max_dd = dd
+
+    wins = sum(1 for t in trades if t.pnl > 0)
+    win_rate = (wins / len(trades)) if trades else 0.0
+
+    return {
+        "initial_balance": float(initial_balance),
+        "final_balance": float(eq[-1]),
+        "total_return": float(total_return),
+        "max_drawdown": float(max_dd),
+        "trades": int(len(trades)),
+        "win_rate": float(win_rate),
+    }
 
 
 class BacktestEngine:
-    """Enhanced backtest engine with strategy support"""
-    
-    def __init__(self, risk_limits: Optional[RiskLimits] = None):
-        self.strategies = {}
-        self.risk_manager = RiskManager(limits=risk_limits)
-        self._register_strategies()
-    
-    def _register_strategies(self):
-        """Register available strategies - only implemented ones"""
-        try:
-            from strategies.pattern3_extreme import pattern3_extreme
-            self.strategies['pattern3_extreme'] = {
-                'function': pattern3_extreme,
-                'name': 'Three-Candle Swing Pattern with Extremum',
-                'description': 'Detects three-candle structure with swing-low, red pierce, and green engulfing reversal',
-                'available': True
-            }
-        except ImportError as e:
-            log.warning(f"Could not import pattern3_extreme strategy: {e}")
-        
-        # Register Momentum ML v2 (beta)
-        try:
-            from strategies.momentum_ml_v2 import momentum_ml_v2
-            self.strategies['momentum_ml_v2'] = {
-                'function': momentum_ml_v2,
-                'name': 'Momentum ML v2 (Beta)',
-                'description': 'Momentum-based strategy using RSI and moving averages. Analyzes price momentum with technical indicators.',
-                'available': True
-            }
-        except ImportError as e:
-            log.warning(f"Could not import momentum_ml_v2 strategy: {e}")
-    
+    def __init__(self, risk_limits=None, **kwargs) -> None:
+        self.risk_limits = risk_limits
+        self.kwargs = dict(kwargs)
+
     def run(
         self,
-        symbol: str = "BTCUSDT",
-        interval: str = "15m",
-        strategy: str = "pattern3_extreme",
-        risk_per_trade: float = 100.0,
-        rr_ratio: float = 4.0,
-        limit: int = 500
+        candles=None,
+        signals=None,
+        symbol: Optional[str] = None,
+        timeframe: Optional[str] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        strategy: str = "buy_and_hold",
+        params: Optional[Dict[str, Any]] = None,
+        initial_balance: float = 1000.0,
+        fee_rate: float = 0.0,
+        slippage: float = 0.0,
+        **kwargs,
     ) -> Dict[str, Any]:
-        """
-        Run backtest with specified strategy and parameters.
-        
-        Args:
-            symbol: Trading pair symbol
-            interval: Timeframe interval
-            strategy: Strategy name
-            risk_per_trade: Risk amount in USD per trade
-            rr_ratio: Risk/Reward ratio
-            limit: Number of candles to load
-        
-        Returns:
-            Dictionary with trades, summary, and metrics
-        """
-        # Load data
-        data = load_dataset(symbol, interval, limit)
-        
-        if not data or len(data) < 4:
-            return {
-                "error": "Insufficient data",
-                "symbol": symbol,
-                "strategy": strategy,
-                "timeframe": interval,
-                "trades": [],
-                "summary": {}
-            }
-        
-        # Convert to DataFrame
-        df = pd.DataFrame(data)
-        
-        # Ensure required columns exist
-        if 'volume' not in df.columns:
-            df['volume'] = 0.0
-        
-        # Get strategy function
-        if strategy not in self.strategies:
-            return {
-                "error": f"Strategy '{strategy}' not found",
-                "available_strategies": list(self.strategies.keys())
-            }
-        
-        strategy_func = self.strategies[strategy]['function']
-        if strategy_func is None:
-            return {
-                "error": f"Strategy '{strategy}' is not yet implemented"
-            }
-        
-        # Run strategy
-        try:
-            trades = strategy_func(df, risk_per_trade=risk_per_trade, rr_ratio=rr_ratio)
-        except Exception as e:
-            log.error(f"Error running strategy {strategy}: {e}")
-            return {
-                "error": str(e),
-                "symbol": symbol,
-                "strategy": strategy,
-                "timeframe": interval
-            }
-        
-        # Validate trades and enforce stop loss
-        validated_trades = []
-        for trade in trades:
-            # Validate stop loss
-            entry = trade.get('entry_price', 0)
-            stop = trade.get('stop', None)
-            direction = trade.get('direction', 'long')
-            
-            is_valid, final_stop, reason = self.risk_manager.validate_stop_loss(
-                entry, stop, direction
+        # FIX_BUG3_SYMBOL_TF_GUARD
+        # Ensure symbol/timeframe are never None in result metadata when candles/signals are precomputed.
+        if symbol is None or timeframe is None:
+            _sym = symbol
+            _tf = timeframe
+            if candles:
+                c0 = candles[0]
+                if _sym is None:
+                    if isinstance(c0, dict):
+                        for k in ("symbol", "pair", "market"):
+                            v = c0.get(k)
+                            if v:
+                                _sym = v
+                                break
+                    else:
+                        _sym = getattr(c0, "symbol", None) or getattr(c0, "pair", None) or getattr(c0, "market", None)
+                if _tf is None:
+                    if isinstance(c0, dict):
+                        for k in ("timeframe", "tf", "interval"):
+                            v = c0.get(k)
+                            if v:
+                                _tf = v
+                                break
+                    else:
+                        _tf = getattr(c0, "timeframe", None) or getattr(c0, "tf", None) or getattr(c0, "interval", None)
+            if _sym is None:
+                _sym = getattr(self, "symbol", None) or getattr(self, "default_symbol", None)
+            if _tf is None:
+                _tf = getattr(self, "timeframe", None) or getattr(self, "default_timeframe", None)
+            if _sym is None or _tf is None:
+                raise ValueError("BacktestEngine.run requires symbol and timeframe (provide args or ensure candles include them).")
+            symbol = _sym
+            timeframe = _tf
+
+        if candles is None or signals is None:
+            if not symbol or not timeframe:
+                raise TypeError("BacktestEngine.run requires either (candles, signals) or (symbol, timeframe)")
+            from core.backtest.data import load_candles
+            from core.backtest.strategies import get_strategy
+
+            p = params or {}
+            candles = load_candles(
+                symbol=str(symbol),
+                timeframe=str(timeframe),
+                start=start,
+                end=end,
+                limit=int(p.get("limit", 5000)),
             )
-            
-            if not is_valid:
-                log.warning(f"Trade rejected: {reason}. Entry: {entry}, Stop: {stop}")
-                continue  # Skip invalid trades
-            
-            # Update trade with validated stop loss
-            trade['stop'] = final_stop
-            validated_trades.append(trade)
-        
-        # Calculate summary metrics
-        summary = self._calculate_summary(validated_trades, risk_per_trade)
-        
-        # Update risk manager with backtest results
-        if validated_trades:
-            initial_capital = 10000.0
-            final_capital = initial_capital + summary.get('total_pnl_usd', 0)
-            self.risk_manager.update_capital(final_capital)
-        
-        # Get risk status
-        risk_status = self.risk_manager.get_risk_status()
-        
-        return {
-            "symbol": symbol,
-            "strategy": strategy,
-            "timeframe": interval,
-            "trades": validated_trades,
-            "summary": summary,
-            "risk_status": risk_status,
-            "trades_rejected": len(trades) - len(validated_trades)
-        }
-    
-    def _calculate_summary(self, trades: List[Dict], risk_per_trade: float) -> Dict[str, Any]:
-        """Calculate backtest summary metrics"""
-        if not trades:
-            return {
-                "total_trades": 0,
-                "winrate": 0.0,
-                "avg_R": 0.0,
-                "pnl_%": 0.0,
-                "sharpe": 0.0,
-                "max_dd": 0.0,
-                "total_pnl_usd": 0.0
-            }
-        
-        # Calculate basic metrics
-        total_trades = len(trades)
-        winning_trades = [t for t in trades if t.get('result_R', 0) > 0]
-        losing_trades = [t for t in trades if t.get('result_R', 0) <= 0]
-        
-        winrate = (len(winning_trades) / total_trades * 100) if total_trades > 0 else 0.0
-        
-        # Calculate R-based metrics
-        r_values = [t.get('result_R', 0) for t in trades]
-        avg_R = np.mean(r_values) if r_values else 0.0
-        
-        # Calculate PnL
-        total_pnl_usd = sum([t.get('result_R', 0) * risk_per_trade for t in trades])
-        initial_capital = 10000.0  # Default starting capital
-        pnl_pct = (total_pnl_usd / initial_capital * 100) if initial_capital > 0 else 0.0
-        
-        # Calculate equity curve for drawdown
-        equity_curve = [initial_capital]
-        for trade in trades:
-            pnl = trade.get('result_R', 0) * risk_per_trade
-            equity_curve.append(equity_curve[-1] + pnl)
-        
-        # Calculate max drawdown
-        peak = initial_capital
-        max_dd = 0.0
-        for equity in equity_curve:
-            if equity > peak:
-                peak = equity
-            drawdown = ((peak - equity) / peak * 100) if peak > 0 else 0.0
-            if drawdown > max_dd:
-                max_dd = drawdown
-        
-        # Calculate Sharpe ratio (simplified)
-        if len(r_values) > 1:
-            returns = np.array(r_values)
-            sharpe = (np.mean(returns) / np.std(returns) * np.sqrt(252)) if np.std(returns) > 0 else 0.0
-        else:
-            sharpe = 0.0
-        
-        return {
-            "total_trades": total_trades,
-            "winrate": round(winrate, 1),
-            "avg_R": round(avg_R, 2),
-            "pnl_%": round(pnl_pct, 2),
-            "sharpe": round(sharpe, 2),
-            "max_dd": round(max_dd, 2),
-            "total_pnl_usd": round(total_pnl_usd, 2),
-            "winning_trades": len(winning_trades),
-            "losing_trades": len(losing_trades)
-        }
-    
-    def summary(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Aggregate summary from multiple strategy backtests.
-        
-        Args:
-            results: List of backtest result dictionaries
-        
-        Returns:
-            Aggregated summary with comparison metrics
-        """
-        if not results:
-            return {"error": "No results provided"}
-        
-        summary_data = []
-        for result in results:
-            if 'summary' in result and 'error' not in result:
-                summary_data.append({
-                    'strategy': result.get('strategy', 'unknown'),
-                    'symbol': result.get('symbol', 'unknown'),
-                    'timeframe': result.get('timeframe', 'unknown'),
-                    **result.get('summary', {})
-                })
-        
-        return {
-            "strategies": summary_data,
-            "best_strategy": max(summary_data, key=lambda x: x.get('pnl_%', 0)) if summary_data else None,
-            "total_strategies": len(summary_data)
-        }
-    
-    def get_available_strategies(self) -> Dict[str, Dict[str, Any]]:
-        """Get list of available strategies with descriptions - only returns implemented strategies"""
-        return {
-            name: {
-                'name': info['name'],
-                'description': info['description'],
-                'available': info.get('available', info['function'] is not None)
-            }
-            for name, info in self.strategies.items()
-            if info.get('function') is not None or info.get('available', False)
-        }
+            strat = get_strategy(strategy)
+            signals = strat(candles, p)
+
+        out = run_backtest(
+            candles=candles,
+            signals=signals,
+            initial_balance=float(initial_balance),
+            fee_rate=float(fee_rate),
+            slippage=float(slippage),
+        )
+        out["meta"] = {"symbol": symbol, "timeframe": timeframe, "strategy": strategy, "params": params or {}}
+        return out

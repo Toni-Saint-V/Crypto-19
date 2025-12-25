@@ -14,11 +14,14 @@ import json
 import random
 import os
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from datetime import datetime, timezone
 import math
 import time
 import numpy as np
+import requests
+import csv
+from pathlib import Path
 
 log = logging.getLogger(__name__)
 from core.backtest.engine import BacktestEngine
@@ -32,6 +35,76 @@ import yaml
 
 # === FASTAPI INITIALIZATION ===
 app = FastAPI(title="CryptoBot Pro — Neural Dashboard")
+
+# === APP_OBSERVABILITY_START ===
+import logging
+import uuid
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+def _setup_logging() -> None:
+    level = os.getenv('LOG_LEVEL', 'info').upper()
+    root = logging.getLogger()
+    if not root.handlers:
+        logging.basicConfig(
+            level=level,
+            format='%(asctime)s %(levelname)s %(name)s %(message)s',
+        )
+    else:
+        root.setLevel(level)
+
+_setup_logging()
+logger = logging.getLogger('app')
+
+class RequestIdMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        rid = request.headers.get('x-request-id') or str(uuid.uuid4())
+        request.state.request_id = rid
+        t0 = time.time()
+        try:
+            response = await call_next(request)
+        except Exception:
+            logger.exception('unhandled_error', extra={'request_id': rid, 'path': request.url.path, 'method': request.method})
+            raise
+        dt_ms = int((time.time() - t0) * 1000)
+        response.headers['x-request-id'] = rid
+        response.headers['x-response-time-ms'] = str(dt_ms)
+        logger.info('request', extra={'request_id': rid, 'path': request.url.path, 'method': request.method, 'status': getattr(response, 'status_code', None), 'duration_ms': dt_ms})
+        return response
+
+app.add_middleware(RequestIdMiddleware)
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    rid = getattr(request.state, 'request_id', None)
+    detail = getattr(exc, 'detail', 'HTTP error')
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={'error': {'message': detail, 'code': 'http_error', 'request_id': rid}},
+    )
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    rid = getattr(request.state, 'request_id', None)
+    logger.exception('unhandled_exception', extra={'request_id': rid})
+    return JSONResponse(
+        status_code=500,
+        content={'error': {'message': 'Internal server error', 'code': 'internal_error', 'request_id': rid}},
+    )
+# === APP_OBSERVABILITY_END ===
+
+# === BACKTEST ROUTER (AUTO) ===
+from core.backtest.api import router as backtest_router
+import os as _os
+if _os.getenv('ENABLE_ASYNC_BACKTEST_ROUTER','0') == '1':
+    app.include_router(backtest_router)
+else:
+    # Disabled by default to avoid overriding sync /api/backtest/run used by the dashboard
+    pass
+
+# === /BACKTEST ROUTER (AUTO) ===
+
+
 
 # === CORS MIDDLEWARE ===
 app.add_middleware(
@@ -143,6 +216,160 @@ toni_service = ToniAIService(mode=toni_mode, api_key=toni_api_key)
 # Store last backtest context for Toni
 last_backtest_context = None
 
+# === HISTORY STORAGE HELPERS ===
+history_jobs = {}
+
+def _parse_ts(value):
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(float(value))
+        except Exception:
+            try:
+                return int(datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp())
+            except Exception:
+                return None
+    return None
+
+def _history_dir(exchange: str, symbol: str, timeframe: str) -> Path:
+    base = Path(os.getcwd()) / "data" / "history" / exchange.lower() / symbol.upper() / timeframe
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+def _history_file(exchange: str, symbol: str, timeframe: str, start_ts: int, end_ts: int) -> Path:
+    return _history_dir(exchange, symbol, timeframe) / f"{start_ts}-{end_ts}.csv"
+
+def _write_history_csv(path: Path, candles: list[dict]):
+    if not candles:
+        return
+    candles_sorted = sorted({int(c["time"]): c for c in candles if "time" in c}.values(), key=lambda x: x["time"])
+    with path.open("w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["time", "open", "high", "low", "close", "volume"])
+        for c in candles_sorted:
+            w.writerow([c.get("time"), c.get("open"), c.get("high"), c.get("low"), c.get("close"), c.get("volume")])
+
+def _load_history(exchange: str, symbol: str, timeframe: str, start_ts: int | None, end_ts: int | None) -> list[dict]:
+    dirp = _history_dir(exchange, symbol, timeframe)
+    if not dirp.exists():
+        return []
+    files = sorted(dirp.glob("*.csv"))
+    rows: list[dict] = []
+    for fp in files:
+        try:
+            parts = fp.stem.split("-")
+            if len(parts) == 2:
+                f_start = int(parts[0])
+                f_end = int(parts[1])
+                if start_ts and f_end < start_ts:
+                    continue
+                if end_ts and f_start > end_ts:
+                    continue
+            with fp.open() as f:
+                reader = csv.DictReader(f)
+                for r in reader:
+                    t = _parse_ts(r.get("time"))
+                    if t is None:
+                        continue
+                    if start_ts and t < start_ts:
+                        continue
+                    if end_ts and t > end_ts:
+                        continue
+                    rows.append({
+                        "time": t,
+                        "open": float(r.get("open", 0)),
+                        "high": float(r.get("high", 0)),
+                        "low": float(r.get("low", 0)),
+                        "close": float(r.get("close", 0)),
+                        "volume": float(r.get("volume", 0)),
+                    })
+        except Exception:
+            continue
+    rows = sorted({c["time"]: c for c in rows}.values(), key=lambda x: x["time"])
+    return rows
+
+def _map_bybit_interval(tf: str) -> str:
+    tf = tf.lower().strip()
+    if tf.endswith("m"):
+        return tf[:-1] or "1"
+    if tf.endswith("h"):
+        return str(int(tf[:-1] or "1") * 60)
+    if tf.endswith("d"):
+        return "D"
+    if tf.endswith("w"):
+        return "W"
+    if tf.endswith("mth") or tf == "m":
+        return "M"
+    return tf
+
+def _bybit_history_page(symbol: str, timeframe: str, start_ms: int, end_ms: int, limit: int = 1000, category: str = "linear"):
+    url = "https://api.bybit.com/v5/market/kline"
+    interval_param = _map_bybit_interval(timeframe)
+    params = {
+        "category": category,
+        "symbol": symbol,
+        "interval": interval_param,
+        "limit": limit,
+        "start": start_ms,
+        "end": end_ms,
+    }
+    r = requests.get(url, params=params, timeout=10)
+    if r.status_code != 200:
+        raise Exception(f"http_error {r.status_code} url={url} params={params}")
+    j = r.json()
+    if j.get("retCode") != 0 or "result" not in j or "list" not in j["result"]:
+        raise Exception(f"bybit_error retCode={j.get('retCode')} msg={j.get('retMsg')} url={url} params={params}")
+    items = j["result"]["list"]
+    items = list(reversed(items))
+    candles = []
+    for it in items:
+        try:
+            candles.append({
+                "time": int(it[0]) // 1000,
+                "open": float(it[1]),
+                "high": float(it[2]),
+                "low": float(it[3]),
+                "close": float(it[4]),
+                "volume": float(it[5]),
+            })
+        except Exception:
+            continue
+    return candles
+
+def _download_history(symbol: str, timeframe: str, start_ts: int, end_ts: int, limit: int = 1000, category: str = "linear") -> list[dict]:
+    all_candles: list[dict] = []
+    cur_start = start_ts * 1000
+    end_ms = end_ts * 1000
+    tf = timeframe.lower().strip()
+    mul = 1
+    if tf.endswith("h"):
+        mul = 60
+        tf_val = tf[:-1]
+    elif tf.endswith("d"):
+        mul = 60 * 24
+        tf_val = tf[:-1]
+    elif tf.endswith("m"):
+        mul = 1
+        tf_val = tf[:-1]
+    else:
+        tf_val = tf
+    try:
+        tf_num = int(tf_val)
+    except Exception:
+        tf_num = 1
+    step_ms = max(tf_num * mul, 1) * 60 * 1000
+    while cur_start < end_ms:
+        next_end = min(cur_start + step_ms * limit, end_ms)
+        chunk = _bybit_history_page(symbol, timeframe, cur_start, next_end, limit=limit, category=category)
+        if not chunk:
+            break
+        all_candles.extend(chunk)
+        last_ts = chunk[-1]["time"]
+        cur_start = (last_ts * 1000) + step_ms
+    return all_candles
 # === ROUTES ===
 
 
@@ -272,13 +499,26 @@ async def api_candles(
     timeframe: str = Query("15m", description="Timeframe"),
     limit: int = Query(500, description="Number of candles"),
     mode: str = Query("live", description="Mode: live or test"),
+    source: str = Query(None, description="history to read stored candles"),
+    start: int | None = Query(None, description="start ts (seconds)"),
+    end: int | None = Query(None, description="end ts (seconds)"),
 ):
     """
-    Get real market data candles from exchange or test mode.
+    Get candles from live/test or from locally stored history (source=history).
     """
     try:
+        if source == "history":
+            candles = _load_history(exchange, symbol, timeframe, start, end)
+            return {
+                "exchange": exchange,
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "mode": "history",
+                "candles": candles[:limit] if limit else candles,
+                "count": len(candles),
+            }
+
         if mode == "test":
-            # Test mode: return synthetic candles
             candles = _make_test_candles(symbol=symbol, timeframe=timeframe, limit=limit)
             return {
                 "exchange": exchange,
@@ -289,7 +529,6 @@ async def api_candles(
                 "count": len(candles),
             }
         else:
-            # Live mode: get real data from exchange
             market_service = MarketDataService()
             ohlcv_data = await market_service.get_candles(
                 exchange=exchange,
@@ -299,7 +538,6 @@ async def api_candles(
                 mode="live"
             )
             
-            # Convert OHLCV to dict format
             candles = []
             for candle in ohlcv_data:
                 candles.append({
@@ -321,7 +559,6 @@ async def api_candles(
             }
     except Exception as e:
         log.error(f"Error fetching candles: {e}")
-        # Fallback to test data on error
         candles = _make_test_candles(symbol=symbol, timeframe=timeframe, limit=limit)
         return {
             "exchange": exchange,
@@ -332,6 +569,49 @@ async def api_candles(
             "count": len(candles),
             "error": str(e),
         }
+
+
+@app.post("/api/history/pull")
+async def api_history_pull(payload: dict):
+    """
+    Pull historical candles and store on disk. Returns job_id and status.
+    """
+    job_id = str(uuid.uuid4())
+    history_jobs[job_id] = {"status": "pending"}
+    exchange = str(payload.get("exchange", "bybit"))
+    symbol = str(payload.get("symbol", "BTCUSDT"))
+    timeframe = str(payload.get("timeframe", "15m"))
+    category = str(payload.get("category", "linear"))
+    start_ts = _parse_ts(payload.get("start"))
+    if start_ts is None:
+        start_ts = _parse_ts(payload.get("start_ts"))
+    end_ts = _parse_ts(payload.get("end"))
+    if end_ts is None:
+        end_ts = _parse_ts(payload.get("end_ts"))
+    if start_ts is None or end_ts is None:
+        history_jobs[job_id] = {"status": "error", "error": "start/end required", "job_id": job_id}
+        return history_jobs[job_id]
+
+    try:
+        candles = await asyncio.to_thread(_download_history, symbol, timeframe, start_ts, end_ts, limit=1000, category=category)
+        _write_history_csv(_history_file(exchange, symbol, timeframe, start_ts, end_ts), candles)
+        history_jobs[job_id] = {
+            "status": "done",
+            "count": len(candles),
+            "path": str(_history_file(exchange, symbol, timeframe, start_ts, end_ts)),
+            "job_id": job_id,
+        }
+    except Exception as e:
+        history_jobs[job_id] = {"status": "error", "error": str(e), "job_id": job_id}
+    return history_jobs[job_id]
+
+
+@app.get("/api/history/status")
+async def api_history_status(job_id: str):
+    job = history_jobs.get(job_id)
+    if not job:
+        return {"status": "not_found"}
+    return job | {"job_id": job_id}
 
 
 @app.get("/api/selfcheck")
@@ -387,7 +667,6 @@ async def api_ai_predict(
         current_price = recent_prices[-1]
         
         # Simple momentum-based prediction
-        price_change_24h = ((current_price - recent_prices[0]) / recent_prices[0]) * 100 if recent_prices[0] > 0 else 0
         
         # Calculate support and resistance
         highs = [float(c.high) for c in ohlcv_data[-50:]]
@@ -483,67 +762,195 @@ async def api_ai_chat(request: Request):
             "error": str(e)
         }, status_code=500)
 
-@app.post("/api/backtest/run")
-async def api_backtest_run(request: Request):
+@app.post("/api/backtest_legacy/run")
+async def api_backtest_run(request: "Request"):
     """
     Run backtest with specified parameters.
     Accepts JSON body or query parameters.
     Returns trades, equity curve, and performance metrics.
     """
+    global last_backtest_context
     try:
-        # Try to get parameters from JSON body first
+        body = {}
         try:
             body = await request.json()
-            symbol = body.get("symbol", "BTCUSDT")
-            interval = body.get("interval", "60")
-            strategy = body.get("strategy", "pattern3_extreme")
-            risk_per_trade = float(body.get("risk_per_trade", 100.0))
-            rr_ratio = float(body.get("rr_ratio", 4.0))
-            limit = int(body.get("limit", 500))
-        except (ValueError, KeyError, TypeError) as json_error:
-            # Fallback to query parameters if JSON parsing fails
-            log.debug(f"JSON body parsing failed, using query params: {json_error}")
-            symbol = request.query_params.get("symbol", "BTCUSDT")
-            interval = request.query_params.get("interval", "60")
-            strategy = request.query_params.get("strategy", "pattern3_extreme")
-            risk_per_trade = float(request.query_params.get("risk_per_trade", 100.0))
-            rr_ratio = float(request.query_params.get("rr_ratio", 4.0))
-            limit = int(request.query_params.get("limit", 500))
-        
+            if not isinstance(body, dict):
+                body = {}
+        except Exception:
+            body = {}
+
+        def q(name, default=None):
+            v = request.query_params.get(name)
+            return v if v is not None else default
+
+        start_ts = body.get("start_ts", q("start_ts"))
+        end_ts = body.get("end_ts", q("end_ts"))
+        start_iso = body.get("start_iso", q("start_iso"))
+        end_iso = body.get("end_iso", q("end_iso"))
+
+        symbol = body.get("symbol", q("symbol", "BTCUSDT"))
+        interval = body.get("interval", q("interval", "60"))
+        strategy = body.get("strategy", q("strategy", "pattern3_extreme"))
+        risk_per_trade = float(body.get("risk_per_trade", q("risk_per_trade", 100.0)))
+        rr_ratio = float(body.get("rr_ratio", q("rr_ratio", 4.0)))
+        limit = int(body.get("limit", q("limit", 500)))
+
         result = backtest_engine.run(
             symbol=symbol,
             interval=interval,
             strategy=strategy,
             risk_per_trade=risk_per_trade,
             rr_ratio=rr_ratio,
-            limit=limit
+            limit=limit,
         )
-        
+
+        if not isinstance(result, dict):
+            return JSONResponse({"error": "backtest returned non-dict"}, status_code=400)
+
         if "error" in result:
             return JSONResponse(result, status_code=400)
-        
-        # Calculate equity curve from trades
-        initial_capital = 10000.0
-        equity_curve = [initial_capital]
-        current_equity = initial_capital
-        
-        for trade in result.get("trades", []):
-            pnl = trade.get("result_R", 0) * risk_per_trade
-            current_equity += pnl
-            equity_curve.append(max(1000, current_equity))  # Floor at 10%
-        
-        result["equity_curve"] = equity_curve
-        result["initial_capital"] = initial_capital
-        
-        # Store context for Toni AI
-        global last_backtest_context
+
+        # Ensure equity curve exists
+        if "equity_curve" not in result:
+            initial_capital = float(result.get("initial_capital", 10000.0))
+            current_equity = initial_capital
+            equity_curve = [initial_capital]
+            trades = result.get("trades") or []
+            floor_value = max(1.0, initial_capital * 0.1)
+            for trade in trades:
+                try:
+                    pnl_r = float((trade or {}).get("result_R", 0))
+                except Exception:
+                    pnl_r = 0.0
+                current_equity += pnl_r * risk_per_trade
+                equity_curve.append(max(floor_value, current_equity))
+            result["equity_curve"] = equity_curve
+            result["initial_capital"] = initial_capital
+
+        # Attach params for frontend/debug
+        params = dict(result.get("parameters") or {})
+        params.update({
+            "start_ts": start_ts,
+            "end_ts": end_ts,
+            "start_iso": start_iso,
+            "end_iso": end_iso,
+            "symbol": symbol,
+            "interval": interval,
+            "strategy": strategy,
+            "risk_per_trade": risk_per_trade,
+            "rr_ratio": rr_ratio,
+            "limit": limit,
+        })
+        result["parameters"] = params
+
         last_backtest_context = result
-        
         return JSONResponse(result)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        try:
+            log.exception("api_backtest_run error: %s", e)
+        except Exception:
+            pass
+        return JSONResponse({"error": str(e)}, status_code=400)
+@app.get("/api/backtest_legacy")
+async def api_backtest_current():
+    """
+    Returns the latest backtest result from last_backtest_context (if present),
+    otherwise falls back to the mock endpoint.
+    """
+    try:
+        ctx = globals().get("last_backtest_context") or {}
+        if isinstance(ctx, dict):
+            equity_curve = ctx.get("equity_curve") or []
+            trades = ctx.get("trades") or []
+            prices = ctx.get("prices") or []
+            stats = ctx.get("statistics") or {}
 
-@app.get("/api/backtest")
+            # If we have something real, return it
+            if equity_curve or trades:
+                # Keep response shape stable for frontend
+                if not isinstance(stats, dict):
+                    stats = {}
+                return JSONResponse({
+                    "equity_curve": equity_curve,
+                    "prices": prices if prices else ([0 for _ in range(len(equity_curve))] if equity_curve else []),
+                    "trades": trades,
+                    "statistics": stats,
+                })
+    except Exception:
+        pass
+
+    return await api_backtest_current()
+
+@app.get("/api/backtest_legacy/mock")
+async def api_backtest_current_mock():
+    """
+    Returns the latest REAL backtest result if available (from last_backtest_context),
+    otherwise falls back to legacy mock endpoint.
+    """
+    global last_backtest_context
+
+    try:
+        ctx = last_backtest_context or {}
+
+        equity_curve = ctx.get("equity_curve") or []
+        trades = ctx.get("trades") or []
+        prices = ctx.get("prices") or []
+
+        # Build statistics compatible with frontend expectations
+        stats = dict(ctx.get("statistics") or {})
+
+        # total_trades
+        if "total_trades" not in stats:
+            stats["total_trades"] = len(trades)
+
+        # total_return
+        if "total_return" not in stats:
+            if len(equity_curve) >= 2 and equity_curve[0]:
+                stats["total_return"] = round(((equity_curve[-1] - equity_curve[0]) / equity_curve[0]) * 100, 2)
+            else:
+                stats["total_return"] = 0.0
+
+        # max_drawdown (percent)
+        if "max_drawdown" not in stats:
+            peak = None
+            max_dd = 0.0
+            for v in equity_curve:
+                try:
+                    x = float(v)
+                except Exception:
+                    continue
+                if peak is None or x > peak:
+                    peak = x
+                if peak and peak > 0:
+                    dd = (peak - x) / peak * 100.0
+                    if dd > max_dd:
+                        max_dd = dd
+            stats["max_drawdown"] = round(max_dd, 2)
+
+        # profit_factor (optional; keep 0 if unknown)
+        if "profit_factor" not in stats:
+            stats["profit_factor"] = float(ctx.get("profit_factor") or 0.0)
+
+        # Ensure arrays exist (frontend usually can handle empty)
+        if not prices and equity_curve:
+            prices = [0 for _ in range(len(equity_curve))]
+
+        payload = {
+            "equity_curve": equity_curve,
+            "prices": prices,
+            "trades": trades,
+            "statistics": stats,
+        }
+
+        # If no real result yet, fallback to legacy mock
+        if not equity_curve and not trades:
+            return await api_backtest_legacy()
+
+        return JSONResponse(payload)
+    except Exception:
+        return await api_backtest_legacy()
+
+@app.get("/api/backtest_legacy/legacy")
 async def api_backtest_legacy():
     """
     Legacy endpoint for backward compatibility.
@@ -889,14 +1296,14 @@ async def ws_dashboard(websocket: WebSocket):
     """
     await websocket.accept()
     try:
-        # При подключении: отправляем первый снапшот
+        # Send initial snapshot on connect
         snapshot = await get_dashboard_snapshot()
         await websocket.send_json({
             "type": "dashboard_update",
             "payload": snapshot.dict(),
         })
 
-        # Простой таймер: периодически отправляем обновлённый снапшот
+        # Periodically push updated snapshot
         while True:
             await asyncio.sleep(5.0)
             snapshot = await get_dashboard_snapshot()
@@ -905,7 +1312,7 @@ async def ws_dashboard(websocket: WebSocket):
                 "payload": snapshot.dict(),
             })
     except WebSocketDisconnect:
-        # тихо выходим без ошибок
+        # Client disconnected: exit silently
         pass
     except Exception as exc:
         print(f"[WS /ws/dashboard] error: {exc}")
@@ -972,8 +1379,8 @@ def generate_contextual_info() -> str:
     info_types = [
         f"Current PNL is {random.uniform(-2, 3):.2f}%.",
         f"Confidence level is at {random.uniform(70, 95):.1f}%.",
-        f"Risk-adjusted returns are positive this week.",
-        f"Market conditions are favorable for the current strategy."
+        "Risk-adjusted returns are positive this week.",
+        "Market conditions are favorable for the current strategy."
     ]
     return random.choice(info_types)
 
@@ -992,7 +1399,394 @@ def handle_command(command: str) -> str:
 
 # === RUN SERVER ===
 
+# __API_STUB_DATA_ENDPOINTS__
+# Contract-required data endpoints. Must not 404 in TEST mode.
+# Temporary stubs: stable envelope, empty payload.
+
+@app.get("/api/trades")
+def api_trades(symbol: str, timeframe: str, mode: str = "TEST"):
+    return {"status": "ok", "data": []}
+
+@app.get("/api/equity")
+def api_equity(symbol: str, timeframe: str, mode: str = "TEST"):
+    return {"status": "ok", "data": []}
+
+@app.get("/api/metrics")
+def api_metrics(symbol: str, timeframe: str, mode: str = "TEST"):
+    return {"status": "ok", "data": {}}
+
+# __API_STUB_DATA_ENDPOINTS__END
+
+# === DASHBOARD_SNAPSHOT_API_START ===
+try:
+    from fastapi import HTTPException  # noqa: E402
+    from core.dashboard.service import get_dashboard_snapshot  # noqa: E402
+except Exception:
+    HTTPException = None
+    get_dashboard_snapshot = None
+
+@app.get("/api/dashboard")
+async def api_dashboard(symbol: str = "BTCUSDT", timeframe: str = "1h", mode: str = "TEST"):
+    if get_dashboard_snapshot is None or HTTPException is None:
+        raise Exception("dashboard snapshot not available")
+    return await get_dashboard_snapshot(symbol=symbol, timeframe=timeframe, mode=mode)
+# === DASHBOARD_SNAPSHOT_API_END ===
+
 if __name__ == "__main__":
     print("🚀 Launching CryptoBot Pro Dashboard")
     print("🌐 Dashboard: http://127.0.0.1:8000/dashboard")
     uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
+
+
+
+
+
+
+# === CORS (AUTO) ===
+try:
+    from fastapi.middleware.cors import CORSMiddleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://127.0.0.1:5173",
+            "http://localhost:5173",
+            "http://127.0.0.1:4173",
+            "http://localhost:4173",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+except Exception as e:
+    print("WARN: CORS middleware not applied:", e)
+# === /CORS (AUTO) ===
+
+
+
+
+
+# --- ML Score API (Skeleton) autogenerated 2025-12-16 02:54:11 ---
+try:
+    from fastapi import Body
+    from core.ml.contract import MLScoreRequest, MLScoreResponse
+    from core.ml.service import ml_score
+
+    @app.post("/api/ml/score", response_model=MLScoreResponse)
+    async def api_ml_score(req: MLScoreRequest = Body(...)):
+        return ml_score(req)
+except Exception as _ml_api_err:
+    print("ML API init skipped:", _ml_api_err)
+
+
+# --- Assistant API (MVP) autogenerated 2025-12-16 03:10:52 ---
+try:
+    from fastapi import Body
+    from core.assistant.contract import AssistantRequest, AssistantResponse
+    from core.assistant.service import assistant_reply
+
+    @app.post("/api/assistant", response_model=AssistantResponse)
+    async def api_assistant(req: AssistantRequest = Body(...)):
+        return assistant_reply(req)
+except Exception as _assistant_api_err:
+    print("Assistant API init skipped:", _assistant_api_err)
+
+
+# --- Backtest Info API (smoke) autogenerated 2025-12-16 03:41:25 ---
+try:
+    @app.get("/api/backtest/info")
+    async def api_backtest_info():
+        return {"ok": True, "ts": "2025-12-16 03:41:25"}
+except Exception as _bt_info_err:
+    print("Backtest info API init skipped:", _bt_info_err)
+
+
+# --- Health API (smoke) autogenerated 2025-12-16 03:42:30 ---
+try:
+    @app.get("/health")
+    async def api_health():
+        return {"ok": True}
+except Exception as _health_err:
+    print("Health API init skipped:", _health_err)
+
+# API_COMPAT_SHIMS_START
+# Compatibility routes for the React dashboard dev client.
+
+@app.post('/api/backtest/run')
+async def api_backtest_run_v2(request: 'Request'):
+    """
+    Dashboard-friendly backtest endpoint.
+    Accepts {"symbol": "...", "tf": "15m"} or {"symbol": "...", "timeframe": "15m"}.
+    Routes to the sync MVP backtest runner to return trades/equity/summary in one call.
+    """
+    global last_backtest_context
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+
+    if not isinstance(payload, dict):
+        payload = {}
+
+    if "timeframe" not in payload and "tf" in payload:
+        payload["timeframe"] = payload.get("tf")
+
+    try:
+        result = await _api_backtest_run_sync(payload)
+        last_backtest_context = result
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+@app.get('/api/backtest')
+async def api_backtest_latest_v2():
+    global last_backtest_context
+    return last_backtest_context or {}
+
+# API_COMPAT_SHIMS_END
+
+
+# BACKTEST_RUN_SYNC_MVP_START
+# Dashboard MVP: provide a synchronous backtest endpoint that returns trades/equity/summary.
+import asyncio as _asyncio  # noqa: E402
+# Registered via add_api_route to avoid decorator/name issues.
+
+from datetime import datetime as _dt  # noqa: E402
+from typing import Any as _Any, Dict as _Dict, List as _List  # noqa: E402
+_last_backtest_sync_result: _Dict[str, _Any] = {}
+
+def _bt_make_trade(entry_ts: int, entry: float, exit_ts: int, exit_p: float, side: str = "long") -> _Dict[str, _Any]:
+    pnl = (exit_p - entry) if side == "long" else (entry - exit_p)
+    return {
+        "side": side,
+        "entryTime": int(entry_ts),
+        "entryPrice": float(entry),
+        "exitTime": int(exit_ts),
+        "exitPrice": float(exit_p),
+        "pnl": float(pnl),
+    }
+
+def _bt_simulate_simple(candles: _List[_Dict[str, _Any]], fee_bps: float = 6.0, slippage_bps: float = 2.0) -> _Dict[str, _Any]:
+    logs: _List[str] = []
+    trades: _List[_Dict[str, _Any]] = []
+    equity_curve: _List[_Dict[str, _Any]] = []
+
+    if not candles:
+        return {
+            "ok": True,
+            "ts": _dt.utcnow().isoformat(timespec="seconds"),
+            "summary": {"pnl": 0.0, "maxDrawdown": 0.0, "winRate": 0.0, "totalTrades": 0, "profitFactor": 0.0},
+            "equity_curve": [],
+            "trades": [],
+            "logs": ["no candles"],
+        }
+
+    closes = [float(c.get("close", 0.0)) for c in candles]
+    times = [int(c.get("time", 0)) for c in candles]
+
+    def entry_px(px: float) -> float:
+        return float(px) * (1.0 + (slippage_bps / 10000.0))
+
+    def exit_px(px: float) -> float:
+        return float(px) * (1.0 - (slippage_bps / 10000.0))
+
+    in_pos = False
+    entry_i = 0
+    entry_p = 0.0
+    equity = 0.0
+    peak = 0.0
+    max_dd = 0.0
+
+    for i in range(3, len(candles)):
+        c = closes[i]
+        tts = times[i]
+
+        if not in_pos:
+            if closes[i] > closes[i-1] > closes[i-2] > closes[i-3]:
+                in_pos = True
+                entry_i = i
+                entry_p = entry_px(c)
+                logs.append(f"enter long i={i} t={tts} p={entry_p:.4f}")
+        else:
+            if closes[i] < closes[i-1] < closes[i-2]:
+                xp = exit_px(c)
+                tr = _bt_make_trade(times[entry_i], entry_p, tts, xp, "long")
+                fee = (entry_p + xp) * (fee_bps / 10000.0)
+                tr["fee"] = float(fee)
+                tr["pnlNet"] = float(tr["pnl"] - fee)
+                trades.append(tr)
+
+                equity += float(tr["pnlNet"])
+                peak = max(peak, equity)
+                max_dd = max(max_dd, peak - equity)
+
+                logs.append(f"exit long i={i} t={tts} p={xp:.4f} pnlNet={tr['pnlNet']:.4f} eq={equity:.4f}")
+                in_pos = False
+
+        equity_curve.append({"time": tts, "equity": float(equity)})
+
+    if in_pos and len(candles) > entry_i:
+        xp = exit_px(closes[-1])
+        tts = times[-1]
+        tr = _bt_make_trade(times[entry_i], entry_p, tts, xp, "long")
+        fee = (entry_p + xp) * (fee_bps / 10000.0)
+        tr["fee"] = float(fee)
+        tr["pnlNet"] = float(tr["pnl"] - fee)
+        trades.append(tr)
+
+        equity += float(tr["pnlNet"])
+        peak = max(peak, equity)
+        max_dd = max(max_dd, peak - equity)
+
+        logs.append(f"force-exit long t={tts} pnlNet={tr['pnlNet']:.4f} eq={equity:.4f}")
+        equity_curve.append({"time": tts, "equity": float(equity)})
+
+    wins = sum(1 for tr in trades if float(tr.get("pnlNet", 0.0)) > 0)
+    total = len(trades)
+    win_rate = (wins / total) if total else 0.0
+
+    gross_win = sum(float(tr.get("pnlNet", 0.0)) for tr in trades if float(tr.get("pnlNet", 0.0)) > 0)
+    gross_loss = -sum(float(tr.get("pnlNet", 0.0)) for tr in trades if float(tr.get("pnlNet", 0.0)) < 0)
+    profit_factor = (gross_win / gross_loss) if gross_loss > 0 else (gross_win if gross_win > 0 else 0.0)
+
+    summary = {
+        "pnl": float(equity),
+        "maxDrawdown": float(max_dd),
+        "winRate": float(win_rate),
+        "totalTrades": int(total),
+        "profitFactor": float(profit_factor),
+    }
+
+    return {
+        "ok": True,
+        "ts": _dt.utcnow().isoformat(timespec="seconds"),
+        "summary": summary,
+        "equity_curve": equity_curve,
+        "trades": trades,
+        "logs": logs,
+    }
+
+def _bt_fetch_candles_http(port: int, exchange: str, symbol: str, timeframe: str, limit: int, mode: str) -> _List[_Dict[str, _Any]]:
+    import json as _json
+    import urllib.request as _ur
+    import urllib.parse as _up
+
+    q = _up.urlencode({
+        "exchange": exchange,
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "limit": str(limit),
+        "mode": mode,
+    })
+    url = f"http://127.0.0.1:{port}/api/candles?{q}"
+    with _ur.urlopen(url, timeout=30) as resp:
+        raw = resp.read().decode("utf-8", "replace")
+    j = _json.loads(raw) if raw else {}
+    arr = j.get("candles")
+    return arr if isinstance(arr, list) else []
+
+def _bt_find_app():
+    g = globals()
+    if "app" in g and hasattr(g["app"], "add_api_route"):
+        return g["app"]
+    for v in g.values():
+        if hasattr(v, "add_api_route") and hasattr(v, "routes"):
+            return v
+    return None
+
+async def _api_backtest_run_sync(payload: dict):  # type: ignore
+    global _last_backtest_sync_result, last_backtest_context
+
+    if "timeframe" not in payload and "tf" in payload:
+        payload["timeframe"] = payload.get("tf")
+
+    exchange = str(payload.get("exchange", "bybit")).lower()
+    symbol = str(payload.get("symbol", "BTCUSDT"))
+    timeframe = str(payload.get("timeframe", "1m"))
+    mode_raw = str(payload.get("mode", "test"))
+    # normalize: backend candles support "test"/"live"; treat "backtest" as "test"
+    mode = "test" if mode_raw.lower() == "backtest" else mode_raw
+    limit = int(payload.get("limit", 400))
+    fee_bps = float(payload.get("feesBps", 6.0) or 6.0)
+    sl_bps = float(payload.get("slippageBps", 2.0) or 2.0)
+    strategy = payload.get("strategy", "pattern3_extreme")
+    risk_per_trade = float(payload.get("risk_per_trade", payload.get("riskPerTrade", 100.0)) or 100.0)
+    rr_ratio = float(payload.get("rr_ratio", payload.get("rrRatio", 4.0)) or 4.0)
+    initial_balance = float(payload.get("initial_balance", payload.get("initialBalance", 10000.0)) or 10000.0)
+    interval = str(payload.get("interval") or "".join([ch for ch in timeframe if ch.isdigit()]) or "60")
+    port = int(payload.get("_port", 8000))
+    source = str(payload.get("source", "")).lower()
+    start_ts = _parse_ts(payload.get("start"))
+    if start_ts is None:
+        start_ts = _parse_ts(payload.get("start_ts"))
+    end_ts = _parse_ts(payload.get("end"))
+    if end_ts is None:
+        end_ts = _parse_ts(payload.get("end_ts"))
+
+    candles_for_run = None
+    if source == "history":
+        candles_for_run = _load_history(exchange, symbol, timeframe, start_ts, end_ts)
+
+    try:
+        result = None
+        if source == "history" and candles_for_run is not None:
+            # Respect explicit history source: simulate even if empty
+            result = _bt_simulate_simple(candles_for_run, fee_bps=fee_bps, slippage_bps=sl_bps)
+        else:
+            result = backtest_engine.run(
+                symbol=symbol,
+                interval=interval,
+                strategy=strategy,
+                risk_per_trade=risk_per_trade,
+                rr_ratio=rr_ratio,
+                limit=limit,
+            )
+    except Exception:
+        result = None
+
+    if not isinstance(result, dict):
+        candles = candles_for_run
+        if candles is None:
+            candles = await _asyncio.to_thread(_bt_fetch_candles_http, port, exchange, symbol, timeframe, limit, mode)
+        result = _bt_simulate_simple(candles, fee_bps=fee_bps, slippage_bps=sl_bps)
+
+    # Attach request/params for downstream consumers
+    params = dict(result.get("parameters") or {})
+    params.update({
+        "exchange": exchange,
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "interval": interval,
+        "strategy": strategy,
+        "risk_per_trade": risk_per_trade,
+        "rr_ratio": rr_ratio,
+        "limit": limit,
+        "mode": mode,
+        "feesBps": fee_bps,
+        "slippageBps": sl_bps,
+        "initial_balance": initial_balance,
+        "source": source,
+        "start": start_ts,
+        "end": end_ts,
+    })
+    result["parameters"] = params
+    result["request"] = {"exchange": exchange, "symbol": symbol, "timeframe": timeframe, "mode": mode, "limit": limit}
+
+    _last_backtest_sync_result = result
+    last_backtest_context = result
+    return result
+
+def _api_backtest_latest_sync():
+    global _last_backtest_sync_result
+    if _last_backtest_sync_result:
+        return _last_backtest_sync_result
+    return {"ok": True, "ts": _dt.utcnow().isoformat(timespec="seconds"), "empty": True}
+
+_bt_app = _bt_find_app()
+if _bt_app is not None:
+    try:
+        _bt_app.add_api_route("/api/backtest/run_sync", _api_backtest_run_sync, methods=["POST"])
+        _bt_app.add_api_route("/api/backtest/latest_sync", _api_backtest_latest_sync, methods=["GET"])
+    except Exception:
+        pass
+# BACKTEST_RUN_SYNC_MVP_END
+

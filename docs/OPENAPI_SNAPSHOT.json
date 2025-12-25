@@ -1,0 +1,1531 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CryptoBot Pro — Neural Dashboard",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Index",
+        "description": "Redirect root to the unified dashboard",
+        "operationId": "index__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dashboard": {
+      "get": {
+        "summary": "Dashboard",
+        "description": "Render the unified dashboard",
+        "operationId": "dashboard_dashboard_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dashboard": {
+      "get": {
+        "summary": "Api Dashboard Test Mode",
+        "description": "TEST-режим: всегда возвращаем фикстурный payload для дашборда.\nНикаких обращений к бирже и внешним сервисам.",
+        "operationId": "api_dashboard_test_mode_api_dashboard_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dashboard/snapshot": {
+      "get": {
+        "summary": "Api Get Dashboard Snapshot",
+        "description": "Return the structured dashboard snapshot.",
+        "operationId": "api_get_dashboard_snapshot_api_dashboard_snapshot_get",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Trading pair symbol",
+              "default": "BTCUSDT",
+              "title": "Symbol"
+            },
+            "description": "Trading pair symbol"
+          },
+          {
+            "name": "timeframe",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Requested timeframe",
+              "default": "15m",
+              "title": "Timeframe"
+            },
+            "description": "Requested timeframe"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardSnapshot"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/candles": {
+      "get": {
+        "summary": "Api Candles",
+        "description": "Get real market data candles from exchange or test mode.",
+        "operationId": "api_candles_api_candles_get",
+        "parameters": [
+          {
+            "name": "exchange",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Exchange name",
+              "default": "bybit",
+              "title": "Exchange"
+            },
+            "description": "Exchange name"
+          },
+          {
+            "name": "symbol",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Trading pair",
+              "default": "BTCUSDT",
+              "title": "Symbol"
+            },
+            "description": "Trading pair"
+          },
+          {
+            "name": "timeframe",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Timeframe",
+              "default": "15m",
+              "title": "Timeframe"
+            },
+            "description": "Timeframe"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Number of candles",
+              "default": 500,
+              "title": "Limit"
+            },
+            "description": "Number of candles"
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Mode: live or test",
+              "default": "live",
+              "title": "Mode"
+            },
+            "description": "Mode: live or test"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/trades": {
+      "get": {
+        "summary": "Api Trades",
+        "operationId": "api_trades_api_trades_get",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "BTCUSDT",
+              "title": "Symbol"
+            }
+          },
+          {
+            "name": "timeframe",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "15m",
+              "title": "Timeframe"
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "backtest",
+              "title": "Mode"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/equity": {
+      "get": {
+        "summary": "Api Equity",
+        "operationId": "api_equity_api_equity_get",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "BTCUSDT",
+              "title": "Symbol"
+            }
+          },
+          {
+            "name": "timeframe",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "15m",
+              "title": "Timeframe"
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "backtest",
+              "title": "Mode"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/metrics": {
+      "get": {
+        "summary": "Api Metrics",
+        "operationId": "api_metrics_api_metrics_get",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "BTCUSDT",
+              "title": "Symbol"
+            }
+          },
+          {
+            "name": "timeframe",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "15m",
+              "title": "Timeframe"
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "backtest",
+              "title": "Mode"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/selfcheck": {
+      "get": {
+        "summary": "Api Selfcheck",
+        "description": "Простая самопроверка TEST-режима.",
+        "operationId": "api_selfcheck_api_selfcheck_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ai/predict": {
+      "get": {
+        "summary": "Api Ai Predict",
+        "description": "AI market prediction endpoint - provides price predictions and market analysis",
+        "operationId": "api_ai_predict_api_ai_predict_get",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Trading pair symbol",
+              "default": "BTCUSDT",
+              "title": "Symbol"
+            },
+            "description": "Trading pair symbol"
+          },
+          {
+            "name": "timeframe",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Timeframe for prediction",
+              "default": "15m",
+              "title": "Timeframe"
+            },
+            "description": "Timeframe for prediction"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ai/chat": {
+      "post": {
+        "summary": "Api Ai Chat",
+        "description": "AI chat endpoint for conversational interface",
+        "operationId": "api_ai_chat_api_ai_chat_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backtest_legacy/run": {
+      "post": {
+        "summary": "Api Backtest Run",
+        "description": "Run backtest with specified parameters.\nAccepts JSON body or query parameters.\nReturns trades, equity curve, and performance metrics.",
+        "operationId": "api_backtest_run_api_backtest_legacy_run_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backtest_legacy": {
+      "get": {
+        "summary": "Api Backtest Current",
+        "description": "Returns the latest backtest result from last_backtest_context (if present),\notherwise falls back to the mock endpoint.",
+        "operationId": "api_backtest_current_api_backtest_legacy_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backtest_legacy/mock": {
+      "get": {
+        "summary": "Api Backtest Current",
+        "description": "Returns the latest REAL backtest result if available (from last_backtest_context),\notherwise falls back to legacy mock endpoint.",
+        "operationId": "api_backtest_current_api_backtest_legacy_mock_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backtest_legacy/legacy": {
+      "get": {
+        "summary": "Api Backtest Legacy",
+        "description": "Legacy endpoint for backward compatibility.\nReturns mock backtest data.",
+        "operationId": "api_backtest_legacy_api_backtest_legacy_legacy_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/strategies": {
+      "get": {
+        "summary": "Api Strategies",
+        "description": "Get list of available strategies with descriptions",
+        "operationId": "api_strategies_api_strategies_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ml/predict": {
+      "get": {
+        "summary": "Api Ml Predict",
+        "description": "Get ML prediction for current market conditions",
+        "operationId": "api_ml_predict_api_ml_predict_get",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "BTCUSDT",
+              "title": "Symbol"
+            }
+          },
+          {
+            "name": "interval",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "60",
+              "title": "Interval"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/risk/status": {
+      "get": {
+        "summary": "Api Risk Status",
+        "description": "Get current risk management status",
+        "operationId": "api_risk_status_api_risk_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/upload-csv": {
+      "post": {
+        "summary": "Api Upload Csv",
+        "description": "Upload CSV file for backtesting",
+        "operationId": "api_upload_csv_api_data_upload_csv_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/risk/resume": {
+      "post": {
+        "summary": "Api Risk Resume",
+        "description": "Resume trading after risk pause (manual override)",
+        "operationId": "api_risk_resume_api_risk_resume_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/toni/ask": {
+      "post": {
+        "summary": "Api Toni Ask",
+        "description": "Ask Toni AI a question",
+        "operationId": "api_toni_ask_api_toni_ask_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ml/score": {
+      "post": {
+        "summary": "Api Ml Score Stub V2",
+        "operationId": "api_ml_score_stub_v2_api_ml_score_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/assistant": {
+      "post": {
+        "summary": "Api Assistant Stub V2",
+        "operationId": "api_assistant_stub_v2_api_assistant_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backtest/info": {
+      "get": {
+        "summary": "Api Backtest Info",
+        "operationId": "api_backtest_info_api_backtest_info_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Api Health",
+        "operationId": "api_health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backtest/run": {
+      "post": {
+        "summary": "Api Backtest Run V2",
+        "operationId": "api_backtest_run_v2_api_backtest_run_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backtest": {
+      "get": {
+        "summary": "Api Backtest Latest V2",
+        "operationId": "api_backtest_latest_v2_api_backtest_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backtest/run_sync": {
+      "post": {
+        "summary": " Api Backtest Run Sync",
+        "operationId": "_api_backtest_run_sync_api_backtest_run_sync_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backtest/latest_sync": {
+      "get": {
+        "summary": " Api Backtest Latest Sync",
+        "operationId": "_api_backtest_latest_sync_api_backtest_latest_sync_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AISignal": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "side": {
+            "type": "string",
+            "title": "Side"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "entry": {
+            "type": "number",
+            "title": "Entry"
+          },
+          "target": {
+            "type": "number",
+            "title": "Target"
+          },
+          "stop_loss": {
+            "type": "number",
+            "title": "Stop Loss"
+          },
+          "timeframe": {
+            "type": "string",
+            "title": "Timeframe"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "side",
+          "confidence",
+          "entry",
+          "target",
+          "stop_loss",
+          "timeframe"
+        ],
+        "title": "AISignal"
+      },
+      "AssistantAction": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "payload": {
+            "type": "object",
+            "title": "Payload"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "label"
+        ],
+        "title": "AssistantAction"
+      },
+      "AssistantRequest": {
+        "properties": {
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ChatMessage"
+            },
+            "type": "array",
+            "title": "Messages"
+          },
+          "context": {
+            "$ref": "#/components/schemas/TradingContext"
+          }
+        },
+        "type": "object",
+        "title": "AssistantRequest"
+      },
+      "AssistantResponse": {
+        "properties": {
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/AssistantAction"
+            },
+            "type": "array",
+            "title": "Actions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "answer"
+        ],
+        "title": "AssistantResponse"
+      },
+      "Candle": {
+        "properties": {
+          "time": {
+            "type": "integer",
+            "title": "Time"
+          },
+          "open": {
+            "type": "number",
+            "title": "Open"
+          },
+          "high": {
+            "type": "number",
+            "title": "High"
+          },
+          "low": {
+            "type": "number",
+            "title": "Low"
+          },
+          "close": {
+            "type": "number",
+            "title": "Close"
+          },
+          "volume": {
+            "type": "number",
+            "title": "Volume"
+          }
+        },
+        "type": "object",
+        "required": [
+          "time",
+          "open",
+          "high",
+          "low",
+          "close",
+          "volume"
+        ],
+        "title": "Candle"
+      },
+      "ChatMessage": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "system",
+              "user",
+              "assistant",
+              "tool"
+            ],
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatMessage"
+      },
+      "DashboardSnapshot": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol",
+            "default": [
+              "BTCUSDT"
+            ]
+          },
+          "timeframe": {
+            "type": "string",
+            "title": "Timeframe",
+            "default": [
+              "15m"
+            ]
+          },
+          "balance": {
+            "type": "number",
+            "title": "Balance",
+            "default": 0.0
+          },
+          "daily_pnl_pct": {
+            "type": "number",
+            "title": "Daily Pnl Pct",
+            "default": 0.0
+          },
+          "total_profit": {
+            "type": "number",
+            "title": "Total Profit",
+            "default": 0.0
+          },
+          "winrate_pct": {
+            "type": "number",
+            "title": "Winrate Pct",
+            "default": 0.0
+          },
+          "active_positions": {
+            "type": "integer",
+            "title": "Active Positions",
+            "default": 0
+          },
+          "risk_level_pct": {
+            "type": "number",
+            "title": "Risk Level Pct",
+            "default": 0.0
+          },
+          "total_pnl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Pnl"
+          },
+          "winrate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Winrate"
+          },
+          "risk_level": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Level"
+          },
+          "candles": {
+            "items": {
+              "$ref": "#/components/schemas/Candle"
+            },
+            "type": "array",
+            "title": "Candles"
+          },
+          "ai_signals": {
+            "items": {
+              "$ref": "#/components/schemas/AISignal"
+            },
+            "type": "array",
+            "title": "Ai Signals"
+          },
+          "trades": {
+            "items": {
+              "$ref": "#/components/schemas/Trade"
+            },
+            "type": "array",
+            "title": "Trades"
+          }
+        },
+        "type": "object",
+        "title": "DashboardSnapshot"
+      },
+      "FeatureVector": {
+        "properties": {
+          "features": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Features"
+          }
+        },
+        "type": "object",
+        "title": "FeatureVector"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "MLContext": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "LIVE",
+              "TEST",
+              "BACKTEST"
+            ],
+            "title": "Mode",
+            "default": "LIVE"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          },
+          "timeframe": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeframe"
+          },
+          "metrics": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metrics"
+          },
+          "positions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Positions"
+          },
+          "recentTrades": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recenttrades"
+          },
+          "backtestResult": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backtestresult"
+          }
+        },
+        "type": "object",
+        "title": "MLContext"
+      },
+      "MLScoreRequest": {
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/MLContext"
+          },
+          "market": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market"
+          }
+        },
+        "type": "object",
+        "title": "MLScoreRequest"
+      },
+      "MLScoreResponse": {
+        "properties": {
+          "output": {
+            "$ref": "#/components/schemas/ScoreOutput"
+          },
+          "featureVector": {
+            "$ref": "#/components/schemas/FeatureVector"
+          }
+        },
+        "type": "object",
+        "required": [
+          "output",
+          "featureVector"
+        ],
+        "title": "MLScoreResponse"
+      },
+      "ScoreOutput": {
+        "properties": {
+          "signalQuality": {
+            "type": "number",
+            "title": "Signalquality",
+            "default": 50.0
+          },
+          "riskScore": {
+            "type": "number",
+            "title": "Riskscore",
+            "default": 50.0
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence",
+            "default": 0.5
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "explain": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Explain"
+          }
+        },
+        "type": "object",
+        "title": "ScoreOutput"
+      },
+      "Trade": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "side": {
+            "type": "string",
+            "title": "Side"
+          },
+          "price": {
+            "type": "number",
+            "title": "Price"
+          },
+          "qty": {
+            "type": "number",
+            "title": "Qty"
+          },
+          "timestamp": {
+            "type": "integer",
+            "title": "Timestamp"
+          },
+          "realized_pnl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Realized Pnl"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "symbol",
+          "side",
+          "price",
+          "qty",
+          "timestamp"
+        ],
+        "title": "Trade"
+      },
+      "TradingContext": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "LIVE",
+              "TEST",
+              "BACKTEST"
+            ],
+            "title": "Mode",
+            "default": "LIVE"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          },
+          "timeframe": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeframe"
+          },
+          "risk": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk"
+          },
+          "positions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Positions"
+          },
+          "recentTrades": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recenttrades"
+          },
+          "metrics": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metrics"
+          },
+          "backtestResult": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backtestresult"
+          }
+        },
+        "type": "object",
+        "title": "TradingContext"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

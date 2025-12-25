@@ -1,18 +1,19 @@
-import asyncio
 import numpy as np
 from typing import Dict, List, Optional, Tuple, Any
-from datetime import datetime, timedelta
+from datetime import datetime
 from dataclasses import dataclass
 from enum import Enum
-from sklearn.ensemble import RandomForestClassifier
+try:
+    from sklearn.ensemble import RandomForestClassifier
+except ModuleNotFoundError:
+    RandomForestClassifier = None
+
 from sklearn.preprocessing import StandardScaler
 import joblib
-import json
 
 import logging
 log = logging.getLogger(__name__)
-from core.services.fetch_bybit_klines import fetch_klines
-
+from core.services.fetch_bybit_klines import fetch_klines  # noqa: E402
 class SignalType(Enum):
     STRONG_BUY = 2
     BUY = 1

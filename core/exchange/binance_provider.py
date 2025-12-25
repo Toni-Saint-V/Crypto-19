@@ -3,7 +3,6 @@ Binance Exchange Provider
 Implementation of ExchangeProvider for Binance exchange
 """
 
-import os
 import asyncio
 import requests
 from typing import List, Dict, Any, Optional

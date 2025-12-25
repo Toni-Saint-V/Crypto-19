@@ -1,0 +1,17 @@
+# Core Contracts (Always)
+
+- Modes: canonical only LIVE/TEST/BACKTEST (UPPER) in UI state/stores/logs/API.
+  - Lowercase allowed only as input -> normalize immediately.
+- Backtest: async job only.
+  - POST /api/backtest -> {job_id}
+  - GET /api/backtest/{job_id}/status
+  - GET /api/backtest/{job_id}/result
+  - No sync backtest endpoints.
+- MVP realtime: polling + backoff. On mode switch: stop timers + abort in-flight.
+- UX non-negotiables:
+  - 100vh/100dvh, no page scroll (only internal scroll in chat/drawer)
+  - Chart is hero and always visible
+  - Chat right fixed width; messages scroll inside; input pinned
+  - Bottom drawer overlay collapsed by default, max-height ~38vh, internal scroll, must not resize chart
+- Mode isolation: 10-switch test required (LIVE->TEST->BACKTEST x3) with zero leakage.
+- Errors: UI must not show raw HTTP codes; show user-friendly message + request_id.

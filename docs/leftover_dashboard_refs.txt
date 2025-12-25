@@ -1,0 +1,9 @@
+CURSOR_UI_PROMPT.md
+MAP.md
+PROJECT_LOG.md
+archive/templates/dashboard_new_lab.html
+archive/templates/index_landing.html
+web/README_DASHBOARD.md
+web/dashboard-react/QUICKSTART.md
+web/dashboard-react/README.md
+web/templates/dashboard.html

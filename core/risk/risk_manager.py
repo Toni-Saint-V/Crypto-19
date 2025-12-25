@@ -4,9 +4,9 @@ Handles global risk limits, position limits, and safety checks
 """
 
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 
 log = logging.getLogger(__name__)

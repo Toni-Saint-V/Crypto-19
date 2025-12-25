@@ -1,0 +1,13 @@
+---
+description: Backend rules: endpoints must match ticket contract; add minimal tests/logging.
+globs:
+  - "server.py"
+  - "**/*.py"
+alwaysApply: false
+---
+
+Backend rules:
+- Do not change API response shapes unless ticket explicitly updates the contract.
+- Timestamps: always ms unix epoch.
+- Return explicit errors with message + status code.
+- Prefer deterministic behavior for tests and local runs.
