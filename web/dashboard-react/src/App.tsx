@@ -340,11 +340,6 @@ function App() {
     }
   }, [testRunning, testPaused]);
 
-  const handleTestStop = useCallback(() => {
-    setTestRunning(false);
-    setTestPaused(false);
-    console.log('Test stopped');
-  }, []);
 
   // Compute CTA based on mode
   const getPrimaryCta = useCallback(() => {
