@@ -1,0 +1,12 @@
+{
+  "name": "cryptobot-19-clean",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "verify": "node scripts/verify-root.mjs",
+    "запуск": "npm run dev",
+    "проверка": "npm run verify",
+    "run": "npm run dev",
+    "check": "npm run verify"
+  }
+}
