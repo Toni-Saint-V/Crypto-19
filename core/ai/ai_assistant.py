@@ -1,7 +1,5 @@
-import asyncio
-import json
-from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime, timedelta
+from typing import Dict, List, Tuple
+from datetime import datetime
 from dataclasses import dataclass
 from enum import Enum
 import numpy as np
@@ -125,8 +123,6 @@ class AIAssistant:
     async def _calculate_indicators(self, candles: List[Dict]) -> Dict[str, float]:
         """Calculate technical indicators"""
         closes = np.array([c["close"] for c in candles])
-        highs = np.array([c["high"] for c in candles])
-        lows = np.array([c["low"] for c in candles])
         volumes = np.array([c["volume"] for c in candles])
         
         # Moving averages

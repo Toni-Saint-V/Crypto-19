@@ -1,4 +1,6 @@
-import asyncio, time, random
+import asyncio
+import time
+import random
 
 async def ws_live_loop(ws):
     price = 50000

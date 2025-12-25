@@ -1,11 +1,9 @@
-import asyncio
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 import numpy as np
 import logging
-from core.services.fetch_bybit_klines import fetch_klines
 
 log = logging.getLogger(__name__)
 

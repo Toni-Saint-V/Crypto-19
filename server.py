@@ -262,7 +262,8 @@ def _load_history(exchange: str, symbol: str, timeframe: str, start_ts: int | No
         try:
             parts = fp.stem.split("-")
             if len(parts) == 2:
-                f_start = int(parts[0]); f_end = int(parts[1])
+                f_start = int(parts[0])
+                f_end = int(parts[1])
                 if start_ts and f_end < start_ts:
                     continue
                 if end_ts and f_start > end_ts:
