@@ -3,7 +3,11 @@ from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime
 from dataclasses import dataclass
 from enum import Enum
-from sklearn.ensemble import RandomForestClassifier
+try:
+    from sklearn.ensemble import RandomForestClassifier
+except ModuleNotFoundError:
+    RandomForestClassifier = None
+
 from sklearn.preprocessing import StandardScaler
 import joblib
 
