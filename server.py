@@ -290,28 +290,25 @@ def _load_history(exchange: str, symbol: str, timeframe: str, start_ts: int | No
     rows = sorted({c["time"]: c for c in rows}.values(), key=lambda x: x["time"])
     return rows
 
-def _bybit_history_page(symbol: str, timeframe: str, start_ms: int, end_ms: int, limit: int = 1000):
-    url = "https://api.bybit.com/v5/market/kline"
-    tf = timeframe.lower().strip()
-    mul = 1
+def _map_bybit_interval(tf: str) -> str:
+    tf = tf.lower().strip()
+    if tf.endswith("m"):
+        return tf[:-1] or "1"
     if tf.endswith("h"):
-        mul = 60
-        tf_val = tf[:-1]
-    elif tf.endswith("d"):
-        mul = 60 * 24
-        tf_val = tf[:-1]
-    elif tf.endswith("m"):
-        mul = 1
-        tf_val = tf[:-1]
-    else:
-        tf_val = tf
-    try:
-        tf_num = int(tf_val)
-    except Exception:
-        tf_num = 1
-    interval_param = str(max(tf_num * mul, 1))
+        return str(int(tf[:-1] or "1") * 60)
+    if tf.endswith("d"):
+        return "D"
+    if tf.endswith("w"):
+        return "W"
+    if tf.endswith("mth") or tf == "m":
+        return "M"
+    return tf
+
+def _bybit_history_page(symbol: str, timeframe: str, start_ms: int, end_ms: int, limit: int = 1000, category: str = "linear"):
+    url = "https://api.bybit.com/v5/market/kline"
+    interval_param = _map_bybit_interval(timeframe)
     params = {
-        "category": "linear",
+        "category": category,
         "symbol": symbol,
         "interval": interval_param,
         "limit": limit,
@@ -319,9 +316,11 @@ def _bybit_history_page(symbol: str, timeframe: str, start_ms: int, end_ms: int,
         "end": end_ms,
     }
     r = requests.get(url, params=params, timeout=10)
+    if r.status_code != 200:
+        raise Exception(f"http_error {r.status_code} url={url} params={params}")
     j = r.json()
-    if "result" not in j or "list" not in j["result"]:
-        raise Exception(f"bad response {j}")
+    if j.get("retCode") != 0 or "result" not in j or "list" not in j["result"]:
+        raise Exception(f"bybit_error retCode={j.get('retCode')} msg={j.get('retMsg')} url={url} params={params}")
     items = j["result"]["list"]
     items = list(reversed(items))
     candles = []
@@ -339,7 +338,7 @@ def _bybit_history_page(symbol: str, timeframe: str, start_ms: int, end_ms: int,
             continue
     return candles
 
-def _download_history(symbol: str, timeframe: str, start_ts: int, end_ts: int, limit: int = 1000) -> list[dict]:
+def _download_history(symbol: str, timeframe: str, start_ts: int, end_ts: int, limit: int = 1000, category: str = "linear") -> list[dict]:
     all_candles: list[dict] = []
     cur_start = start_ts * 1000
     end_ms = end_ts * 1000
@@ -363,7 +362,7 @@ def _download_history(symbol: str, timeframe: str, start_ts: int, end_ts: int, l
     step_ms = max(tf_num * mul, 1) * 60 * 1000
     while cur_start < end_ms:
         next_end = min(cur_start + step_ms * limit, end_ms)
-        chunk = _bybit_history_page(symbol, timeframe, cur_start, next_end, limit=limit)
+        chunk = _bybit_history_page(symbol, timeframe, cur_start, next_end, limit=limit, category=category)
         if not chunk:
             break
         all_candles.extend(chunk)
@@ -581,23 +580,29 @@ async def api_history_pull(payload: dict):
     exchange = str(payload.get("exchange", "bybit"))
     symbol = str(payload.get("symbol", "BTCUSDT"))
     timeframe = str(payload.get("timeframe", "15m"))
+    category = str(payload.get("category", "linear"))
     start_ts = _parse_ts(payload.get("start"))
+    if start_ts is None:
+        start_ts = _parse_ts(payload.get("start_ts"))
     end_ts = _parse_ts(payload.get("end"))
-    if not start_ts or not end_ts:
-        history_jobs[job_id] = {"status": "error", "error": "start/end required"}
+    if end_ts is None:
+        end_ts = _parse_ts(payload.get("end_ts"))
+    if start_ts is None or end_ts is None:
+        history_jobs[job_id] = {"status": "error", "error": "start/end required", "job_id": job_id}
         return history_jobs[job_id]
 
     try:
-        candles = await asyncio.to_thread(_download_history, symbol, timeframe, start_ts, end_ts, limit=1000)
+        candles = await asyncio.to_thread(_download_history, symbol, timeframe, start_ts, end_ts, limit=1000, category=category)
         _write_history_csv(_history_file(exchange, symbol, timeframe, start_ts, end_ts), candles)
         history_jobs[job_id] = {
             "status": "done",
             "count": len(candles),
             "path": str(_history_file(exchange, symbol, timeframe, start_ts, end_ts)),
+            "job_id": job_id,
         }
     except Exception as e:
-        history_jobs[job_id] = {"status": "error", "error": str(e)}
-    return history_jobs[job_id] | {"job_id": job_id}
+        history_jobs[job_id] = {"status": "error", "error": str(e), "job_id": job_id}
+    return history_jobs[job_id]
 
 
 @app.get("/api/history/status")
@@ -1722,7 +1727,8 @@ async def _api_backtest_run_sync(payload: dict):  # type: ignore
 
     try:
         result = None
-        if candles_for_run:
+        if source == "history" and candles_for_run is not None:
+            # Respect explicit history source: simulate even if empty
             result = _bt_simulate_simple(candles_for_run, fee_bps=fee_bps, slippage_bps=sl_bps)
         else:
             result = backtest_engine.run(
