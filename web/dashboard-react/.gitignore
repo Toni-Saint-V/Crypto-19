@@ -30,3 +30,5 @@ yarn-error.log*
 
 *.bak
 package.json.bak
+
+.vite/
