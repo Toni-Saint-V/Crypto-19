@@ -22,6 +22,9 @@ from datetime import datetime, timezone
 import math
 import time
 import numpy as np
+import requests
+import csv
+from pathlib import Path
 
 log = logging.getLogger(__name__)
 
@@ -235,6 +238,160 @@ toni_service = ToniAIService(mode=toni_mode, api_key=toni_api_key)
 # Store last backtest context for Toni
 last_backtest_context = None
 
+# === HISTORY STORAGE HELPERS ===
+history_jobs = {}
+
+def _parse_ts(value):
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(float(value))
+        except Exception:
+            try:
+                return int(datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp())
+            except Exception:
+                return None
+    return None
+
+def _history_dir(exchange: str, symbol: str, timeframe: str) -> Path:
+    base = Path(os.getcwd()) / "data" / "history" / exchange.lower() / symbol.upper() / timeframe
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+def _history_file(exchange: str, symbol: str, timeframe: str, start_ts: int, end_ts: int) -> Path:
+    return _history_dir(exchange, symbol, timeframe) / f"{start_ts}-{end_ts}.csv"
+
+def _write_history_csv(path: Path, candles: list[dict]):
+    if not candles:
+        return
+    candles_sorted = sorted({int(c["time"]): c for c in candles if "time" in c}.values(), key=lambda x: x["time"])
+    with path.open("w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["time", "open", "high", "low", "close", "volume"])
+        for c in candles_sorted:
+            w.writerow([c.get("time"), c.get("open"), c.get("high"), c.get("low"), c.get("close"), c.get("volume")])
+
+def _load_history(exchange: str, symbol: str, timeframe: str, start_ts: int | None, end_ts: int | None) -> list[dict]:
+    dirp = _history_dir(exchange, symbol, timeframe)
+    if not dirp.exists():
+        return []
+    files = sorted(dirp.glob("*.csv"))
+    rows: list[dict] = []
+    for fp in files:
+        try:
+            parts = fp.stem.split("-")
+            if len(parts) == 2:
+                f_start = int(parts[0])
+                f_end = int(parts[1])
+                if start_ts and f_end < start_ts:
+                    continue
+                if end_ts and f_start > end_ts:
+                    continue
+            with fp.open() as f:
+                reader = csv.DictReader(f)
+                for r in reader:
+                    t = _parse_ts(r.get("time"))
+                    if t is None:
+                        continue
+                    if start_ts and t < start_ts:
+                        continue
+                    if end_ts and t > end_ts:
+                        continue
+                    rows.append({
+                        "time": t,
+                        "open": float(r.get("open", 0)),
+                        "high": float(r.get("high", 0)),
+                        "low": float(r.get("low", 0)),
+                        "close": float(r.get("close", 0)),
+                        "volume": float(r.get("volume", 0)),
+                    })
+        except Exception:
+            continue
+    rows = sorted({c["time"]: c for c in rows}.values(), key=lambda x: x["time"])
+    return rows
+
+def _map_bybit_interval(tf: str) -> str:
+    tf = tf.lower().strip()
+    if tf.endswith("m"):
+        return tf[:-1] or "1"
+    if tf.endswith("h"):
+        return str(int(tf[:-1] or "1") * 60)
+    if tf.endswith("d"):
+        return "D"
+    if tf.endswith("w"):
+        return "W"
+    if tf.endswith("mth") or tf == "m":
+        return "M"
+    return tf
+
+def _bybit_history_page(symbol: str, timeframe: str, start_ms: int, end_ms: int, limit: int = 1000, category: str = "linear"):
+    url = "https://api.bybit.com/v5/market/kline"
+    interval_param = _map_bybit_interval(timeframe)
+    params = {
+        "category": category,
+        "symbol": symbol,
+        "interval": interval_param,
+        "limit": limit,
+        "start": start_ms,
+        "end": end_ms,
+    }
+    r = requests.get(url, params=params, timeout=10)
+    if r.status_code != 200:
+        raise Exception(f"http_error {r.status_code} url={url} params={params}")
+    j = r.json()
+    if j.get("retCode") != 0 or "result" not in j or "list" not in j["result"]:
+        raise Exception(f"bybit_error retCode={j.get('retCode')} msg={j.get('retMsg')} url={url} params={params}")
+    items = j["result"]["list"]
+    items = list(reversed(items))
+    candles = []
+    for it in items:
+        try:
+            candles.append({
+                "time": int(it[0]) // 1000,
+                "open": float(it[1]),
+                "high": float(it[2]),
+                "low": float(it[3]),
+                "close": float(it[4]),
+                "volume": float(it[5]),
+            })
+        except Exception:
+            continue
+    return candles
+
+def _download_history(symbol: str, timeframe: str, start_ts: int, end_ts: int, limit: int = 1000, category: str = "linear") -> list[dict]:
+    all_candles: list[dict] = []
+    cur_start = start_ts * 1000
+    end_ms = end_ts * 1000
+    tf = timeframe.lower().strip()
+    mul = 1
+    if tf.endswith("h"):
+        mul = 60
+        tf_val = tf[:-1]
+    elif tf.endswith("d"):
+        mul = 60 * 24
+        tf_val = tf[:-1]
+    elif tf.endswith("m"):
+        mul = 1
+        tf_val = tf[:-1]
+    else:
+        tf_val = tf
+    try:
+        tf_num = int(tf_val)
+    except Exception:
+        tf_num = 1
+    step_ms = max(tf_num * mul, 1) * 60 * 1000
+    while cur_start < end_ms:
+        next_end = min(cur_start + step_ms * limit, end_ms)
+        chunk = _bybit_history_page(symbol, timeframe, cur_start, next_end, limit=limit, category=category)
+        if not chunk:
+            break
+        all_candles.extend(chunk)
+        last_ts = chunk[-1]["time"]
+        cur_start = (last_ts * 1000) + step_ms
+    return all_candles
 # === ROUTES ===
 
 
@@ -364,9 +521,12 @@ async def api_candles(
     timeframe: str = Query("15m", description="Timeframe"),
     limit: int = Query(500, description="Number of candles"),
     mode: str = Query("live", description="Mode: live or test"),
+    source: str = Query(None, description="history to read stored candles"),
+    start: int | None = Query(None, description="start ts (seconds)"),
+    end: int | None = Query(None, description="end ts (seconds)"),
 ):
     """
-    Get real market data candles from exchange or test mode.
+    Get candles from live/test or from locally stored history (source=history).
     """
     # Normalize mode to UPPER
     mode_normalized = normalize_mode(mode)
@@ -384,7 +544,6 @@ async def api_candles(
                 "count": len(candles),
             }
         else:
-            # Live mode: get real data from exchange
             market_service = MarketDataService()
             ohlcv_data = await market_service.get_candles(
                 exchange=exchange,
@@ -394,7 +553,6 @@ async def api_candles(
                 mode="live"
             )
             
-            # Convert OHLCV to dict format
             candles = []
             for candle in ohlcv_data:
                 candles.append({
@@ -416,7 +574,6 @@ async def api_candles(
             }
     except Exception as e:
         log.error(f"Error fetching candles: {e}")
-        # Fallback to test data on error
         candles = _make_test_candles(symbol=symbol, timeframe=timeframe, limit=limit)
         return {
             "exchange": exchange,
@@ -427,6 +584,49 @@ async def api_candles(
             "count": len(candles),
             "error": str(e),
         }
+
+
+@app.post("/api/history/pull")
+async def api_history_pull(payload: dict):
+    """
+    Pull historical candles and store on disk. Returns job_id and status.
+    """
+    job_id = str(uuid.uuid4())
+    history_jobs[job_id] = {"status": "pending"}
+    exchange = str(payload.get("exchange", "bybit"))
+    symbol = str(payload.get("symbol", "BTCUSDT"))
+    timeframe = str(payload.get("timeframe", "15m"))
+    category = str(payload.get("category", "linear"))
+    start_ts = _parse_ts(payload.get("start"))
+    if start_ts is None:
+        start_ts = _parse_ts(payload.get("start_ts"))
+    end_ts = _parse_ts(payload.get("end"))
+    if end_ts is None:
+        end_ts = _parse_ts(payload.get("end_ts"))
+    if start_ts is None or end_ts is None:
+        history_jobs[job_id] = {"status": "error", "error": "start/end required", "job_id": job_id}
+        return history_jobs[job_id]
+
+    try:
+        candles = await asyncio.to_thread(_download_history, symbol, timeframe, start_ts, end_ts, limit=1000, category=category)
+        _write_history_csv(_history_file(exchange, symbol, timeframe, start_ts, end_ts), candles)
+        history_jobs[job_id] = {
+            "status": "done",
+            "count": len(candles),
+            "path": str(_history_file(exchange, symbol, timeframe, start_ts, end_ts)),
+            "job_id": job_id,
+        }
+    except Exception as e:
+        history_jobs[job_id] = {"status": "error", "error": str(e), "job_id": job_id}
+    return history_jobs[job_id]
+
+
+@app.get("/api/history/status")
+async def api_history_status(job_id: str):
+    job = history_jobs.get(job_id)
+    if not job:
+        return {"status": "not_found"}
+    return job | {"job_id": job_id}
 
 
 @app.get("/api/selfcheck")
