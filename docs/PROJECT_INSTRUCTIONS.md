@@ -121,6 +121,3 @@
 - Желательно одной командой за шаг
 
 См. также: docs/OPERATOR_RULES.md (операторские правила терминала)
-
-
-See: docs/COMMUNICATION_RULES.md

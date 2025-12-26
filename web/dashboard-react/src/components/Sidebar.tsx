@@ -21,7 +21,7 @@ export default function Sidebar({ mode }: SidebarProps) {
     <div 
       className="flex-shrink-0 flex flex-col"
       style={{ 
-        width: '380px',
+        width: 'var(--chat-w)',
         background: 'var(--surface-1)',
         borderLeft: '1px solid var(--stroke)',
       }}

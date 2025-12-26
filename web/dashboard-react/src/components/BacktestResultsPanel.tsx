@@ -1,14 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import type { BacktestResult, Metrics } from "../types/backtest";
 
-type AnyObj = Record<string, any>;
-
-function num(v: any, d: number): number {
+function num(v: unknown, d: number): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : d;
 }
 
-function pickKpi(data: AnyObj) {
-  const src = (data && (data.kpi || data.summary || data)) || {};
+function pickKpi(data: BacktestResult | null | undefined) {
+  const src: Metrics = (data?.kpi ?? data?.summary ?? data?.metrics ?? data?.statistics ?? data ?? {}) as Metrics;
   return {
     totalTrades: num(src.totalTrades ?? src.trades ?? src.total_trades, 0),
     profitFactor: num(src.profitFactor ?? src.pf ?? src.profit_factor, 0),
@@ -16,93 +15,47 @@ function pickKpi(data: AnyObj) {
   };
 }
 
-type RunStatus = "idle" | "running" | "done" | "error";
-
-function toNumber(v: unknown, fallback: number): number {
-  if (typeof v === "number" && Number.isFinite(v)) return v;
-  if (typeof v === "string") {
-    const x = Number(v);
-    if (Number.isFinite(x)) return x;
-  }
-  return fallback;
-}
+type JobStatus = "idle" | "queued" | "running" | "done" | "error";
 
 interface BacktestResultsPanelProps {
   apiBase?: string;
   onRun?: () => void;
   onCancel?: () => void;
-  runStatus?: RunStatus;
+  onRetry?: () => void;
+  jobStatus?: JobStatus;
+  jobProgress?: number;
   runError?: string;
+  result?: BacktestResult | null;
   onExpandedChange?: (expanded: boolean) => void;
-  historyPreset: '1Y' | '3Y' | 'custom';
-  historyStart: number;
-  historyEnd: number;
-  historyStatus: 'idle' | 'pending' | 'done' | 'error';
-  historyCount: number;
-  historyPath?: string | null;
-  historyError?: string | null;
-  onHistoryPresetChange: (preset: '1Y' | '3Y' | 'custom') => void;
-  onHistoryDateChange: (which: 'start' | 'end', value: number) => void;
-  onHistoryDownload: () => void;
 }
 
 export default function BacktestResultsPanel({ 
-  apiBase, 
   onRun,
   onCancel,
-  runStatus: externalRunStatus,
+  onRetry,
+  jobStatus: externalJobStatus,
+  jobProgress: externalJobProgress,
   runError: externalRunError,
+  result: externalResult,
   onExpandedChange,
-  historyPreset,
-  historyStart,
-  historyEnd,
-  historyStatus,
-  historyCount,
-  historyPath,
-  historyError,
-  onHistoryPresetChange,
-  onHistoryDateChange,
-  onHistoryDownload,
-}: BacktestResultsPanelProps) {
-  const [data, setData] = useState<AnyObj | null>(null);
+}: BacktestResultsPanelProps = {}) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<"results" | "trades" | "logs" | "monte-carlo" | "raw">("results");
   const [focusedInputId, setFocusedInputId] = useState<string | null>(null);
   const [isButtonHovered, setIsButtonHovered] = useState(false);
-  const [customStartInput, setCustomStartInput] = useState<string>("");
-  const [customEndInput, setCustomEndInput] = useState<string>("");
   
-  // Use external status if provided, otherwise internal state
-  const [internalRunStatus, setInternalRunStatus] = useState<RunStatus>("idle");
-  const [internalRunError, setInternalRunError] = useState<string>("");
-  const runStatus = externalRunStatus ?? internalRunStatus;
-  const runError = externalRunError ?? internalRunError;
-
-  useEffect(() => {
-    const handler = (e: any) => setData(e?.detail || null);
-    window.addEventListener("backtest:updated", handler as any);
-    return () => window.removeEventListener("backtest:updated", handler as any);
-  }, []);
+  // Job-only: use external state (no window events)
+  const jobStatus = externalJobStatus || 'idle';
+  const jobProgress = externalJobProgress || 0;
+  const runError = externalRunError;
+  const data = externalResult;
 
   const kpi = useMemo(() => pickKpi(data || {}), [data]);
-  useEffect(() => {
-    if (historyPreset === 'custom') {
-      // keep inputs in sync if external updates occur
-      if (!customStartInput && historyStart) {
-        const d = new Date(historyStart * 1000);
-        setCustomStartInput(d.toISOString().slice(0, 10));
-      }
-      if (!customEndInput && historyEnd) {
-        const d = new Date(historyEnd * 1000);
-        setCustomEndInput(d.toISOString().slice(0, 10));
-      }
-    }
-  }, [historyPreset, historyStart, historyEnd]);
   
   // Extract PnL from data (try multiple possible fields)
   const totalPnl = useMemo(() => {
     if (!data) return null;
-    const src = data.kpi || data.summary || data.metrics || data;
+    const src: Metrics = (data.kpi ?? data.summary ?? data.metrics ?? data.statistics ?? data) as Metrics;
     const pnl = src.totalPnl ?? src.pnl ?? src.total_pnl ?? src.total_pnl_usd ?? src.profit;
     if (typeof pnl === 'number' && Number.isFinite(pnl)) return pnl;
     return null;
@@ -127,132 +80,14 @@ export default function BacktestResultsPanel({
     });
   };
 
-  const handlePreset = (preset: '1Y' | '3Y' | 'custom') => {
-    onHistoryPresetChange(preset);
-    if (preset !== 'custom') {
-      setCustomStartInput('');
-      setCustomEndInput('');
-    }
-  };
-
-  const handleCustomInput = (which: 'start' | 'end', value: string) => {
-    if (which === 'start') setCustomStartInput(value);
-    else setCustomEndInput(value);
-    const ts = value ? Math.floor(new Date(value).getTime() / 1000) : NaN;
-    if (!Number.isNaN(ts)) {
-      onHistoryDateChange(which, ts);
-    }
-  };
-
-  const handleRunBacktest = async () => {
-    if (runStatus === "running") return;
-    
-    // Use external handler if provided
-    if (onRun) {
-      onRun();
-      return;
-    }
-
-    // Fallback to internal handler if no external handler
-    setInternalRunStatus("running");
-    setInternalRunError("");
-
-    try {
-      const payload: Record<string, unknown> = {
-        strategy: "pattern3_extreme",
-        symbol: "BTCUSDT",
-        interval: "60",
-        initial_balance: 10000,
-      };
-
-      const base = String(apiBase || '').replace(/\/$/, '');
-      const url = `${base}/api/backtest/run`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        throw new Error(`HTTP ${res.status} ${res.statusText} ${txt}`.trim());
-      }
-
-      const result = (await res.json().catch(() => ({}))) as AnyObj;
-      
-      // Extract KPI from result
-      const stat = result.statistics || result.summary || result;
-      const kpi = {
-        totalTrades: toNumber(stat.total_trades ?? stat.totalTrades, 0),
-        profitFactor: toNumber(stat.profit_factor ?? stat.profitFactor, 0),
-        maxDrawdown: toNumber(stat.max_drawdown ?? stat.maxDrawdown, 0),
-      };
-
-      // Dispatch event for other components
-      window.dispatchEvent(new CustomEvent("backtest:updated", { detail: { ...kpi, ...result } }));
-      
-      // Update local state
-      setData({ ...kpi, ...result });
-      setInternalRunStatus("done");
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setInternalRunError(msg);
-      setInternalRunStatus("error");
-    }
+  // Job-only: use external handlers only
+  const handleRunBacktest = () => {
+    if (jobStatus === "running" || jobStatus === "queued") return;
+    onRun?.();
   };
 
   return (
     <div className="w-full h-full flex flex-col">
-      {/* History controls (backtest mode only) */}
-      <div className="px-4 py-3 flex flex-col gap-2 border-b border-[#1A1C22]">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] text-gray-400">History range:</span>
-          {(['1Y','3Y','custom'] as const).map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => handlePreset(p)}
-              className={`px-2 py-1 text-[11px] rounded border transition-colors ${historyPreset === p ? 'bg-[#21D4B4] border-[#21D4B4] text-black font-semibold' : 'bg-transparent border-[#1A1C22] text-gray-400 hover:text-gray-200 hover:border-[#2A2C32]'}`}
-            >
-              {p}
-            </button>
-          ))}
-        </div>
-        {historyPreset === 'custom' && (
-          <div className="flex items-center gap-2 flex-wrap text-[11px] text-gray-300">
-            <span>Start:</span>
-            <input
-              type="date"
-              value={customStartInput}
-              onChange={(e) => handleCustomInput('start', e.target.value)}
-              className="bg-[#0C0F15] border border-[#1A1C22] rounded px-2 py-1 text-[11px] text-gray-100 focus:outline-none focus:border-[#21D4B4]"
-            />
-            <span>End:</span>
-            <input
-              type="date"
-              value={customEndInput}
-              onChange={(e) => handleCustomInput('end', e.target.value)}
-              className="bg-[#0C0F15] border border-[#1A1C22] rounded px-2 py-1 text-[11px] text-gray-100 focus:outline-none focus:border-[#21D4B4]"
-            />
-          </div>
-        )}
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={onHistoryDownload}
-            className="px-3 py-1.5 text-[11px] rounded border border-[#21D4B4] text-black font-semibold"
-            style={{ background: 'var(--accent-backtest)' }}
-          >
-            Download dataset
-          </button>
-          <span className="text-[11px] text-gray-400">
-            {historyStatus === 'pending' && 'Downloading...'}
-            {historyStatus === 'done' && `Ready (${historyCount} rows) ${historyPath ? `@ ${historyPath}` : ''}`}
-            {historyStatus === 'error' && `Error: ${historyError || 'failed'}`}
-            {historyStatus === 'idle' && 'Not downloaded'}
-          </span>
-        </div>
-      </div>
       {/* Collapsed header / Summary strip */}
       <div
         className="w-full flex items-center justify-between gap-3 px-4 py-2 flex-shrink-0"
@@ -314,7 +149,7 @@ export default function BacktestResultsPanel({
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-          {runStatus === "running" && onCancel && (
+          {(jobStatus === "running" || jobStatus === "queued") && onCancel && (
             <button
               type="button"
               onClick={onCancel}
@@ -331,17 +166,17 @@ export default function BacktestResultsPanel({
           <button
             type="button"
             onClick={handleRunBacktest}
-            disabled={runStatus === "running"}
+            disabled={jobStatus === "running" || jobStatus === "queued"}
             className="inline-flex h-7 items-center rounded-lg px-3 text-xs font-semibold transition-all disabled:opacity-50"
             style={{
-              background: runStatus === "error"
+              background: jobStatus === "error"
                 ? 'var(--status-loss-bg)'
                 : 'var(--accent-backtest-bg)',
-              color: runStatus === "error" ? 'var(--status-loss)' : 'var(--text-1)',
-              border: `1px solid ${runStatus === "error" ? 'var(--status-loss-border)' : 'var(--accent-backtest-border)'}`,
+              color: jobStatus === "error" ? 'var(--status-loss)' : 'var(--text-1)',
+              border: `1px solid ${jobStatus === "error" ? 'var(--status-loss-border)' : 'var(--accent-backtest-border)'}`,
             }}
           >
-            {runStatus === "running" ? (
+            {(jobStatus === "running" || jobStatus === "queued") ? (
               <>
                 <svg
                   className="animate-spin -ml-1 mr-2 h-3 w-3"
@@ -363,11 +198,11 @@ export default function BacktestResultsPanel({
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                   />
                 </svg>
-                Running...
+                {jobStatus === "queued" ? "Queued..." : `Running... ${Math.round(jobProgress * 100)}%`}
               </>
-            ) : runStatus === "done" ? (
+            ) : jobStatus === "done" ? (
               "✓ Done"
-            ) : runStatus === "error" ? (
+            ) : jobStatus === "error" ? (
               "✗ Error"
             ) : (
               "▶ Run"
@@ -426,9 +261,9 @@ export default function BacktestResultsPanel({
 
             {/* Scrollable content */}
             <div className="flex-1 min-h-0 overflow-y-auto chat-scrollbar text-xs space-y-3">
-              {runStatus === "error" && runError && (
+              {jobStatus === "error" && runError && (
                 <div 
-                  className="rounded-lg p-3 text-[11px]"
+                  className="rounded-lg p-3 text-[11px] space-y-2"
                   style={{
                     border: '1px solid var(--status-loss-border)',
                     background: 'var(--status-loss-bg)',
@@ -439,9 +274,23 @@ export default function BacktestResultsPanel({
                     className="font-semibold mb-1"
                     style={{ color: 'var(--status-loss)' }}
                   >
-                    Backtest Error
+                    Не удалось обработать запрос
                   </div>
                   <div style={{ color: 'var(--text-2)' }}>{runError}</div>
+                  {onRetry && (
+                    <button
+                      type="button"
+                      onClick={onRetry}
+                      className="px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
+                      style={{
+                        background: 'var(--accent-backtest-bg)',
+                        border: '1px solid var(--accent-backtest-border)',
+                        color: 'var(--accent-backtest)',
+                      }}
+                    >
+                      Retry
+                    </button>
+                  )}
                 </div>
               )}
               {activeTab === "results" && (
@@ -457,47 +306,37 @@ export default function BacktestResultsPanel({
                     <>
                       <div className="grid grid-cols-3 gap-2">
                         <div 
-                          className="card"
+                          className="rounded-lg p-2"
                           style={{
                             border: '1px solid var(--stroke)',
                             background: 'var(--surface-2)',
-                            borderRadius: 'var(--radius-1)',
-                            padding: 'var(--space-2)',
                           }}
                         >
-                          <div className="caption-text" style={{ color: 'var(--text-3)' }}>Total Trades</div>
-                          <div className="body-text font-semibold" style={{ color: 'var(--text-1)' }}>{kpi.totalTrades > 0 ? kpi.totalTrades : '—'}</div>
+                          <div className="text-[11px]" style={{ color: 'var(--text-3)' }}>Total Trades</div>
+                          <div className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>{kpi.totalTrades}</div>
                         </div>
                         <div 
-                          className="card"
+                          className="rounded-lg p-2"
                           style={{
                             border: '1px solid var(--stroke)',
                             background: 'var(--surface-2)',
-                            borderRadius: 'var(--radius-1)',
-                            padding: 'var(--space-2)',
                           }}
                         >
-                          <div className="caption-text" style={{ color: 'var(--text-3)' }}>Profit Factor</div>
-                          <div className="body-text font-semibold" style={{ color: 'var(--text-1)' }}>
-                            {typeof kpi.profitFactor === 'number' && Number.isFinite(kpi.profitFactor) 
-                              ? kpi.profitFactor.toFixed(2) 
-                              : '—'}
+                          <div className="text-[11px]" style={{ color: 'var(--text-3)' }}>Profit Factor</div>
+                          <div className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>
+                            {kpi.profitFactor.toFixed(2)}
                           </div>
                         </div>
                         <div 
-                          className="card"
+                          className="rounded-lg p-2"
                           style={{
                             border: '1px solid var(--stroke)',
                             background: 'var(--surface-2)',
-                            borderRadius: 'var(--radius-1)',
-                            padding: 'var(--space-2)',
                           }}
                         >
-                          <div className="caption-text" style={{ color: 'var(--text-3)' }}>Max Drawdown</div>
-                          <div className="body-text font-semibold" style={{ color: 'var(--status-loss)' }}>
-                            {typeof kpi.maxDrawdown === 'number' && Number.isFinite(kpi.maxDrawdown) 
-                              ? `${(-kpi.maxDrawdown).toFixed(2)}%` 
-                              : '—'}
+                          <div className="text-[11px]" style={{ color: 'var(--text-3)' }}>Max Drawdown</div>
+                          <div className="text-sm font-semibold" style={{ color: 'var(--status-loss)' }}>
+                            {kpi.maxDrawdown.toFixed(2)}
                           </div>
                         </div>
                       </div>
@@ -563,7 +402,7 @@ export default function BacktestResultsPanel({
                         </tr>
                       </thead>
                       <tbody>
-                        {data.trades.slice(0, 120).map((t: AnyObj, idx: number) => (
+                        {data.trades.slice(0, 120).map((t, idx: number) => (
                           <tr
                             key={idx}
                             style={{
@@ -606,7 +445,7 @@ export default function BacktestResultsPanel({
                     </div>
                   ) : (
                     <ul className="space-y-1">
-                      {data.logs.slice(0, 200).map((line: any, idx: number) => (
+                      {data.logs.slice(0, 200).map((line, idx: number) => (
                         <li
                           key={idx}
                           className="rounded px-2 py-1 font-mono text-[10px]"

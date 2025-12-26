@@ -9,4 +9,5 @@
 - [ ] 0006 QA: smoke test checklist + curl scripts
 
 ## Backlog
+- [ ] 0007 ui-redesign: make `npm run -s verify` PASS + PR auto-merge (ui-redesign -> main)
 - [ ] ...

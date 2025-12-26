@@ -11,18 +11,14 @@ interface StatsTickerProps {
 }
 
 function formatNumber(value: unknown, digits: number = 2): string {
-  // Distinguish between missing data (null/undefined/NaN) and zero value
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return '—';
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value.toFixed(digits);
   }
-  // Zero is a valid value (e.g., profit factor 0.00), display it
-  return value.toFixed(digits);
+  return '—';
 }
 
 function formatCurrency(value: number): string {
-  // Distinguish between missing data (null/undefined/NaN) and zero value
-  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
-  // Zero is a valid value (break-even), display it
+  if (!Number.isFinite(value)) return '—';
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -32,9 +28,7 @@ function formatCurrency(value: number): string {
 }
 
 function formatPercent(value: number, digits: number = 1): string {
-  // Distinguish between missing data (null/undefined/NaN) and zero value
-  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
-  // Zero is a valid value (0% winrate), display it
+  if (!Number.isFinite(value)) return '—';
   return `${value >= 0 ? '+' : ''}${value.toFixed(digits)}%`;
 }
 
@@ -72,24 +66,23 @@ function KPICard({ label, value, delta, color = 'neutral', isLoading }: KPICardP
 
   return (
     <div 
-      className="card flex flex-col gap-1"
+      className="px-4 py-3 rounded-lg flex flex-col gap-1"
       style={{ 
         background: style.bg, 
         border: `1px solid ${style.border}`,
-        borderRadius: 'var(--radius-1)',
       }}
     >
-      <div className="caption-text" style={{ color: 'var(--text-3)' }}>{label}</div>
+      <div className="text-xs" style={{ color: 'var(--text-3)' }}>{label}</div>
       <div className="flex items-baseline gap-2">
         <span 
-          className="kpi-value tabular-nums"
+          className="text-lg font-semibold tabular-nums"
           style={{ color: style.text }}
         >
           {value}
         </span>
         {delta && (
           <span 
-            className="caption-text"
+            className="text-xs font-medium"
             style={{ color: 'var(--text-3)' }}
           >
             {delta}
@@ -101,17 +94,16 @@ function KPICard({ label, value, delta, color = 'neutral', isLoading }: KPICardP
 }
 
 export default function StatsTicker({ mode, kpi, backtestKpi }: StatsTickerProps) {
-  const isBacktest = mode === 'backtest';
+  const isBacktest = mode === 'BACKTEST';
   const isLoading = !kpi;
 
   if (isLoading) {
     return (
       <div 
-        className="h-20 min-h-[80px] flex items-center gap-3 flex-shrink-0"
+        className="h-20 min-h-[80px] px-6 flex items-center gap-3 flex-shrink-0"
         style={{ 
           background: 'var(--surface-1)', 
-          borderBottom: '1px solid var(--stroke)',
-          padding: '0 var(--space-6)',
+          borderBottom: '1px solid var(--stroke)' 
         }}
       >
         <KPICard label="Loading..." value="—" isLoading={true} />
@@ -123,11 +115,10 @@ export default function StatsTicker({ mode, kpi, backtestKpi }: StatsTickerProps
 
   return (
     <div 
-      className="h-20 min-h-[80px] flex items-center gap-3 flex-shrink-0 overflow-x-auto"
+      className="h-20 min-h-[80px] px-6 flex items-center gap-3 flex-shrink-0 overflow-x-auto"
       style={{ 
         background: 'var(--surface-1)', 
-        borderBottom: '1px solid var(--stroke)',
-        padding: '0 var(--space-6)',
+        borderBottom: '1px solid var(--stroke)' 
       }}
     >
       {isBacktest ? (
@@ -135,7 +126,7 @@ export default function StatsTicker({ mode, kpi, backtestKpi }: StatsTickerProps
           <KPICard
             label="Total PnL"
             value={formatCurrency((kpi as BacktestKPIData).totalPnl ?? 0)}
-            color={((kpi as BacktestKPIData).totalPnl > 0 ? 'positive' : (kpi as BacktestKPIData).totalPnl < 0 ? 'negative' : 'neutral')}
+            color={(kpi as BacktestKPIData).totalPnl >= 0 ? 'positive' : 'negative'}
           />
           <KPICard
             label="Winrate"
@@ -146,7 +137,7 @@ export default function StatsTicker({ mode, kpi, backtestKpi }: StatsTickerProps
             <>
               <KPICard
                 label="Trades"
-                value={backtestKpi.totalTrades > 0 ? backtestKpi.totalTrades.toString() : '—'}
+                value={backtestKpi.totalTrades.toString()}
                 color="neutral"
               />
               <KPICard
@@ -167,7 +158,7 @@ export default function StatsTicker({ mode, kpi, backtestKpi }: StatsTickerProps
           <KPICard
             label="Total PnL"
             value={formatCurrency((kpi as KPIData).totalPnl ?? 0)}
-            color={((kpi as KPIData).totalPnl > 0 ? 'positive' : (kpi as KPIData).totalPnl < 0 ? 'negative' : 'neutral')}
+            color={(kpi as KPIData).totalPnl >= 0 ? 'positive' : 'negative'}
           />
           <KPICard
             label="Winrate"
@@ -176,7 +167,7 @@ export default function StatsTicker({ mode, kpi, backtestKpi }: StatsTickerProps
           />
           <KPICard
             label="Positions"
-            value={(kpi as KPIData).activePositions > 0 ? String((kpi as KPIData).activePositions) : '—'}
+            value={String((kpi as KPIData).activePositions ?? 0)}
             color="neutral"
           />
           <KPICard

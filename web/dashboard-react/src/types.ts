@@ -1,4 +1,19 @@
-export type Mode = 'live' | 'test' | 'backtest';
+// Mode truth: only UPPER case in state
+export type Mode = 'LIVE' | 'TEST' | 'BACKTEST';
+
+// Normalize mode input (accepts any case, returns UPPER)
+export function normalizeMode(mode: string | Mode): Mode {
+  if (!mode) return 'LIVE';
+  const upper = mode.toUpperCase().trim();
+  if (upper === 'LIVE' || upper === 'TEST' || upper === 'BACKTEST') {
+    return upper as Mode;
+  }
+  // Fallback mappings
+  if (upper === 'L' || upper === 'LIVE_MODE') return 'LIVE';
+  if (upper === 'T' || upper === 'TEST_MODE') return 'TEST';
+  if (upper === 'B' || upper === 'BT' || upper === 'BACKTEST_MODE') return 'BACKTEST';
+  return 'LIVE'; // default
+}
 
 export interface Trade {
   id: string;

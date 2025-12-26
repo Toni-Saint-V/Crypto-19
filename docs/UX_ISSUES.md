@@ -1,33 +1,29 @@
-# UX Issues — Dashboard
+# UX_ISSUES
 
-## Non-negotiables (Layout Contracts)
-- 100vh / 100dvh, no page scroll.
-- Chart is hero and always visible.
-- Chat right fixed width; messages scroll inside; input pinned.
-- Backtest results: bottom drawer overlay, collapsed by default, max-height ~38vh, internal scroll, must NOT change chart height.
-- Modes do not leak after 10 rapid switches.
+## Non-negotiables
+- No page scroll: весь экран 100vh без прокрутки страницы.
+- Внутренний скролл разрешен только в: чат, raw payload, длинные списки (trades/logs).
+- Chart всегда видим (герой экрана).
+- BACKTEST результаты не выталкивают chart вниз.
 
-## Current Known Breaks (P0)
-1) Backtest drawer receives no data (panel depended on window event that is not dispatched).
-2) Drawer uses hardcoded `right: 380px` instead of chat width variable -> fragile.
-3) Inconsistent mode casing across boundaries -> risk of sending wrong-mode requests.
-4) Multiple fetch patterns (some ignore apiBase) -> dev/prod mismatch risk.
-5) ChartHUD shows defaults (LIVE/UNKNOWN) -> trust hit.
+## Симптом
+- В BACKTEST результаты "уезжают" и выталкивают график/компоновку, появляется page scroll.
 
-## Fix Targets (P0)
-- Replace magic layout numbers with CSS vars `--chat-w`, `--drawer-max-h`.
-- Backtest job-only dataflow: job_id -> status -> result -> drawer.
-- Single API client and no bypass calls.
-- Mode lock: only UPPER in stores; normalize inputs.
-- Polling must abort/stop on mode switch.
+## Наиболее вероятные причины (типовые)
+- Результаты backtest рендерятся обычным блоком под графиком без ограничения высоты.
+- В flex/grid контейнерах нет min-height: 0 у детей, из-за чего overflow "проламывает" страницу.
+- Нет явного 100vh контейнера и overflow hidden на уровне страницы/root.
+- Панели не имеют фиксированных зон (grid rows/cols), всё течет по документу.
 
-## Definition of Done
-- No page scroll across desktop/tablet/mobile.
-- Drawer never shifts chart height.
-- After Run Backtest, drawer always shows results.
-- 10-switch test has zero leakage.
+## Выбранная стратегия фикса BACKTEST layout (фиксируем)
+- Bottom drawer (свернут по умолчанию).
+- Drawer имеет max-height и внутренний overflow: auto.
+- Drawer не влияет на высоту chart (chart зона всегда в 100vh).
 
-## Common Pitfalls
-- "Quick fix" via window events again.
-- Responsive tweaks that reintroduce page scroll.
-- Leaving one stray hardcoded width/offset.
+## Acceptance criteria (что считаем успехом)
+- Нет page scroll вообще.
+- Chart всегда виден.
+- Chat справа фиксированной ширины, скролл только внутри списка сообщений, input закреплен снизу.
+- Backtest Results/Trades/Logs живут внутри drawer, скроллятся там.
+- Переключение режимов не смешивает данные.
+

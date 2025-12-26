@@ -1,3 +1,6 @@
+from typing import Any as _Any, Dict as _Dict, List as _List
+from datetime import datetime as _dt
+
 """
 CryptoBot Pro - FastAPI Server
 AI-powered crypto trading dashboard with WebSocket support
@@ -24,6 +27,25 @@ import csv
 from pathlib import Path
 
 log = logging.getLogger(__name__)
+
+# Mode normalization: always return UPPER (LIVE/TEST/BACKTEST)
+def normalize_mode(mode: str) -> str:
+    """Normalize mode to UPPER case. Accepts lowercase on input."""
+    if not mode:
+        return "LIVE"
+    mode_upper = mode.upper().strip()
+    if mode_upper in ("LIVE", "TEST", "BACKTEST"):
+        return mode_upper
+    # Fallback: map common variations
+    if mode_upper in ("L", "LIVE_MODE"):
+        return "LIVE"
+    if mode_upper in ("T", "TEST_MODE"):
+        return "TEST"
+    if mode_upper in ("B", "BT", "BACKTEST_MODE"):
+        return "BACKTEST"
+    # Default to LIVE if unknown
+    return "LIVE"
+
 from core.backtest.engine import BacktestEngine
 from core.ml.ml_service import MLService
 from core.ai.toni_service import ToniAIService, ToniContext
@@ -506,25 +528,18 @@ async def api_candles(
     """
     Get candles from live/test or from locally stored history (source=history).
     """
+    # Normalize mode to UPPER
+    mode_normalized = normalize_mode(mode)
+    
     try:
-        if source == "history":
-            candles = _load_history(exchange, symbol, timeframe, start, end)
-            return {
-                "exchange": exchange,
-                "symbol": symbol,
-                "timeframe": timeframe,
-                "mode": "history",
-                "candles": candles[:limit] if limit else candles,
-                "count": len(candles),
-            }
-
-        if mode == "test":
+        if mode_normalized == "TEST":
+            # Test mode: return synthetic candles
             candles = _make_test_candles(symbol=symbol, timeframe=timeframe, limit=limit)
             return {
                 "exchange": exchange,
                 "symbol": symbol,
                 "timeframe": timeframe,
-                "mode": "test",
+                "mode": "TEST",
                 "candles": candles,
                 "count": len(candles),
             }
@@ -553,7 +568,7 @@ async def api_candles(
                 "exchange": exchange,
                 "symbol": symbol,
                 "timeframe": timeframe,
-                "mode": "live",
+                "mode": "LIVE",
                 "candles": candles,
                 "count": len(candles),
             }
@@ -564,7 +579,7 @@ async def api_candles(
             "exchange": exchange,
             "symbol": symbol,
             "timeframe": timeframe,
-            "mode": "test",
+            "mode": "TEST",
             "candles": candles,
             "count": len(candles),
             "error": str(e),
@@ -1151,12 +1166,13 @@ async def websocket_ai(websocket: WebSocket):
                     user_message = message_data.get("text") or message_data.get("message", "")
                     
                     # Build context from current state
+                    mode_from_msg = normalize_mode(str(message_data.get("mode", "live")))
                     context = ToniContext(
                         last_backtest=last_backtest_context,
                         current_strategy=message_data.get("strategy"),
                         current_symbol=message_data.get("symbol"),
                         current_timeframe=message_data.get("timeframe"),
-                        is_live_mode=message_data.get("mode") == "live"
+                        is_live_mode=mode_from_msg == "LIVE"
                     )
                     
                     # Get response from Toni AI
@@ -1405,15 +1421,18 @@ def handle_command(command: str) -> str:
 
 @app.get("/api/trades")
 def api_trades(symbol: str, timeframe: str, mode: str = "TEST"):
-    return {"status": "ok", "data": []}
+    mode_normalized = normalize_mode(mode)
+    return {"status": "ok", "data": [], "mode": mode_normalized}
 
 @app.get("/api/equity")
 def api_equity(symbol: str, timeframe: str, mode: str = "TEST"):
-    return {"status": "ok", "data": []}
+    mode_normalized = normalize_mode(mode)
+    return {"status": "ok", "data": [], "mode": mode_normalized}
 
 @app.get("/api/metrics")
 def api_metrics(symbol: str, timeframe: str, mode: str = "TEST"):
-    return {"status": "ok", "data": {}}
+    mode_normalized = normalize_mode(mode)
+    return {"status": "ok", "data": {}, "mode": mode_normalized}
 
 # __API_STUB_DATA_ENDPOINTS__END
 
@@ -1429,7 +1448,12 @@ except Exception:
 async def api_dashboard(symbol: str = "BTCUSDT", timeframe: str = "1h", mode: str = "TEST"):
     if get_dashboard_snapshot is None or HTTPException is None:
         raise Exception("dashboard snapshot not available")
-    return await get_dashboard_snapshot(symbol=symbol, timeframe=timeframe, mode=mode)
+    mode_normalized = normalize_mode(mode)
+    result = await get_dashboard_snapshot(symbol=symbol, timeframe=timeframe, mode=mode_normalized)
+    # Ensure mode in response is UPPER
+    if isinstance(result, dict):
+        result["mode"] = mode_normalized
+    return result
 # === DASHBOARD_SNAPSHOT_API_END ===
 
 if __name__ == "__main__":
@@ -1513,55 +1537,41 @@ except Exception as _health_err:
 
 @app.post('/api/backtest/run')
 async def api_backtest_run_v2(request: 'Request'):
-    """
-    Dashboard-friendly backtest endpoint.
-    Accepts {"symbol": "...", "tf": "15m"} or {"symbol": "...", "timeframe": "15m"}.
-    Routes to the sync MVP backtest runner to return trades/equity/summary in one call.
-    """
-    global last_backtest_context
-    try:
-        payload = await request.json()
-    except Exception:
-        payload = {}
-
-    if not isinstance(payload, dict):
-        payload = {}
-
-    if "timeframe" not in payload and "tf" in payload:
-        payload["timeframe"] = payload.get("tf")
-
-    try:
-        result = await _api_backtest_run_sync(payload)
-        last_backtest_context = result
-        return JSONResponse(result)
-    except Exception as e:
-        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    return await api_backtest_run(request)
 
 @app.get('/api/backtest')
 async def api_backtest_latest_v2():
     global last_backtest_context
     return last_backtest_context or {}
 
+@app.post('/api/assistant')
+async def api_assistant_stub_v2(payload: dict):
+    return {'answer': 'assistant stub (not wired)', 'actions': [], 'debug': {'stub': True}}
+
+@app.post('/api/ml/score')
+async def api_ml_score_stub_v2(payload: dict):
+    return {'quality': 0.5, 'risk': 0.5, 'explain': ['stub']}
+
 # API_COMPAT_SHIMS_END
 
 
 # BACKTEST_RUN_SYNC_MVP_START
-# Dashboard MVP: provide a synchronous backtest endpoint that returns trades/equity/summary.
-import asyncio as _asyncio  # noqa: E402
-# Registered via add_api_route to avoid decorator/name issues.
+# REMOVED: Synchronous backtest endpoints are not allowed per contract.
+# Backtest must be job-only: POST /api/backtest/run -> job_id; GET status; GET result.
+# All sync endpoints and their registration have been removed.
+# BACKTEST_RUN_SYNC_MVP_END
 
-from datetime import datetime as _dt  # noqa: E402
-from typing import Any as _Any, Dict as _Dict, List as _List  # noqa: E402
-_last_backtest_sync_result: _Dict[str, _Any] = {}
-
-def _bt_make_trade(entry_ts: int, entry: float, exit_ts: int, exit_p: float, side: str = "long") -> _Dict[str, _Any]:
-    pnl = (exit_p - entry) if side == "long" else (entry - exit_p)
+def _bt_make_trade(entry_ts, entry_px, exit_ts, exit_px, side):
+    try:
+        pnl = (exit_px - entry_px) if side == "long" else (entry_px - exit_px)
+    except Exception:
+        pnl = 0.0
     return {
+        "entry_ts": str(entry_ts),
+        "exit_ts": str(exit_ts),
+        "entry_px": float(entry_px),
+        "exit_px": float(exit_px),
         "side": side,
-        "entryTime": int(entry_ts),
-        "entryPrice": float(entry),
-        "exitTime": int(exit_ts),
-        "exitPrice": float(exit_p),
         "pnl": float(pnl),
     }
 
@@ -1693,100 +1703,8 @@ def _bt_find_app():
             return v
     return None
 
-async def _api_backtest_run_sync(payload: dict):  # type: ignore
-    global _last_backtest_sync_result, last_backtest_context
-
-    if "timeframe" not in payload and "tf" in payload:
-        payload["timeframe"] = payload.get("tf")
-
-    exchange = str(payload.get("exchange", "bybit")).lower()
-    symbol = str(payload.get("symbol", "BTCUSDT"))
-    timeframe = str(payload.get("timeframe", "1m"))
-    mode_raw = str(payload.get("mode", "test"))
-    # normalize: backend candles support "test"/"live"; treat "backtest" as "test"
-    mode = "test" if mode_raw.lower() == "backtest" else mode_raw
-    limit = int(payload.get("limit", 400))
-    fee_bps = float(payload.get("feesBps", 6.0) or 6.0)
-    sl_bps = float(payload.get("slippageBps", 2.0) or 2.0)
-    strategy = payload.get("strategy", "pattern3_extreme")
-    risk_per_trade = float(payload.get("risk_per_trade", payload.get("riskPerTrade", 100.0)) or 100.0)
-    rr_ratio = float(payload.get("rr_ratio", payload.get("rrRatio", 4.0)) or 4.0)
-    initial_balance = float(payload.get("initial_balance", payload.get("initialBalance", 10000.0)) or 10000.0)
-    interval = str(payload.get("interval") or "".join([ch for ch in timeframe if ch.isdigit()]) or "60")
-    port = int(payload.get("_port", 8000))
-    source = str(payload.get("source", "")).lower()
-    start_ts = _parse_ts(payload.get("start"))
-    if start_ts is None:
-        start_ts = _parse_ts(payload.get("start_ts"))
-    end_ts = _parse_ts(payload.get("end"))
-    if end_ts is None:
-        end_ts = _parse_ts(payload.get("end_ts"))
-
-    candles_for_run = None
-    if source == "history":
-        candles_for_run = _load_history(exchange, symbol, timeframe, start_ts, end_ts)
-
-    try:
-        result = None
-        if source == "history" and candles_for_run is not None:
-            # Respect explicit history source: simulate even if empty
-            result = _bt_simulate_simple(candles_for_run, fee_bps=fee_bps, slippage_bps=sl_bps)
-        else:
-            result = backtest_engine.run(
-                symbol=symbol,
-                interval=interval,
-                strategy=strategy,
-                risk_per_trade=risk_per_trade,
-                rr_ratio=rr_ratio,
-                limit=limit,
-            )
-    except Exception:
-        result = None
-
-    if not isinstance(result, dict):
-        candles = candles_for_run
-        if candles is None:
-            candles = await _asyncio.to_thread(_bt_fetch_candles_http, port, exchange, symbol, timeframe, limit, mode)
-        result = _bt_simulate_simple(candles, fee_bps=fee_bps, slippage_bps=sl_bps)
-
-    # Attach request/params for downstream consumers
-    params = dict(result.get("parameters") or {})
-    params.update({
-        "exchange": exchange,
-        "symbol": symbol,
-        "timeframe": timeframe,
-        "interval": interval,
-        "strategy": strategy,
-        "risk_per_trade": risk_per_trade,
-        "rr_ratio": rr_ratio,
-        "limit": limit,
-        "mode": mode,
-        "feesBps": fee_bps,
-        "slippageBps": sl_bps,
-        "initial_balance": initial_balance,
-        "source": source,
-        "start": start_ts,
-        "end": end_ts,
-    })
-    result["parameters"] = params
-    result["request"] = {"exchange": exchange, "symbol": symbol, "timeframe": timeframe, "mode": mode, "limit": limit}
-
-    _last_backtest_sync_result = result
-    last_backtest_context = result
-    return result
-
-def _api_backtest_latest_sync():
-    global _last_backtest_sync_result
-    if _last_backtest_sync_result:
-        return _last_backtest_sync_result
-    return {"ok": True, "ts": _dt.utcnow().isoformat(timespec="seconds"), "empty": True}
-
-_bt_app = _bt_find_app()
-if _bt_app is not None:
-    try:
-        _bt_app.add_api_route("/api/backtest/run_sync", _api_backtest_run_sync, methods=["POST"])
-        _bt_app.add_api_route("/api/backtest/latest_sync", _api_backtest_latest_sync, methods=["GET"])
-    except Exception:
-        pass
+# Synchronous backtest endpoints removed per contract requirement:
+# Backtest must be job-only: POST /api/backtest/run -> job_id; GET status; GET result.
+# No sync endpoints allowed.
 # BACKTEST_RUN_SYNC_MVP_END
 

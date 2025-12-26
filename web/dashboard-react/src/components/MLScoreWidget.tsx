@@ -36,15 +36,9 @@ function trafficFromQuality(q01: number | null): "green" | "yellow" | "red" | "o
 
 export function MLScoreWidget(props: Props) {
   const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState(false);
   const [data, setData] = useState<MlResp>({});
   const timerRef = useRef<number | null>(null);
-  const inFlightRef = useRef<AbortController | null>(null);
-
-  const mode = String(props.context?.mode ?? "").toUpperCase() || "TEST";
-  const symbol = props.context?.symbol || "BTCUSDT";
-  const timeframe = props.context?.timeframe || "15m";
-  const fetchKey = `${mode}|${symbol}|${timeframe}`;
 
   const q01 = useMemo(() => {
     const q = (data.quality != null ? data.quality : (data.score != null ? data.score : null)) as number | null;
@@ -64,54 +58,37 @@ export function MLScoreWidget(props: Props) {
   }, [data]);
 
   async function fetchOnce() {
-    if (inFlightRef.current) {
-      inFlightRef.current.abort();
-    }
-    const controller = new AbortController();
-    inFlightRef.current = controller;
     setLoading(true);
-    setErr(null);
+    setErr(false);
     try {
-      const payload = { 
-        context: { mode, symbol, timeframe },
-        market: { volatility: null, trend_strength: null, spread_estimate: null }
-      };
+      const payload = { context: props.context, market: { volatility: null, trend_strength: null, spread_estimate: null } };
       const r = await fetch("/api/ml/score", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-        signal: controller.signal,
       });
       if (!r.ok) {
-        const txt = await r.text().catch(() => "");
-        setErr(`ML score error: HTTP ${r.status}${txt ? ` ${txt}` : ""}`);
+        setErr(true);
         setData({});
         return;
       }
       const j = (await r.json().catch(() => ({} as any))) as MlResp;
       setData(j || {});
-    } catch (e: any) {
-      if (controller.signal.aborted) return;
-      setErr(e?.message ? String(e.message) : "ML score unavailable");
+    } catch {
+      setErr(true);
       setData({});
     } finally {
-      if (inFlightRef.current === controller) {
-        inFlightRef.current = null;
-      }
       setLoading(false);
     }
   }
 
   useEffect(() => {
     fetchOnce();
-    // Refresh periodically but not spammy
-    timerRef.current = window.setInterval(() => fetchOnce(), 60000) as unknown as number;
+    timerRef.current = window.setInterval(() => fetchOnce(), 10000) as unknown as number;
     return () => {
       if (timerRef.current != null) window.clearInterval(timerRef.current);
-      if (inFlightRef.current) inFlightRef.current.abort();
     };
-    // Only refetch when symbol/timeframe/mode change
-  }, [fetchKey]);
+  }, [props.context]);
 
   const title = err ? "ML недоступен" : (label ? label : "ML");
 
@@ -127,7 +104,7 @@ export function MLScoreWidget(props: Props) {
         {loading ? (
           <span className="shimmer-line" style={{ width: 120 }} />
         ) : err ? (
-          <span className="ml-muted" title={err}>Нет данных</span>
+          <span className="ml-muted">Нет данных</span>
         ) : (
           <>
             <span className="ml-label">{label ? label : "ML"}</span>

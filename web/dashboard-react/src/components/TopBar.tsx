@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import { Mode } from '../types';
-import ModeBadge from './ModeBadge';
-import DataHealthIndicator from './DataHealthIndicator';
+import { Mode, normalizeMode } from '../types';
 
 interface TopBarProps {
   mode: Mode;
@@ -12,7 +10,9 @@ interface TopBarProps {
   primaryCtaLabel: string;
   onPrimaryCta: () => void;
   primaryCtaDisabled?: boolean;
-  apiBase?: string;
+  secondaryCtaLabel?: string;
+  onSecondaryCta?: () => void;
+  secondaryCtaDisabled?: boolean;
 }
 
 function ModeButton(props: {
@@ -54,25 +54,27 @@ export default function TopBar({
   primaryCtaLabel,
   onPrimaryCta,
   primaryCtaDisabled = false,
-  apiBase,
+  secondaryCtaLabel,
+  onSecondaryCta,
+  secondaryCtaDisabled = false,
 }: TopBarProps) {
   const [hoveredMode, setHoveredMode] = useState<Mode | null>(null);
   const [settingsHovered, setSettingsHovered] = useState(false);
   
   const modeAccents: Record<Mode, { color: string; bg: string; border: string; glow: string }> = {
-    backtest: {
+    BACKTEST: {
       color: 'var(--accent-backtest)',
       bg: 'var(--accent-backtest-bg)',
       border: 'var(--accent-backtest-border)',
       glow: 'var(--accent-backtest-glow)',
     },
-    live: {
+    LIVE: {
       color: 'var(--accent-live)',
       bg: 'var(--accent-live-bg)',
       border: 'var(--accent-live-border)',
       glow: 'var(--accent-live-glow)',
     },
-    test: {
+    TEST: {
       color: 'var(--accent-test)',
       bg: 'var(--accent-test-bg)',
       border: 'var(--accent-test-border)',
@@ -105,41 +107,53 @@ export default function TopBar({
       <div className="flex items-center gap-2 flex-shrink-0" style={{ background: 'var(--surface-2)', padding: '4px', borderRadius: 'var(--radius-2)' }}>
         <ModeButton
           label="LIVE"
-          value="live"
-          active={mode === 'live'}
-          onClick={() => onModeChange('live')}
-          accent={{ bg: modeAccents.live.bg, glow: modeAccents.live.glow }}
-          hovered={hoveredMode === 'live'}
-          onHoverChange={(h) => setHoveredMode(h ? 'live' : null)}
+          value="LIVE"
+          active={mode === 'LIVE'}
+          onClick={() => onModeChange(normalizeMode('live'))}
+          accent={{ bg: modeAccents.LIVE.bg, glow: modeAccents.LIVE.glow }}
+          hovered={hoveredMode === 'LIVE'}
+          onHoverChange={(h) => setHoveredMode(h ? 'LIVE' : null)}
         />
         <ModeButton
           label="TEST"
-          value="test"
-          active={mode === 'test'}
-          onClick={() => onModeChange('test')}
-          accent={{ bg: modeAccents.test.bg, glow: modeAccents.test.glow }}
-          hovered={hoveredMode === 'test'}
-          onHoverChange={(h) => setHoveredMode(h ? 'test' : null)}
+          value="TEST"
+          active={mode === 'TEST'}
+          onClick={() => onModeChange(normalizeMode('test'))}
+          accent={{ bg: modeAccents.TEST.bg, glow: modeAccents.TEST.glow }}
+          hovered={hoveredMode === 'TEST'}
+          onHoverChange={(h) => setHoveredMode(h ? 'TEST' : null)}
         />
         <ModeButton
           label="BACKTEST"
-          value="backtest"
-          active={mode === 'backtest'}
-          onClick={() => onModeChange('backtest')}
-          accent={{ bg: modeAccents.backtest.bg, glow: modeAccents.backtest.glow }}
-          hovered={hoveredMode === 'backtest'}
-          onHoverChange={(h) => setHoveredMode(h ? 'backtest' : null)}
+          value="BACKTEST"
+          active={mode === 'BACKTEST'}
+          onClick={() => onModeChange(normalizeMode('backtest'))}
+          accent={{ bg: modeAccents.BACKTEST.bg, glow: modeAccents.BACKTEST.glow }}
+          hovered={hoveredMode === 'BACKTEST'}
+          onHoverChange={(h) => setHoveredMode(h ? 'BACKTEST' : null)}
         />
       </div>
 
-      {/* Right: CTA + Mode Badge + Data Health + Settings */}
+      {/* Right: CTA + Connection + Settings */}
       <div className="flex items-center gap-3 flex-shrink-0">
-        {/* Mode Badge */}
-        <ModeBadge mode={mode} />
-        
-        {/* Data Health Indicator */}
-        <DataHealthIndicator apiBase={apiBase} />
-        
+        {/* Secondary CTA (optional) */}
+        {secondaryCtaLabel && onSecondaryCta && (
+          <button
+            onClick={onSecondaryCta}
+            disabled={secondaryCtaDisabled}
+            className="px-4 py-1.5 text-xs font-semibold rounded-lg transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              background: 'var(--surface-2)',
+              border: '1px solid var(--stroke)',
+              color: 'var(--text-2)',
+            }}
+            aria-label={secondaryCtaLabel}
+            title={secondaryCtaDisabled ? 'Action unavailable' : undefined}
+          >
+            {secondaryCtaLabel}
+          </button>
+        )}
+
         {/* Primary CTA */}
         <button
           onClick={onPrimaryCta}
@@ -160,6 +174,14 @@ export default function TopBar({
         >
           {primaryCtaLabel}
         </button>
+
+        <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-3)' }}>
+          <span 
+            className="inline-flex h-1.5 w-1.5 rounded-full"
+            style={{ background: 'var(--status-profit)' }}
+          />
+          <span>Connected</span>
+        </div>
 
         <button 
           className="p-1.5 transition-colors rounded-lg"

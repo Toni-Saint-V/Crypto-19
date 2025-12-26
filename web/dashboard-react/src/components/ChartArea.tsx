@@ -1,5 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
-import { CandlestickData, Time } from 'lightweight-charts';
+import { useState, useEffect } from 'react';
 import { Mode } from '../types';
 import TradingChart from './TradingChart';
 import ChartParametersRow from './ChartParametersRow';
@@ -8,85 +7,7 @@ import { MLScoreWidget } from "./MLScoreWidget";
 import BacktestResultsPanel from "./BacktestResultsPanel";
 import LiveResultsDrawer from "./LiveResultsDrawer";
 import TestResultsDrawer from "./TestResultsDrawer";
-
-type CandleLike = {
-  time?: any;
-  timestamp?: any;
-  ts?: any;
-  open?: any;
-  high?: any;
-  low?: any;
-  close?: any;
-};
-
-function toUnixSeconds(value: any): number | undefined {
-  if (value === null || value === undefined) return undefined;
-
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return Math.floor(value.getTime() / 1000);
-  }
-
-  if (typeof value === 'string') {
-    const asNum = Number(value);
-    if (Number.isFinite(asNum)) {
-      return asNum > 1000000000000 ? Math.floor(asNum / 1000) : Math.floor(asNum);
-    }
-    const parsed = Date.parse(value);
-    if (!Number.isNaN(parsed)) {
-      return Math.floor(parsed / 1000);
-    }
-    return undefined;
-  }
-
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value)) return undefined;
-    return value > 1000000000000 ? Math.floor(value / 1000) : Math.floor(value);
-  }
-
-  return undefined;
-}
-
-function normalizeCandles(raw: any): CandlestickData<Time>[] {
-  if (!Array.isArray(raw)) return [];
-
-  const mapped: CandlestickData<Time>[] = [];
-
-  for (const c of raw) {
-    const time = toUnixSeconds((c as CandleLike)?.time ?? (c as CandleLike)?.timestamp ?? (c as CandleLike)?.ts);
-    const open = Number((c as CandleLike)?.open);
-    const high = Number((c as CandleLike)?.high);
-    const low = Number((c as CandleLike)?.low);
-    const close = Number((c as CandleLike)?.close);
-
-    if (
-      time === undefined ||
-      !Number.isFinite(open) ||
-      !Number.isFinite(high) ||
-      !Number.isFinite(low) ||
-      !Number.isFinite(close)
-    ) {
-      continue;
-    }
-
-    mapped.push({
-      time: time as Time,
-      open,
-      high,
-      low,
-      close,
-    });
-  }
-
-  mapped.sort((a, b) => (Number(a.time) || 0) - (Number(b.time) || 0));
-  return mapped;
-}
-
-function extractTrades(result: any): any[] {
-  if (!result) return [];
-  const candidates = result.trades ?? result.positions ?? result.results ?? result.payload ?? result.data;
-  if (Array.isArray(candidates)) return candidates;
-  return [];
-}
+import type { BacktestResult } from "../types/backtest";
 
 // Minimal typed ML context (UI only, no contract changes)
 interface MLContext {
@@ -96,6 +17,7 @@ interface MLContext {
 }
 
 interface ChartAreaProps {
+  backtestResult?: BacktestResult | null;
   mode: Mode;
   symbol: string;
   exchange: string;
@@ -105,24 +27,14 @@ interface ChartAreaProps {
   apiBase?: string;
   onBacktestRun?: () => void;
   onBacktestCancel?: () => void;
-  backtestRunStatus?: 'idle' | 'running' | 'done' | 'error';
+  onBacktestRetry?: () => void;
+  backtestJobStatus?: 'idle' | 'queued' | 'running' | 'done' | 'error';
+  backtestJobProgress?: number;
   backtestRunError?: string;
-  backtestResult?: any;
-  historyPreset: '1Y' | '3Y' | 'custom';
-  historyStart: number;
-  historyEnd: number;
-  historyStatus: 'idle' | 'pending' | 'done' | 'error';
-  historyCount: number;
-  historyPath?: string;
-  historyError?: string;
-  onHistoryPresetChange: (preset: '1Y' | '3Y' | 'custom') => void;
-  onHistoryDateChange: (which: 'start' | 'end', value: number) => void;
-  onHistoryDownload: () => void;
-
-  historyRowCount?: number | null;
 }
 
 export default function ChartArea({
+  backtestResult,
   mode,
   symbol,
   exchange,
@@ -132,26 +44,15 @@ export default function ChartArea({
   apiBase,
   onBacktestRun,
   onBacktestCancel,
-  backtestRunStatus,
+  onBacktestRetry,
+  backtestJobStatus,
+  backtestJobProgress,
   backtestRunError,
-  backtestResult,
-  historyPreset,
-  historyStart,
-  historyEnd,
-  historyStatus,
-  historyCount,
-  historyPath,
-  historyError,
-  onHistoryPresetChange,
-  onHistoryDateChange,
-  onHistoryDownload,
-
 }: ChartAreaProps) {
   const [riskFilter, setRiskFilter] = useState('All');
   const [drawerExpanded, setDrawerExpanded] = useState(false);
-  const [candles, setCandles] = useState<CandlestickData<Time>[]>([]);
   
-  // Reset drawer expanded state on mode change (always collapsed by default)
+  // Reset drawer expanded state on mode change
   useEffect(() => {
     setDrawerExpanded(false);
   }, [mode]);
@@ -167,46 +68,6 @@ export default function ChartArea({
     symbol,
     timeframe,
   };
-
-  // Load candles from backend whenever symbol/timeframe/mode/exchange changes
-  useEffect(() => {
-    const controller = new AbortController();
-
-    const fetchCandles = async () => {
-      try {
-        const base = String(apiBase || '').replace(/\/$/, '');
-        // Backend /api/candles supports live/test; map backtest -> test to avoid mixing live candles with historical trades.
-        const candlesMode = mode === 'backtest' ? 'test' : mode;
-        const params = new URLSearchParams({
-          symbol,
-          timeframe,
-          exchange,
-          mode: candlesMode,
-        });
-
-        const res = await fetch(`${base}/api/candles?${params.toString()}`, {
-          signal: controller.signal,
-        });
-
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-
-        const json = await res.json().catch(() => ({}));
-        const list = Array.isArray(json?.candles) ? json.candles : Array.isArray(json) ? json : [];
-        setCandles(normalizeCandles(list));
-      } catch (e: any) {
-        if (controller.signal.aborted) return;
-        // On error, clear candles to avoid showing stale/mocked data
-        setCandles([]);
-      }
-    };
-
-    fetchCandles();
-    return () => controller.abort();
-  }, [apiBase, symbol, timeframe, exchange, mode]);
-
-  const chartTrades = useMemo(() => extractTrades(backtestResult), [backtestResult]);
   
   return (
     <div 
@@ -219,7 +80,7 @@ export default function ChartArea({
       {/* Chart topbar (HUD + ML Score) */}
       <div className="flex items-center justify-between px-4 py-2 flex-shrink-0" style={{ borderBottom: '1px solid var(--stroke)' }}>
         <div className="flex items-center gap-2">
-          <ChartHUD />
+          <ChartHUD mode={mode} symbol={symbol} timeframe={timeframe} />
         </div>
         <div className="flex items-center gap-2">
           <MLScoreWidget context={mlContext} />
@@ -241,20 +102,19 @@ export default function ChartArea({
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
         {/* Chart always visible, takes remaining space */}
         <div className="flex-1 min-h-0 overflow-hidden">
-          <TradingChart data={candles} trades={chartTrades} />
+          <TradingChart />
         </div>
 
-        {/* Shared bottom drawer wrapper (always overlay-mounted, does not affect chart height) */}
-        {/* Drawer is constrained to left area only (does not cover chat on right) */}
+        {/* Shared bottom drawer wrapper (always overlay-mounted) */}
         <div
           className="flex flex-col z-10"
           style={{
             position: 'absolute',
             left: 0,
-            right: '380px', // Leave space for chat panel (fixed width)
+            right: 0,
             bottom: 0,
-            height: drawerExpanded ? '38vh' : '48px',
-            maxHeight: '38vh',
+            height: drawerExpanded ? 'var(--drawer-max-h)' : '48px',
+            maxHeight: 'var(--drawer-max-h)',
             transition: 'height 200ms ease-out',
             background: 'var(--surface-1)',
             borderTop: '1px solid var(--stroke)',
@@ -262,32 +122,23 @@ export default function ChartArea({
             overflow: 'hidden',
           }}
         >
-          {mode === 'backtest' && (
+          {mode === 'BACKTEST' && (
             <BacktestResultsPanel 
               apiBase={apiBase}
               onRun={onBacktestRun}
               onCancel={onBacktestCancel}
-              runStatus={backtestRunStatus}
+              onRetry={onBacktestRetry}
+              jobStatus={backtestJobStatus}
+              jobProgress={backtestJobProgress}
               runError={backtestRunError}
+              result={backtestResult}
               onExpandedChange={setDrawerExpanded}
-historyCount={historyCount}
-historyError={historyError}
-              onHistoryPresetChange={onHistoryPresetChange}
-
-              historyPreset={historyPreset}
-              historyStart={historyStart}
-              historyEnd={historyEnd}
-              historyStatus={historyStatus}
-
-              historyPath={historyPath}
-              onHistoryDateChange={onHistoryDateChange}
-              onHistoryDownload={onHistoryDownload}
             />
           )}
-          {mode === 'live' && (
+          {mode === 'LIVE' && (
             <LiveResultsDrawer onExpandedChange={setDrawerExpanded} />
           )}
-          {mode === 'test' && (
+          {mode === 'TEST' && (
             <TestResultsDrawer onExpandedChange={setDrawerExpanded} />
           )}
         </div>

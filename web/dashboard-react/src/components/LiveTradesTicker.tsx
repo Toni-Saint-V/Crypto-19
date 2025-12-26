@@ -48,7 +48,7 @@ const backtestEvents: string[] = [
 export default function LiveTradesTicker({ mode }: LiveTradesTickerProps) {
   let content: JSX.Element[] = [];
 
-  if (mode === 'live') {
+  if (mode === 'LIVE') {
     content = liveTrades.map((trade) => {
       const positive = trade.pnl >= 0;
       return (
@@ -67,7 +67,7 @@ export default function LiveTradesTicker({ mode }: LiveTradesTickerProps) {
         </div>
       );
     });
-  } else if (mode === 'test') {
+  } else if (mode === 'TEST') {
     content = testEvents.map((e, idx) => (
       <div key={idx} className="text-xs text-gray-300">
         {e}

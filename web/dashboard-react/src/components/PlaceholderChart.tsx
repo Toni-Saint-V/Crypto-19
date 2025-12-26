@@ -6,7 +6,7 @@ interface PlaceholderChartProps {
 
 export default function PlaceholderChart({ mode }: PlaceholderChartProps) {
   const modeLabel =
-    mode === 'live' ? 'Live synthetic data' : mode === 'test' ? 'Test playback' : 'Backtest curve';
+    mode === 'LIVE' ? 'Live synthetic data' : mode === 'TEST' ? 'Test playback' : 'Backtest curve';
 
   return (
     <div className="w-full h-full bg-[#05070A] flex flex-col">

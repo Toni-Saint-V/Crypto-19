@@ -3,45 +3,29 @@
 @tailwind utilities;
 
 :root {
-  /* Base colors - Design Tokens */
-  --bg: #0B1020;
-  --surface-1: #101A33;
-  --surface-2: #1a2333;
-  --surface-3: #242d3d;
+  /* Base colors */
+  --bg: #05070a;
+  --surface-1: #0a0d12;
+  --surface-2: #0f1419;
+  --surface-3: #141a20;
   --stroke: rgba(255, 255, 255, 0.08);
   --stroke-strong: rgba(255, 255, 255, 0.12);
-  --text-1: #EAF0FF;
-  --text-2: #9AA8C7;
-  --text-3: #6B7A99;
-  --text-muted: #9AA8C7;
-  
-  /* Status colors - Design Tokens */
-  --status-good: #3EF08A;
-  --status-bad: #FF5C7A;
-  --status-warn: #FFCB4D;
-  --status-accent1: #6AA6FF;
-  --status-accent2: #B36BFF;
-  
-  /* Status backgrounds */
-  --status-good-bg: rgba(62, 240, 138, 0.1);
-  --status-bad-bg: rgba(255, 92, 122, 0.1);
-  --status-warn-bg: rgba(255, 203, 77, 0.1);
-  --status-good-border: rgba(62, 240, 138, 0.3);
-  --status-bad-border: rgba(255, 92, 122, 0.3);
-  --status-warn-border: rgba(255, 203, 77, 0.3);
+  --text-1: rgba(255, 255, 255, 0.95);
+  --text-2: rgba(255, 255, 255, 0.7);
+  --text-3: rgba(255, 255, 255, 0.5);
   
   /* Shadows (elevation) */
   --shadow-e1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.2);
   --shadow-e2: 0 4px 8px rgba(0, 0, 0, 0.4), 0 0 2px rgba(0, 0, 0, 0.3);
   --shadow-e3: 0 8px 16px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.4);
   
-  /* Radius - Design Tokens */
-  --radius-1: 10px;
-  --radius-2: 14px;
-  --radius-3: 18px;
+  /* Radius */
+  --radius-1: 8px;
+  --radius-2: 12px;
+  --radius-3: 16px;
   --radius-pill: 9999px;
   
-  /* Spacing - Design Tokens (0,4,8,12,16,24,32,40,48) */
+  /* Spacing (4px baseline) */
   --space-0: 0px;
   --space-1: 4px;
   --space-2: 8px;
@@ -52,15 +36,6 @@
   --space-7: 32px;
   --space-8: 40px;
   --space-9: 48px;
-  
-  /* Typography - Design Tokens */
-  --font-family: "Inter", "SF Pro", system-ui, -apple-system, sans-serif;
-  --font-kpi-size: 24px;
-  --font-kpi-weight: 700;
-  --font-body-size: 13px;
-  --font-body-weight: 500;
-  --font-caption-size: 11px;
-  --font-caption-weight: 500;
   
   /* Mode accents */
   --accent-backtest: #a855f7; /* purple-500 */
@@ -84,18 +59,22 @@
   --accent-test-border: rgba(245, 158, 11, 0.3);
   --accent-test-glow: rgba(245, 158, 11, 0.25);
   
-  /* Legacy status colors (mapped to new tokens) */
-  --status-loss: var(--status-bad);
-  --status-loss-bg: var(--status-bad-bg);
-  --status-loss-border: var(--status-bad-border);
+  /* Status colors */
+  --status-loss: #ef4444; /* red-500 */
+  --status-loss-bg: rgba(239, 68, 68, 0.1);
+  --status-loss-border: rgba(239, 68, 68, 0.3);
   
-  --status-profit: var(--status-good);
-  --status-profit-bg: var(--status-good-bg);
-  --status-profit-border: var(--status-good-border);
+  --status-profit: #10b981; /* emerald-500 */
+  --status-profit-bg: rgba(16, 185, 129, 0.1);
+  --status-profit-border: rgba(16, 185, 129, 0.3);
   
-  --status-info: var(--status-accent1);
-  --status-info-bg: rgba(106, 166, 255, 0.1);
-  --status-info-border: rgba(106, 166, 255, 0.3);
+  --status-warn: #f59e0b; /* amber-500 */
+  --status-warn-bg: rgba(245, 158, 11, 0.1);
+  --status-warn-border: rgba(245, 158, 11, 0.3);
+  
+  --status-info: #3b82f6; /* blue-500 */
+  --status-info-bg: rgba(59, 130, 246, 0.1);
+  --status-info-border: rgba(59, 130, 246, 0.3);
   
   /* Active mode accent (for mode-aware selection) - default to live */
   --accent-active: var(--accent-live);
@@ -108,6 +87,10 @@
   --gradient-backtest: linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(236, 72, 153, 0.1) 100%);
   --gradient-live: linear-gradient(135deg, rgba(20, 184, 166, 0.15) 0%, rgba(59, 130, 246, 0.1) 100%);
   --gradient-test: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(251, 191, 36, 0.1) 100%);
+  
+  /* Layout contract: remove magic numbers */
+  --chat-w: 380px; /* Chat sidebar width (380-420px range) */
+  --drawer-max-h: 38vh; /* Bottom drawer max height */
 }
 
 * {
@@ -128,21 +111,14 @@ body,
 }
 
 body {
-  overflow: hidden !important;
+  overflow: hidden;
   overscroll-behavior: none;
-  font-family: var(--font-family);
-  font-size: var(--font-body-size);
-  font-weight: var(--font-body-weight);
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    -apple-system, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: var(--text-1);
   color-scheme: dark;
-}
-
-html {
-  overflow: hidden !important;
-  height: 100vh;
-  height: 100dvh; /* Dynamic viewport height for mobile */
 }
 
 .hide-scrollbar {
@@ -194,46 +170,6 @@ html {
 .tabular-nums {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
-}
-
-/* KPI Typography */
-.kpi-value {
-  font-size: var(--font-kpi-size);
-  font-weight: var(--font-kpi-weight);
-  line-height: 1.2;
-}
-
-/* Body Typography */
-.body-text {
-  font-size: var(--font-body-size);
-  font-weight: var(--font-body-weight);
-  line-height: 1.5;
-}
-
-/* Caption Typography */
-.caption-text {
-  font-size: var(--font-caption-size);
-  font-weight: var(--font-caption-weight);
-  line-height: 1.4;
-}
-
-/* Card spacing (16px padding) */
-.card {
-  padding: var(--space-4);
-  border-radius: var(--radius-1);
-}
-
-/* Button spacing */
-.btn {
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-1);
-  font-size: var(--font-body-size);
-  font-weight: var(--font-body-weight);
-}
-
-/* Table spacing */
-.table-cell {
-  padding: var(--space-2) var(--space-3);
 }
 
 /* Placeholder color */

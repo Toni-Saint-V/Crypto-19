@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import StrategyIcon from "./StrategyIcon";
 
 interface ChartParametersRowProps {
   symbol: string;
@@ -39,18 +40,13 @@ export default function ChartParametersRow({
     <div className="h-12 min-h-[48px] flex items-center justify-between px-6 border-b border-[#1A1C22] bg-[#05070A] flex-shrink-0">
       <div className="flex items-center gap-4 text-xs">
         <div className="flex items-center gap-2">
-          <div
-            className="flex items-center gap-1.5 px-3 py-1 rounded-lg"
-            style={{ background: 'var(--accent-backtest-bg)', border: '1px solid var(--accent-backtest-border)' }}
-          >
-            <span className="text-[11px]" style={{ color: 'var(--accent-backtest)' }}>Strategy</span>
-            <span className="text-[12px] font-semibold text-white">{strategy}</span>
-          </div>
           <span className="text-sm font-medium text-white">{symbol}</span>
           <span className="text-gray-500">|</span>
           <span className="text-gray-400">{exchange}</span>
           <span className="text-gray-500 ml-4">TF:</span>
           <span className="text-gray-200">{timeframe}</span>
+          <span className="text-gray-500 ml-4">Strategy:</span>
+          <span className="text-gray-200">{strategy}</span>
         </div>
       </div>
 
@@ -90,7 +86,8 @@ export default function ChartParametersRow({
                   className="w-16 bg-[#0C0F15] border border-[#1A1C22] rounded px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-[#21D4B4]"
                   min="1"
                 />
-                <select
+                <div className="strategy-badge" data-testid="strategy"><StrategyIcon strategy={String(strategy)} /><span className="strategy-name">{String(strategy)}</span></div>
+<select
                   value={customUnit}
                   onChange={(e) => setCustomUnit(e.target.value as 'm' | 'h' | 'd')}
                   className="bg-[#0C0F15] border border-[#1A1C22] rounded px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-[#21D4B4]"
