@@ -119,6 +119,15 @@ async function main() {
     process.stdout.write("\n");
   } catch {}
 
+  // macOS best-effort: open browser unless NO_OPEN=1
+  try {
+    const noOpen = String(process.env.NO_OPEN || "").trim() === "1";
+    if (!noOpen && process.platform === "darwin") {
+      const opener = spawn("open", [frontendUrl], { stdio: "ignore" });
+      opener.on("error", () => {});
+    }
+  } catch {}
+
   const stop = () => children.forEach((c) => { try { c.kill("SIGINT"); } catch {} });
   process.on("SIGINT", () => { stop(); process.exit(0); });
   process.on("SIGTERM", () => { stop(); process.exit(0); });

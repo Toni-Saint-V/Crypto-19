@@ -1,6 +1,15 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function isNetworkErrorText(text) {
+  const t = String(text || "");
+  return /TLS handshake timeout|handshake timeout|timed out|timeout|ECONNRESET|ENOTFOUND|EAI_AGAIN|EOF|Temporary failure|network/i.test(t);
+}
+
 function run(cmd, args, opts = {}) {
   const res = spawnSync(cmd, args, { encoding: "utf8", ...opts });
   if (res.error && res.error.code === "ENOENT") {
@@ -89,7 +98,89 @@ function ghApiGraphql(query, variables, failPrefix) {
   }
 }
 
-function main() {
+async function ghApiJsonRetry(args, failPrefix, opts = {}) {
+  const retries = Number.isFinite(opts.retries) ? opts.retries : 3;
+  const baseDelayMs = Number.isFinite(opts.baseDelayMs) ? opts.baseDelayMs : 600;
+
+  let last = null;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const r = run("gh", ["api", ...args], { stdio: ["ignore", "pipe", "pipe"] });
+    if (r.ok) {
+      try {
+        return { ok: true, json: JSON.parse(r.stdout || "{}") };
+      } catch {
+        console.error(`${failPrefix} (invalid JSON)`);
+        console.error(r.stdout);
+        process.exit(1);
+      }
+    }
+
+    const msg = (r.stderr || r.stdout || "").trim();
+    last = msg;
+    const net = isNetworkErrorText(msg);
+
+    if (!net) {
+      console.error(`${failPrefix}`);
+      console.error(msg);
+      process.exit(1);
+    }
+
+    if (attempt < retries) {
+      const delay = baseDelayMs * Math.pow(2, attempt - 1);
+      console.log(`[pr:auto] WARN: GitHub API network error (attempt ${attempt}/${retries}). Retrying in ${delay}ms...`);
+      await sleep(delay);
+      continue;
+    }
+  }
+
+  return { ok: false, networkDown: true, error: last || "GitHub API unavailable" };
+}
+
+async function ghApiGraphqlRetry(query, variables, failPrefix, opts = {}) {
+  const retries = Number.isFinite(opts.retries) ? opts.retries : 3;
+  const baseDelayMs = Number.isFinite(opts.baseDelayMs) ? opts.baseDelayMs : 600;
+
+  let last = null;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const args = ["api", "graphql", "-f", `query=${query}`];
+    for (const [k, v] of Object.entries(variables || {})) {
+      args.push("-f", `${k}=${v}`);
+    }
+    const r = run("gh", args, { stdio: ["ignore", "pipe", "pipe"] });
+    if (r.ok) {
+      try {
+        return { ok: true, json: JSON.parse(r.stdout || "{}") };
+      } catch {
+        console.error(`${failPrefix} (invalid JSON)`);
+        console.error(r.stdout);
+        process.exit(1);
+      }
+    }
+
+    const msg = (r.stderr || r.stdout || "").trim();
+    last = msg;
+    const net = isNetworkErrorText(msg);
+
+    if (!net) {
+      console.error(`${failPrefix}`);
+      console.error(msg);
+      process.exit(1);
+    }
+
+    if (attempt < retries) {
+      const delay = baseDelayMs * Math.pow(2, attempt - 1);
+      console.log(`[pr:auto] WARN: GitHub API network error (attempt ${attempt}/${retries}). Retrying in ${delay}ms...`);
+      await sleep(delay);
+      continue;
+    }
+  }
+
+  return { ok: false, networkDown: true, error: last || "GitHub API unavailable" };
+}
+
+async function main() {
+  const offline = String(process.env.PR_AUTO_OFFLINE || "") === "1";
+  const noPush = String(process.env.PR_AUTO_NO_PUSH || "") === "1";
   if (!ghAvailable()) {
     console.error("[pr:auto] ERROR: gh CLI not installed.");
     console.error("[pr:auto] Install: https://cli.github.com/");
@@ -115,10 +206,12 @@ function main() {
   }
 
   const dirty = tryExec("git", ["status", "--porcelain"]);
+  if (!offline && !noPush) {
   if (dirty) {
     console.error("[pr:auto] ERROR: uncommitted changes detected.");
     console.error("[pr:auto] Commit or stash changes first.");
     process.exit(1);
+  }
   }
 
   // Determine repo
@@ -130,35 +223,68 @@ function main() {
     process.exit(1);
   }
   const [owner] = ownerRepo.split("/");
+  const [ownerName, repoName] = ownerRepo.split("/");
+  const branchPath = encodeURIComponent(branch).replaceAll("%2F", "/");
+  const manualPrUrl = `https://github.com/${ownerName}/${repoName}/pull/new/${branchPath}`;
 
   console.log(`[pr:auto] Repo:   ${ownerRepo}`);
   console.log(`[pr:auto] Branch: ${branch}`);
 
-  // Push branch (best-effort but usually required for PR creation)
-  const push = run("git", ["push", "-u", "origin", "HEAD"], { stdio: "inherit" });
-  if (!push.ok) {
-    console.error("[pr:auto] ERROR: git push failed.");
-    console.error("[pr:auto] Fix push errors, then re-run: npm run pr:auto");
-    process.exit(1);
+  let pushOk = false;
+  if (process.env.PR_AUTO_NO_PUSH === "1") {
+    console.log("[pr:auto] NOTE: PR_AUTO_NO_PUSH=1, skipping git push (assuming pushed).");
+    pushOk = true;
+  } else {
+    const push = run("git", ["push", "-u", "origin", "HEAD"], { stdio: "inherit" });
+    if (!push.ok) {
+      console.error("[pr:auto] ERROR: git push failed.");
+      console.error("[pr:auto] Fix push errors, then re-run: npm run pr:auto");
+      process.exit(1);
+    }
+    pushOk = true;
+  }
+
+
+  // Mandatory banner before any GitHub API calls
+  console.log(`[pr:auto] mode offline=${offline} no_push=${noPush} push_ok=${pushOk}`);
+  console.log(`[pr:auto] manual_pr_url: ${manualPrUrl}`);
+
+  // Offline short-circuit BEFORE any GitHub API calls
+  if (offline) {
+    console.log("[pr:auto] PR_AUTO_OFFLINE=1: exiting before any GitHub API calls.");
+    process.exit(pushOk ? 0 : 1);
   }
 
   // Repo metadata (default branch + delete_branch_on_merge)
-  const repoMeta = ghApiJson([`repos/${ownerRepo}`], "[pr:auto] ERROR: unable to fetch repo metadata.");
+  const repoMetaRes = await ghApiJsonRetry([`repos/${ownerRepo}`], "[pr:auto] ERROR: unable to fetch repo metadata.");
+  if (!repoMetaRes.ok && repoMetaRes.networkDown) {
+    console.log("");
+    console.log("[pr:auto] GitHub API is currently unavailable (network/TLS).");
+    console.log("[pr:auto] Auto PR creation and auto-merge were not enabled due to network.");
+    console.log("[pr:auto] If push succeeded, you can create a PR in the browser:");
+    console.log(`  ${manualPrUrl}`);
+    process.exit(pushOk ? 0 : 1);
+  }
+  const repoMeta = repoMetaRes.json;
   const defaultBranch = repoMeta.default_branch || "main";
   const deleteOnMerge = Boolean(repoMeta.delete_branch_on_merge);
   const repoId = repoMeta.node_id;
 
   // Find existing open PR for this branch
-  const prs = ghApiJson(
-    [
-      `repos/${ownerRepo}/pulls`,
-      "-f",
-      `head=${owner}:${branch}`,
-      "-f",
-      "state=open",
-    ],
+  const headParam = `${ownerName}:${branch}`;
+  const prsRes = await ghApiJsonRetry(
+    [`repos/${ownerRepo}/pulls`, "-f", `head=${headParam}`, "-f", "state=open"],
     "[pr:auto] ERROR: unable to list PRs for branch."
   );
+  if (!prsRes.ok && prsRes.networkDown) {
+    console.log("");
+    console.log("[pr:auto] GitHub API is currently unavailable (network/TLS).");
+    console.log("[pr:auto] Auto PR creation and auto-merge were not enabled due to network.");
+    console.log("[pr:auto] If push succeeded, you can create a PR in the browser:");
+    console.log(`  ${manualPrUrl}`);
+    process.exit(pushOk ? 0 : 1);
+  }
+  const prs = prsRes.json;
 
   let pr = Array.isArray(prs) && prs.length > 0 ? prs[0] : null;
 
@@ -167,22 +293,19 @@ function main() {
     const title = tryExec("git", ["log", "-1", "--pretty=%s"]) || `PR: ${branch}`;
     const body = tryExec("git", ["log", "-1", "--pretty=%b"]) || `Automated PR for branch ${branch}.`;
 
-    pr = ghApiJson(
-      [
-        "-X",
-        "POST",
-        `repos/${ownerRepo}/pulls`,
-        "-f",
-        `title=${title}`,
-        "-f",
-        `head=${branch}`,
-        "-f",
-        `base=${defaultBranch}`,
-        "-f",
-        `body=${body}`,
-      ],
+    const createRes = await ghApiJsonRetry(
+      ["-X", "POST", `repos/${ownerRepo}/pulls`, "-f", `title=${title}`, "-f", `head=${branch}`, "-f", `base=${defaultBranch}`, "-f", `body=${body}`],
       "[pr:auto] ERROR: unable to create PR."
     );
+    if (!createRes.ok && createRes.networkDown) {
+      console.log("");
+      console.log("[pr:auto] GitHub API is currently unavailable (network/TLS).");
+      console.log("[pr:auto] PR was not created due to network. Auto-merge was not enabled.");
+      console.log("[pr:auto] If push succeeded, you can create a PR in the browser:");
+      console.log(`  ${manualPrUrl}`);
+      process.exit(pushOk ? 0 : 1);
+    }
+    pr = createRes.json;
     console.log(`[pr:auto] Created PR #${pr.number}`);
   } else {
     console.log(`[pr:auto] Found existing PR #${pr.number}`);
@@ -201,14 +324,24 @@ function main() {
       }
     }
   `;
-  const enableRes = ghApiGraphql(
+  const enableRes = await ghApiGraphqlRetry(
     enableQuery,
     { pullRequestId: prId },
     "[pr:auto] ERROR: unable to enable auto-merge via GraphQL."
   );
+  if (!enableRes.ok && enableRes.networkDown) {
+    const prUrlFallback = pr.html_url || "(unknown)";
+    console.log("");
+    console.log("[pr:auto] GitHub API is currently unavailable (network/TLS).");
+    console.log("[pr:auto] Auto-merge was NOT enabled due to network.");
+    console.log(`[pr:auto] PR: ${prUrlFallback}`);
+    console.log("[pr:auto] If needed, create PR manually:");
+    console.log(`  ${manualPrUrl}`);
+    process.exit(pushOk ? 0 : 1);
+  }
 
   const prUrl =
-    enableRes?.data?.enablePullRequestAutoMerge?.pullRequest?.url ||
+    enableRes?.json?.data?.enablePullRequestAutoMerge?.pullRequest?.url ||
     pr.html_url ||
     "(unknown)";
 
@@ -221,14 +354,15 @@ function main() {
         }
       }
     `;
-    const r = run("gh", ["api", "graphql", "-f", `query=${updateRepoQuery}`, "-f", `repositoryId=${repoId}`], {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    if (r.ok) {
-      console.log("[pr:auto] Repo setting: delete branch on merge enabled (best-effort).");
+    const updateRes = await ghApiGraphqlRetry(
+      updateRepoQuery,
+      { repositoryId: repoId },
+      "[pr:auto] WARN: unable to enable repo delete-branch-on-merge (GraphQL)."
+    );
+    if (!updateRes.ok && updateRes.networkDown) {
+      console.log("[pr:auto] WARN: delete-branch-on-merge not enabled due to network.");
     } else {
-      console.log("[pr:auto] WARN: Could not enable repo delete-branch-on-merge (permissions/repo settings).");
-      console.log("[pr:auto] You can enable it in GitHub repo settings, or delete the branch manually after merge.");
+      console.log("[pr:auto] Repo setting: delete branch on merge enabled (best-effort).");
     }
   }
 
@@ -243,7 +377,7 @@ function main() {
 }
 
 try {
-  main();
+  await main();
 } catch (e) {
   console.error("[pr:auto] ERROR:", e?.message || e);
   process.exit(1);
