@@ -7,23 +7,23 @@ interface ModeBadgeProps {
 
 export default function ModeBadge({ mode, className = '' }: ModeBadgeProps) {
   const modeLabels: Record<Mode, string> = {
-    live: 'LIVE',
-    test: 'TEST',
-    backtest: 'BACKTEST',
+    LIVE: 'LIVE',
+    TEST: 'TEST',
+    BACKTEST: 'BACKTEST',
   };
 
   const modeAccents: Record<Mode, { color: string; bg: string; border: string }> = {
-    backtest: {
+    BACKTEST: {
       color: 'var(--accent-backtest)',
       bg: 'var(--accent-backtest-bg)',
       border: 'var(--accent-backtest-border)',
     },
-    live: {
+    LIVE: {
       color: 'var(--accent-live)',
       bg: 'var(--accent-live-bg)',
       border: 'var(--accent-live-border)',
     },
-    test: {
+    TEST: {
       color: 'var(--accent-test)',
       bg: 'var(--accent-test-bg)',
       border: 'var(--accent-test-border)',
