@@ -3,7 +3,12 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/dev.mjs",
+    "dev:clean": "npm run -s ports:free && npm run -s dev",
+    "ports:free": "node scripts/ports-free.mjs",
     "verify": "node scripts/verify-root.mjs",
+    "verify:ci": "npm run -s verify",
+    "pr:auto": "node scripts/pr-auto.mjs",
+    "logs:dev": "node scripts/logs-dev.mjs",
     "запуск": "npm run dev",
     "проверка": "npm run verify",
     "run": "npm run dev",
