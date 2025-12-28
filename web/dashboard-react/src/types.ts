@@ -40,6 +40,8 @@ export interface BacktestKPIData {
   maxDrawdown: number;
 }
 
+export type MetricState = 'loading' | 'empty' | 'error' | 'stale' | 'ok';
+
 export interface Indicator {
   name: string;
   active: boolean;

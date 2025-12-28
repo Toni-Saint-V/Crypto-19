@@ -1,114 +1,55 @@
-import { Mode, KPIData, BacktestKPIData } from '../types';
+import { Mode, KPIData, BacktestKPIData, MetricState } from '../types';
+import MetricCard from './MetricCard';
+import { formatCurrency, formatInteger, formatNumber, formatPercent } from '../utils/formatters';
 
 interface StatsTickerProps {
   mode: Mode;
   kpi: KPIData | BacktestKPIData | null;
+  balance?: number;
   backtestKpi?: {
     totalTrades: number;
     profitFactor: number;
     maxDrawdown: number;
   };
+  backtestJobStatus?: 'idle' | 'queued' | 'running' | 'done' | 'error';
+  backtestError?: string | null;
 }
 
-function formatNumber(value: unknown, digits: number = 2): string {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value.toFixed(digits);
-  }
-  return '—';
+function subtitleLine(units: string, period: string, asOf: string): string {
+  return `${units} · ${period} · as of ${asOf}`;
 }
 
-function formatCurrency(value: number): string {
-  if (!Number.isFinite(value)) return '—';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
-}
-
-function formatPercent(value: number, digits: number = 1): string {
-  if (!Number.isFinite(value)) return '—';
-  return `${value >= 0 ? '+' : ''}${value.toFixed(digits)}%`;
-}
-
-interface KPICardProps {
-  label: string;
-  value: string;
-  delta?: string;
-  color?: 'positive' | 'negative' | 'neutral';
-  isLoading?: boolean;
-}
-
-function KPICard({ label, value, delta, color = 'neutral', isLoading }: KPICardProps) {
-  const colorStyles = {
-    positive: { text: 'var(--status-profit)', bg: 'var(--status-profit-bg)', border: 'var(--status-profit-border)' },
-    negative: { text: 'var(--status-loss)', bg: 'var(--status-loss-bg)', border: 'var(--status-loss-border)' },
-    neutral: { text: 'var(--text-1)', bg: 'var(--surface-2)', border: 'var(--stroke)' },
-  };
-
-  const style = colorStyles[color];
-
-  if (isLoading) {
-    return (
-      <div 
-        className="px-4 py-3 rounded-lg flex flex-col gap-1"
-        style={{ background: 'var(--surface-2)', border: '1px solid var(--stroke)' }}
-      >
-        <div className="text-xs" style={{ color: 'var(--text-3)' }}>{label}</div>
-        <div 
-          className="h-6 w-20 rounded animate-pulse" 
-          style={{ background: 'var(--surface-3)' }}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div 
-      className="px-4 py-3 rounded-lg flex flex-col gap-1"
-      style={{ 
-        background: style.bg, 
-        border: `1px solid ${style.border}`,
-      }}
-    >
-      <div className="text-xs" style={{ color: 'var(--text-3)' }}>{label}</div>
-      <div className="flex items-baseline gap-2">
-        <span 
-          className="text-lg font-semibold tabular-nums"
-          style={{ color: style.text }}
-        >
-          {value}
-        </span>
-        {delta && (
-          <span 
-            className="text-xs font-medium"
-            style={{ color: 'var(--text-3)' }}
-          >
-            {delta}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export default function StatsTicker({ mode, kpi, backtestKpi }: StatsTickerProps) {
+export default function StatsTicker({
+  mode,
+  kpi,
+  balance,
+  backtestKpi,
+  backtestJobStatus = 'idle',
+  backtestError,
+}: StatsTickerProps) {
   const isBacktest = mode === 'BACKTEST';
   const isLoading = !kpi;
+  const asOf = '—';
+
+  const backtestReady = (backtestJobStatus === 'done') || Boolean(backtestKpi && backtestKpi.totalTrades > 0);
+  const backtestState: MetricState =
+    backtestJobStatus === 'error'
+      ? 'error'
+      : backtestJobStatus === 'running' || backtestJobStatus === 'queued'
+      ? 'loading'
+      : backtestReady
+      ? 'ok'
+      : 'empty';
 
   if (isLoading) {
     return (
-      <div 
-        className="h-20 min-h-[80px] px-6 flex items-center gap-3 flex-shrink-0"
-        style={{ 
-          background: 'var(--surface-1)', 
-          borderBottom: '1px solid var(--stroke)' 
-        }}
+      <div
+        className="h-20 min-h-[80px] px-6 flex items-center gap-3 flex-shrink-0 overflow-x-auto"
+        style={{ background: 'var(--surface-1)', borderBottom: '1px solid var(--stroke)' }}
       >
-        <KPICard label="Loading..." value="—" isLoading={true} />
-        <KPICard label="Loading..." value="—" isLoading={true} />
-        <KPICard label="Loading..." value="—" isLoading={true} />
+        <MetricCard label="Equity" value="—" subtitle={subtitleLine('USD', '—', asOf)} state="loading" />
+        <MetricCard label="Net P&L" value="—" subtitle={subtitleLine('USD', '—', asOf)} state="loading" />
+        <MetricCard label="Win Rate" value="—" subtitle={subtitleLine('%', '—', asOf)} state="loading" />
       </div>
     );
   }
@@ -123,58 +64,112 @@ export default function StatsTicker({ mode, kpi, backtestKpi }: StatsTickerProps
     >
       {isBacktest ? (
         <>
-          <KPICard
-            label="Total PnL"
-            value={formatCurrency((kpi as BacktestKPIData).totalPnl ?? 0)}
-            color={(kpi as BacktestKPIData).totalPnl >= 0 ? 'positive' : 'negative'}
+          <MetricCard
+            label="Final Equity"
+            value="—"
+            subtitle={subtitleLine('USD', '—', asOf)}
+            source="Backtest engine"
+            state={backtestState === 'loading' ? 'loading' : 'empty'}
           />
-          <KPICard
-            label="Winrate"
+          <MetricCard
+            label="Total P&L"
+            value={formatCurrency((kpi as BacktestKPIData).totalPnl)}
+            subtitle={subtitleLine('USD', '—', asOf)}
+            source="Backtest engine"
+            state={backtestState}
+            trend={(kpi as BacktestKPIData).totalPnl > 0 ? 'up' : (kpi as BacktestKPIData).totalPnl < 0 ? 'down' : 'neutral'}
+            tooltip={backtestState === 'error' ? (backtestError ?? 'Error') : undefined}
+          />
+          <MetricCard
+            label="Total Trades"
+            value={formatInteger(backtestKpi?.totalTrades)}
+            subtitle={subtitleLine('count', '—', asOf)}
+            source="Backtest engine"
+            state={backtestState}
+            tooltip={backtestState === 'error' ? (backtestError ?? 'Error') : undefined}
+          />
+          <MetricCard
+            label="Max Drawdown"
+            value={formatPercent(backtestKpi?.maxDrawdown ? -Math.abs(backtestKpi.maxDrawdown) : null)}
+            subtitle={subtitleLine('%', '—', asOf)}
+            source="Backtest engine"
+            state={backtestState}
+            trend="down"
+            tooltip={backtestState === 'error' ? (backtestError ?? 'Error') : undefined}
+          />
+          <MetricCard
+            label="Win Rate"
             value={formatPercent((kpi as BacktestKPIData).winrate)}
-            color="neutral"
+            subtitle={subtitleLine('%', '—', asOf)}
+            source="Backtest engine"
+            state={backtestState}
+            tooltip={backtestState === 'error' ? (backtestError ?? 'Error') : undefined}
           />
-          {backtestKpi && (
-            <>
-              <KPICard
-                label="Trades"
-                value={backtestKpi.totalTrades.toString()}
-                color="neutral"
-              />
-              <KPICard
-                label="Profit Factor"
-                value={formatNumber(backtestKpi.profitFactor, 2)}
-                color={backtestKpi.profitFactor >= 1 ? 'positive' : 'negative'}
-              />
-              <KPICard
-                label="Max Drawdown"
-                value={formatPercent(-backtestKpi.maxDrawdown)}
-                color="negative"
-              />
-            </>
-          )}
+          <MetricCard
+            label="Profit Factor"
+            value={formatNumber(backtestKpi?.profitFactor, 2)}
+            subtitle={subtitleLine('—', '—', asOf)}
+            source="Backtest engine"
+            state={backtestState}
+            trend={Number(backtestKpi?.profitFactor) >= 1 ? 'up' : 'down'}
+            tooltip={backtestState === 'error' ? (backtestError ?? 'Error') : undefined}
+          />
+          <MetricCard
+            label="Sharpe Ratio"
+            value="—"
+            subtitle={subtitleLine('—', '—', asOf)}
+            source="Backtest engine (risk-free rate: 0%)"
+            state={backtestState === 'loading' ? 'loading' : 'empty'}
+          />
         </>
       ) : (
         <>
-          <KPICard
-            label="Total PnL"
-            value={formatCurrency((kpi as KPIData).totalPnl ?? 0)}
-            color={(kpi as KPIData).totalPnl >= 0 ? 'positive' : 'negative'}
+          <MetricCard
+            label={mode === 'TEST' ? 'Equity (sim)' : 'Equity'}
+            value={formatCurrency(balance, { showSign: false })}
+            subtitle={subtitleLine('USD', mode === 'TEST' ? 'simulated' : '—', asOf)}
+            source={mode === 'TEST' ? 'Internal' : 'Bybit balance API'}
+            state={balance == null ? 'empty' : 'ok'}
           />
-          <KPICard
-            label="Winrate"
+          <MetricCard
+            label={mode === 'TEST' ? 'Net P&L (sim)' : 'Net P&L'}
+            value={formatCurrency((kpi as KPIData).totalPnl)}
+            subtitle={subtitleLine('USD', mode === 'TEST' ? 'simulated' : 'today', asOf)}
+            source={mode === 'TEST' ? 'Internal' : 'Calculated'}
+            state="ok"
+            trend={(kpi as KPIData).totalPnl > 0 ? 'up' : (kpi as KPIData).totalPnl < 0 ? 'down' : 'neutral'}
+          />
+          <MetricCard
+            label="Open Positions"
+            value={formatInteger((kpi as KPIData).activePositions)}
+            subtitle={subtitleLine('count', mode === 'TEST' ? 'simulated' : '—', asOf)}
+            source={mode === 'TEST' ? 'Internal' : 'Bybit positions API'}
+            state="ok"
+          />
+          <MetricCard
+            label="Max Drawdown"
+            value="—"
+            subtitle={subtitleLine('%', 'session', asOf)}
+            source={mode === 'TEST' ? 'Internal' : 'Calculated'}
+            state="empty"
+            trend="down"
+          />
+          <MetricCard
+            label="Win Rate"
             value={formatPercent((kpi as KPIData).winrate)}
-            color="neutral"
+            subtitle={subtitleLine('%', mode === 'TEST' ? 'sim trades' : 'last 20', asOf)}
+            source={mode === 'TEST' ? 'Internal' : 'Calculated'}
+            state="ok"
           />
-          <KPICard
-            label="Positions"
-            value={String((kpi as KPIData).activePositions ?? 0)}
-            color="neutral"
-          />
-          <KPICard
-            label="Risk Level"
-            value={(kpi as KPIData).riskLevel ?? '—'}
-            color="neutral"
-          />
+          {mode === 'LIVE' && (
+            <MetricCard
+              label="Risk Level"
+              value={(kpi as KPIData).riskLevel || '—'}
+              subtitle={subtitleLine('—', '—', asOf)}
+              source="Risk engine"
+              state={(kpi as KPIData).riskLevel ? 'ok' : 'empty'}
+            />
+          )}
         </>
       )}
     </div>

@@ -460,7 +460,14 @@ function App() {
           secondaryCtaDisabled={secondaryCta?.disabled}
         />
 
-        <StatsTicker mode={mode} kpi={kpi} backtestKpi={isBacktest ? backtestKpi : undefined} />
+        <StatsTicker
+          mode={mode}
+          kpi={kpi}
+          balance={balance}
+          backtestKpi={isBacktest ? backtestKpi : undefined}
+          backtestJobStatus={backtestJobStatus}
+          backtestError={backtestError}
+        />
 
         <div className="flex flex-1 overflow-hidden min-h-0">
           <div className="flex flex-col flex-1 overflow-hidden min-w-0 min-h-0">
