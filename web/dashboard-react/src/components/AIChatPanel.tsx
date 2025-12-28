@@ -123,8 +123,12 @@ export default function AIChatPanel({mode, context}: AIChatPanelProps) {
     }
   };
 
-  const modeLabel =
-    mode === 'LIVE' ? 'Live trading' : mode === 'TEST' ? 'Test sandbox' : 'Backtest review';
+    const modeLabel =
+    mode === 'LIVE'
+      ? 'Live Trading'
+      : mode === 'TEST'
+        ? 'Simulated (no risk)'
+        : 'Historical Analysis';
 
   const modeAccents: Record<Mode, { color: string; bg: string; border: string }> = {
     BACKTEST: {

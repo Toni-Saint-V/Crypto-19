@@ -374,22 +374,22 @@ function App() {
         if (backtestJobStatus === 'running' || backtestJobStatus === 'queued') {
           return { label: 'Cancel', action: handleBacktestCancel, disabled: false };
         } else if (backtestJobStatus === 'done') {
-          return { label: 'Re-run', action: handleBacktestRun, disabled: false };
+          return { label: 'Run Again', action: handleBacktestRun, disabled: false };
         } else {
           return { label: 'Run Backtest', action: handleBacktestRun, disabled: false };
         }
       case 'LIVE':
         if (liveRunning) {
-          return { label: 'Stop Bot', action: handleLiveStop, disabled: false };
+          return { label: '⚠ STOP BOT', action: handleLiveStop, disabled: false };
         } else {
-          return { label: 'Start Bot', action: handleLiveStart, disabled: false };
+          return { label: 'START LIVE BOT', action: handleLiveStart, disabled: false };
         }
       case 'TEST':
         if (testRunning) {
           if (testPaused) {
-            return { label: 'Resume', action: handleTestResume, disabled: false };
+            return { label: 'Resume Test', action: handleTestResume, disabled: false };
           } else {
-            return { label: 'Pause', action: handleTestPause, disabled: false };
+            return { label: 'Pause Test', action: handleTestPause, disabled: false };
           }
         } else {
           return { label: 'Start Test', action: handleTestStart, disabled: false };
@@ -400,7 +400,7 @@ function App() {
   const primaryCta = getPrimaryCta();
   const secondaryCta =
     mode === 'TEST' && testRunning
-      ? { label: 'Stop', action: handleTestStop, disabled: false }
+      ? { label: 'Stop Test', action: handleTestStop, disabled: false }
       : null;
 
   const isBacktest = mode === 'BACKTEST';

@@ -7,9 +7,15 @@ interface ModeBadgeProps {
 
 export default function ModeBadge({ mode, className = '' }: ModeBadgeProps) {
   const modeLabels: Record<Mode, string> = {
-    LIVE: 'LIVE',
+    LIVE: '🔴 LIVE',
     TEST: 'TEST',
     BACKTEST: 'BACKTEST',
+  };
+
+  const modeSubtitles: Record<Mode, string> = {
+    LIVE: 'Live Trading',
+    TEST: 'Simulated (no risk)',
+    BACKTEST: 'Historical Analysis',
   };
 
   const modeAccents: Record<Mode, { color: string; bg: string; border: string }> = {
@@ -34,14 +40,20 @@ export default function ModeBadge({ mode, className = '' }: ModeBadgeProps) {
 
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${className}`}
+      className={`inline-flex flex-col items-start px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${className}`}
       style={{
         background: accent.bg,
         border: `1px solid ${accent.border}`,
         color: accent.color,
       }}
     >
-      {modeLabels[mode]}
+      <span className="leading-none">{modeLabels[mode]}</span>
+      <span
+        className="mode-badge__subtitle text-[10px] leading-tight font-medium normal-case tracking-normal mt-0.5"
+        style={{ color: 'var(--text-3)' }}
+      >
+        {modeSubtitles[mode]}
+      </span>
     </span>
   );
 }

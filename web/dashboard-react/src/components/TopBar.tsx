@@ -29,7 +29,7 @@ function ModeButton(props: {
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+      className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 ease-out ${
         active ? 'shadow-lg' : ''
       }`}
       style={{
@@ -141,7 +141,7 @@ export default function TopBar({
           <button
             onClick={onSecondaryCta}
             disabled={secondaryCtaDisabled}
-            className="px-4 py-1.5 text-xs font-semibold rounded-lg transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 ease-out hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{
               background: 'var(--surface-2)',
               border: '1px solid var(--stroke)',
